@@ -4,8 +4,8 @@
 <dict>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<!-- Replace HOST with the domain that serves public/.well-known/apple-app-site-association at its root. -->
-		<string>applinks:HOST?mode=developer</string>
+		<!-- The Heroku app serves public/.well-known/apple-app-site-association at its root. -->
+		<string>applinks:kodable-creator-rig-03d05ef5fa9b.herokuapp.com?mode=developer</string>
 	</array>
 </dict>
 </plist>

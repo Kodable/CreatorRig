@@ -252,10 +252,11 @@ pause "Purchase completed? Press Enter."
 stage "Universal Link: choose the host and publish the AASA file"
 say "iOS fetches https://HOST/.well-known/apple-app-site-association from the domain ROOT. kodable.github.io has no site at its root, so GitHub Pages cannot host it."
 say "Plan: a Heroku app for the rig that later hosts the Creator product under its own domain. The repo has Procfile + scripts/serve.mjs; Heroku builds dist/ and serves it with the AASA at the root."
-step "heroku create kodable-creator-rig && git push heroku main      (then the host is kodable-creator-rig-<hash>.herokuapp.com; heroku info shows it)"
+step "Already done: the app kodable-creator-rig exists in the Heroku team kodable and serves the AASA at https://kodable-creator-rig-03d05ef5fa9b.herokuapp.com/.well-known/apple-app-site-association. Deploy updates with: git push heroku main"
 note "Alternative: add the rig's entry to the AASA that game.kodable.com already serves (KodableWebGame/static/.well-known/apple-app-site-association)."
 note "The JSON to publish is public/.well-known/apple-app-site-association (appID ${TEAM_ID}.${BUNDLE_ID}, paths /creator-rig and /creator-rig/*)."
-ask UL_HOST "Host that serves the AASA at its root (for example creator-rig.netlify.app or game.kodable.com):"
+ask UL_HOST "Host that serves the AASA at its root (Enter for kodable-creator-rig-03d05ef5fa9b.herokuapp.com):"
+UL_HOST="${UL_HOST:-kodable-creator-rig-03d05ef5fa9b.herokuapp.com}"
 write_env UL_HOST "$UL_HOST"
 if [[ -n "$UL_HOST" ]]; then
   sed -i '' "s|applinks:[^<]*|applinks:${UL_HOST}?mode=developer|" ios/App/App/App.entitlements
