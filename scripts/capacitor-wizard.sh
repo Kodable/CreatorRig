@@ -6,6 +6,9 @@
 # Everything above the "STAGES" marker is the wizard library: do not hand-edit
 # it. Author the per-step stages below the marker.
 
+# Re-exec under bash when started by sh or zsh (`sh script`, `source script`).
+if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
+
 set -euo pipefail
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -181,7 +184,7 @@ finish() {
 
 # ──────────────────────────────────────────────────────────────────────────
 # STAGES: author this section. One stage() per step the human takes.
-# ──────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------
 # Capacitor shell for the Creator Rig (CW-01.9): the Apple-side steps only a
 # human can do. Run from the repo root: scripts/capacitor-wizard.sh
 # Values land in .env.capacitor (never committed) and in ios/App/App/App.entitlements.
@@ -195,7 +198,7 @@ MAC_IP="$(ipconfig getifaddr en0 2>/dev/null || echo '<mac-ip>')"
 
 banner "Creator Rig: Capacitor shell on the iPad and iPhone"
 
-# ── 0 ─────────────────────────────────────────────────────────────────────
+# ---- stage 0 ------------------------------------------------------------
 stage "Xcode: install the iOS platform component"
 say "Xcode 26.6 on this Mac has no iOS 26.5 platform installed; xcodebuild refuses every iOS destination until it is."
 step "Either: Xcode > Settings > Components > iOS 26.5 > download (several GB)."
@@ -203,7 +206,7 @@ step "Or in a terminal: xcodebuild -downloadPlatform iOS"
 step "Then check: cd ios/App && xcodebuild -project App.xcodeproj -scheme App -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build   → BUILD SUCCEEDED"
 pause "Platform installed and the simulator build succeeded? Press Enter."
 
-# ── 1 ─────────────────────────────────────────────────────────────────────
+# ---- stage 1 ------------------------------------------------------------
 stage "Xcode: sign the app with the Kodable team"
 say "The iOS project is generated. Xcode registers the rig's App ID with automatic signing."
 step "Run: npx cap open ios   (or open ios/App/App.xcodeproj)"
@@ -213,7 +216,7 @@ note "Xcode creates the App ID and a development profile. If it asks, sign in wi
 step "Capability 'Associated Domains' should already be listed (from App.entitlements). Leave the HOST entry for stage 5."
 pause "Signing shows no red errors? Press Enter."
 
-# ── 2 ─────────────────────────────────────────────────────────────────────
+# ---- stage 2 ------------------------------------------------------------
 stage "Run the shell on the iPad, loading the Mac's dev server"
 say "Live mode: the app loads http://${MAC_IP}:5173 so web changes need no app rebuild, and the report collector is same-origin."
 step "In a terminal in the repo: npm run dev        (leave it running)"
@@ -224,7 +227,7 @@ step "First launch on the device: allow 'Local Network' when the app asks (Setti
 step "The rig index appears in the app. The device tag reads capacitor-ipad. Run 'baseline 200' and confirm the report says device=capacitor-ipad."
 pause "Report seen with device=capacitor-ipad? Press Enter."
 
-# ── 3 ─────────────────────────────────────────────────────────────────────
+# ---- stage 3 ------------------------------------------------------------
 stage "App Store Connect: app record and the sandbox consumable"
 say "The purchase scenario buys one consumable. It needs an app record and a product; nothing is submitted for review."
 open_url "https://appstoreconnect.apple.com/apps"
@@ -237,7 +240,7 @@ ask IAP_PRODUCT_ID "Product ID as saved (Enter for ${PRODUCT_ID}):"
 write_env IAP_PRODUCT_ID "${IAP_PRODUCT_ID:-$PRODUCT_ID}"
 pause "Product saved? Press Enter."
 
-# ── 4 ─────────────────────────────────────────────────────────────────────
+# ---- stage 4 ------------------------------------------------------------
 stage "Sandbox tester on the iPad"
 open_url "https://appstoreconnect.apple.com/access/users/sandbox"
 step "Sandbox > Testers > +. Use an email that is not an existing Apple account (a plus-address like you+rig@kodable.com works). Note the password."
@@ -248,7 +251,7 @@ step "In the shell: open 'purchase · coin', tap 'Buy the test coin'. Complete t
 step "The report shows transactionId and receipt sizes; Xcode's console prints RIG_RECEIPT. Send the report to the collector."
 pause "Purchase completed? Press Enter."
 
-# ── 5 ─────────────────────────────────────────────────────────────────────
+# ---- stage 5 ------------------------------------------------------------
 stage "Universal Link: choose the host and publish the AASA file"
 say "iOS fetches https://HOST/.well-known/apple-app-site-association from the domain ROOT. kodable.github.io has no site at its root, so GitHub Pages cannot host it."
 say "Plan: a Heroku app for the rig that later hosts the Creator product under its own domain. The repo has Procfile + scripts/serve.mjs; Heroku builds dist/ and serves it with the AASA at the root."
@@ -266,7 +269,7 @@ fi
 step "On the iPad: Settings > Developer > Associated Domains Development: on (developer mode skips Apple's CDN cache)."
 pause "AASA reachable and the switch on? Press Enter."
 
-# ── 6 ─────────────────────────────────────────────────────────────────────
+# ---- stage 6 ------------------------------------------------------------
 stage "Universal Link: rebuild and tap a link"
 step "In Xcode: Run again (the entitlement changed)."
 step "On the iPad, paste this into Notes and long-press it: https://${UL_HOST:-HOST}/creator-rig/?scenario=bodies&adapter=box2d&count=200"
@@ -274,7 +277,7 @@ step "Choose 'Open in Creator Rig'. The shell must open the bodies scenario; its
 note "If Safari opens instead: the AASA is not served from the root, has a redirect, or the app was not reinstalled after the entitlement change."
 pause "Shell opened the scenario from the link? Press Enter."
 
-# ── 7 ─────────────────────────────────────────────────────────────────────
+# ---- stage 7 ------------------------------------------------------------
 stage "Shell checks: silent switch, text input, jettison"
 step "audio · tap with the iPad's ring/silent switch OFF: the beep must be audible (AVAudioSession playback category in AppDelegate)."
 step "textinput · field: tap the field, type, tap the canvas. Pass: keyboard height reported, canvas size unchanged, dismissal counted."
@@ -282,7 +285,7 @@ warn "jettison · 32mb allocates memory until iOS kills the web content process.
 step "Send each report to the collector, or Share them to the Mac."
 pause "Reports sent? Press Enter."
 
-# ── 8 ─────────────────────────────────────────────────────────────────────
+# ---- stage 8 ------------------------------------------------------------
 stage "Same on the iPhone, then the bundled build"
 step "Repeat stages 2, 4 (sign in the tester), 6 and 7 on the iPhone."
 step "Bundled build (no dev server): npm run build && npx cap sync ios   (CAP_SERVER_URL unset), then Run. Set the Collector field on the index page to http://${MAC_IP}:5173 so Send works from the app's own origin."
