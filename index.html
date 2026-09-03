@@ -78,6 +78,10 @@
       #report-actions { flex-wrap: wrap; justify-content: center; max-width: 90vw; }
       /* CW-01.7 editor overlay */
       .ov-root { position: absolute; inset: 0; z-index: 5; touch-action: none; user-select: none; -webkit-user-select: none; }
+      .ov-react { position: absolute; inset: 0; pointer-events: none; }
+      .ov-react .ov-panel, .ov-react .ov-rail { pointer-events: auto; }
+      .ov-canvas-layer { position: absolute; left: 0; top: 0; pointer-events: none; }
+      .ov-canvas-layer .ov-handle { pointer-events: auto; }
       .ov-rail {
         position: absolute; left: 0; top: 0; bottom: 0; width: 56px; display: flex; flex-direction: column; gap: 8px; padding: 48px 8px 8px;
         background: rgba(23,30,58,0.94); border-right: 1px solid var(--line); color: #e7e9f4;

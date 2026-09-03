@@ -177,6 +177,7 @@ export const MATRIX: ScenarioEntry[] = [
       { label: 'robot-noflush', params: { count: 60, robot: 1, flush: 0 } },
       { label: 'robot-imperative', params: { count: 60, robot: 1, gizmo: 'imperative' } },
       { label: 'manual', params: { count: 60 }, manual: true },
+      { label: 'manual-imperative', params: { count: 60, gizmo: 'imperative' }, manual: true },
     ],
     adapters: [],
   },

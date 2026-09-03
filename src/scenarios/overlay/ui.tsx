@@ -1,7 +1,8 @@
 import { memo, Profiler, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import { PANEL_FIELDS, type EditorStore, type ObjectProps } from './store';
 
-/** World to CSS pixels inside the stage, supplied by the scene (camera and scale aware). */
+/** World to CSS pixels inside the canvas layer, supplied by the scene (camera and scale aware). */
 export type Project = (x: number, y: number) => { x: number; y: number; scale: number };
 
 export interface UiMetrics {
@@ -17,6 +18,8 @@ interface AppProps {
   onReveal: (id: number) => void;
   /** Imperative gizmo: the scene moves the gizmo element itself during a drag. */
   gizmoRef: React.RefObject<HTMLDivElement | null>;
+  /** A div the scene keeps exactly over the canvas; the gizmo renders inside it, so its pixels are canvas pixels. */
+  canvasLayer: HTMLElement;
 }
 
 const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const;
@@ -33,7 +36,7 @@ export function App(props: AppProps): ReactElement {
       }}
     >
       <Rail count={state.objects.length} selected={state.selected} zoom={state.camera.zoom} />
-      <Gizmo selected={selected} project={props.project} gizmoRef={props.gizmoRef} />
+      {createPortal(<Gizmo selected={selected} project={props.project} gizmoRef={props.gizmoRef} />, props.canvasLayer)}
       <Panel store={props.store} objects={state.objects} selected={selected} onReveal={props.onReveal} />
     </Profiler>
   );

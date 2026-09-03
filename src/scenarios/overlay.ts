@@ -144,11 +144,12 @@ const overlay: Scenario = {
       const z = store.getState().camera.zoom;
       return { x: v.x + g.x / z, y: v.y + g.y / z };
     };
+    /** World to canvas-layer pixels: no page offset, the layer already sits on the canvas. */
     const project: Project = (wx, wy) => {
       const b = canvasRect();
       const v = view();
       const z = store.getState().camera.zoom;
-      return { x: b.x + ((wx - v.x) * z) / b.sx, y: b.y + ((wy - v.y) * z) / b.sy, scale: z / b.sx };
+      return { x: ((wx - v.x) * z) / b.sx, y: ((wy - v.y) * z) / b.sy, scale: z / b.sx };
     };
     const zoomAt = (clientX: number, clientY: number, factor: number): void => {
       const c = store.getState().camera;
@@ -173,14 +174,35 @@ const overlay: Scenario = {
       return null;
     };
 
-    // DOM: one root for React and for pointer input, over the whole stage.
+    // DOM: one root for React and for pointer input over the whole stage, plus a layer kept
+    // exactly over the canvas. The gizmo lives in that layer, so its position is in canvas pixels
+    // and no page or viewport offset can separate it from the sprites (iPad Safari moved the
+    // canvas under a page-positioned gizmo by a constant 6 to 77 px).
+    // createRoot empties its container on the first render, so the canvas layer and the React
+    // container are siblings inside the input shell (`root`), which holds the pointer handlers.
     const stage = document.getElementById('stage') ?? document.body;
     const root = document.createElement('div');
     root.className = 'ov-root';
+    const canvasLayer = document.createElement('div');
+    canvasLayer.className = 'ov-canvas-layer';
+    const reactRoot = document.createElement('div');
+    reactRoot.className = 'ov-react';
+    root.append(canvasLayer, reactRoot);
     stage.appendChild(root);
+    const canvas = scene.sys.game.canvas;
+    const layerBox = { left: -1, top: -1, width: 0, height: 0 };
+    const syncLayer = (): void => {
+      const { offsetLeft: left, offsetTop: top, offsetWidth: width, offsetHeight: height } = canvas;
+      if (left === layerBox.left && top === layerBox.top && width === layerBox.width && height === layerBox.height) return;
+      Object.assign(layerBox, { left, top, width, height });
+      canvasLayer.style.transform = `translate(${left}px, ${top}px)`;
+      canvasLayer.style.width = `${width}px`;
+      canvasLayer.style.height = `${height}px`;
+    };
+    syncLayer();
     const gizmoRef: RefObject<HTMLDivElement | null> = { current: null };
     const uiMetrics: UiMetrics = { commits: 0, commitMs: [] };
-    createRoot(root).render(createElement(App, { store, project, metrics: uiMetrics, onReveal: reveal, gizmoRef }));
+    createRoot(reactRoot).render(createElement(App, { store, project, metrics: uiMetrics, onReveal: reveal, gizmoRef, canvasLayer }));
 
     // Robot state (declared here so the metrics can name the phase of an outlier).
     const bot = { phase: 'drag' as 'drag' | 'zoom' | 'type' | 'list', t: 0, cycle: 0, frame: 0, down: false, origin: { x: 0, y: 0 } };
@@ -384,8 +406,14 @@ const overlay: Scenario = {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     };
     const center = (): { x: number; y: number } => {
-      const r = scene.sys.game.canvas.getBoundingClientRect();
+      const r = canvas.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    /** World to page pixels, for aiming synthetic pointer events. */
+    const toPage = (wx: number, wy: number): { x: number; y: number } => {
+      const r = canvas.getBoundingClientRect();
+      const p = project(wx, wy);
+      return { x: r.left + p.x, y: r.top + p.y };
     };
     const robotStep = (dt: number): void => {
       bot.t += dt;
@@ -395,7 +423,7 @@ const overlay: Scenario = {
         const target = state.objects[bot.cycle % state.objects.length]!;
         if (!bot.down) {
           reveal(target.id);
-          const p = project(target.x, target.y);
+          const p = toPage(target.x, target.y);
           bot.origin = { x: p.x, y: p.y };
           dispatchPointer('pointerdown', p.x, p.y);
           bot.down = true;
@@ -461,6 +489,7 @@ const overlay: Scenario = {
 
     return {
       update(deltaMs: number): void {
+        syncLayer();
         if (robot) robotStep(deltaMs);
         if (drag || pinch) dragFrames.push(deltaMs);
         // State reaches Phaser in the store listener; live drag positions win until the pointer lifts.
