@@ -279,8 +279,8 @@ step "Send each report to the collector, or Share them to the Mac."
 pause "Reports sent? Press Enter."
 
 # ---- stage 8 ------------------------------------------------------------
-stage "Same on the iPhone, then the bundled build"
-step "Repeat stages 2, 4 (sign in the tester), 6 and 7 on the iPhone."
+stage "Bundled build on the iPad; the iPhone is optional"
+note "iPhone (optional, the iPad is the target): if you do it, two runs are enough: baseline 200 (the app launches and lays out landscape-only on a phone) and jettison (the phone has less memory, so its budget is the lower bound)."
 step "Remote mode (no Mac needed): CAP_SERVER_URL=https://kodable-creator-rig-03d05ef5fa9b.herokuapp.com npx cap sync ios, then Run: the shell loads the Heroku site. Set the Collector field on the index page to http://${MAC_IP}:5173 so Send still reaches the Mac."
 step "Bundled build (offline): npm run build && npx cap sync ios   (CAP_SERVER_URL unset), then Run."
 step "In the rig folder: npm run results   prints the tables with the capacitor-ipad and capacitor-iphone rows."
