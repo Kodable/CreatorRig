@@ -1,4 +1,4 @@
-import { Profiler, useEffect, useRef, useSyncExternalStore, type ReactElement } from 'react';
+import { memo, Profiler, useEffect, useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react';
 import { PANEL_FIELDS, type EditorStore, type ObjectProps } from './store';
 
 /** World to CSS pixels inside the stage, supplied by the scene (camera and scale aware). */
@@ -39,7 +39,7 @@ export function App(props: AppProps): ReactElement {
   );
 }
 
-function Rail({ count, selected, zoom }: { count: number; selected: number | null; zoom: number }): ReactElement {
+const Rail = memo(function Rail({ count, selected, zoom }: { count: number; selected: number | null; zoom: number }): ReactElement {
   return (
     <nav className="ov-rail">
       {['Select', 'Move', 'Shapes', 'Code', 'Play'].map((t) => (
@@ -56,7 +56,7 @@ function Rail({ count, selected, zoom }: { count: number; selected: number | nul
       </div>
     </nav>
   );
-}
+});
 
 function Gizmo({ selected, project, gizmoRef }: { selected: ObjectProps | undefined; project: Project; gizmoRef: React.RefObject<HTMLDivElement | null> }): ReactElement | null {
   if (!selected) return null;
@@ -86,6 +86,9 @@ function Panel({ store, objects, selected, onReveal }: { store: EditorStore; obj
     if (!selected || !listRef.current) return;
     listRef.current.querySelector(`[data-object-id="${selected.id}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [selected?.id]);
+  // Row data changes identity only when a name changes, so the memoized list skips position updates.
+  const namesKey = objects.map((o) => o.name).join('\u0000');
+  const rows = useMemo<Row[]>(() => objects.map((o) => ({ id: o.id, name: o.name })), [namesKey]);
   return (
     <aside className="ov-panel">
       <h3>Properties</h3>
@@ -112,22 +115,37 @@ function Panel({ store, objects, selected, onReveal }: { store: EditorStore; obj
         <p className="ov-muted">Tap an object. Drag to move; handles resize and rotate; wheel or pinch zooms; shift-drag or two fingers pan.</p>
       )}
       <h3>Objects</h3>
-      <div className="ov-list" ref={listRef}>
-        {objects.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            data-object-id={o.id}
-            className={o.id === selected?.id ? 'ov-row ov-row-selected' : 'ov-row'}
-            onClick={() => {
-              store.select(o.id);
-              onReveal(o.id);
-            }}
-          >
-            {o.name}
-          </button>
-        ))}
-      </div>
+      <ObjectList listRef={listRef} rows={rows} selectedId={selected?.id ?? null} store={store} onReveal={onReveal} />
     </aside>
   );
 }
+
+interface Row {
+  id: number;
+  name: string;
+}
+
+/**
+ * The 60-row list re-renders only when a name or the selection changes, not on every position
+ * change of a dragged object. Without this, each pointer move re-rendered 60 buttons.
+ */
+const ObjectList = memo(function ObjectList({ listRef, rows, selectedId, store, onReveal }: { listRef: React.RefObject<HTMLDivElement | null>; rows: Row[]; selectedId: number | null; store: EditorStore; onReveal: (id: number) => void }): ReactElement {
+  return (
+    <div className="ov-list" ref={listRef}>
+      {rows.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          data-object-id={o.id}
+          className={o.id === selectedId ? 'ov-row ov-row-selected' : 'ov-row'}
+          onClick={() => {
+            store.select(o.id);
+            onReveal(o.id);
+          }}
+        >
+          {o.name}
+        </button>
+      ))}
+    </div>
+  );
+});

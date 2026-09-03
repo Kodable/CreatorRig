@@ -186,6 +186,7 @@ const overlay: Scenario = {
     const latency: number[] = [];
     const typingLatency: number[] = [];
     const drift: number[] = [];
+    const driftByMode: Record<string, number[]> = {};
     let driftMaxAt = '';
     let inputPending: number | null = null;
     let typingPending: number | null = null;
@@ -363,6 +364,8 @@ const overlay: Scenario = {
         const d = (Math.hypot(wp.x - img.x, wp.y - img.y) * cam.zoom) / s;
         if (d > (drift.length > 0 ? Math.max(...drift) : -1)) driftMaxAt = `${bot.phase} t=${Math.round(bot.t)} frame=${bot.frame} selected=${selectedId}`;
         drift.push(d);
+        const mode = pinch ? 'pinch' : drag ? drag.mode : 'idle';
+        (driftByMode[mode] ??= []).push(d);
       }
     });
 
@@ -482,6 +485,7 @@ const overlay: Scenario = {
           latencyMs: stats(latency),
           typingLatencyMs: stats(typingLatency),
           driftPx: stats(drift),
+          driftByMode: Object.fromEntries(Object.entries(driftByMode).map(([k, v]) => [k, stats(v)])),
           driftMaxAt,
           driftOutliers: drift.filter((d) => d > 5).length,
           pointerMoves,
