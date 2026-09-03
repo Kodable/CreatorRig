@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { percentile, summarize } from './report';
+import { percentile, reportFileName, summarize } from './report';
 import { parseParams, buildUrl, guessDevice } from './params';
 import { MATRIX, benchRuns } from './scenarios/matrix';
 
@@ -27,6 +27,13 @@ describe('summarize', () => {
     expect(stats.max).toBe(40);
     expect(stats.dropped).toBe(1);
     expect(stats.slow).toBe(2);
+  });
+});
+
+describe('reportFileName', () => {
+  it('names a device report scenario-count-adapter-device.json', () => {
+    expect(reportFileName({ scenario: 'determinism', adapter: 'rapier', device: 'ipad', params: { count: 200 } })).toBe('determinism-200-rapier-ipad.json');
+    expect(reportFileName({ scenario: 'baseline', adapter: 'none', device: 'Mac Safari', params: { count: 1000 } })).toBe('baseline-1000-mac-safari.json');
   });
 });
 

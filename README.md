@@ -13,7 +13,7 @@ npm install
 npm run rig          # dev server on the LAN, opens the index page
 ```
 
-The index page lists every scenario and variant. Set the **device tag** first (`chromebook`, `ipad`, `iphone`, `mac-chrome`, `mac-safari`, `capacitor-ipad`, ...), then tap a variant. After the warm-up and the measured window the report box appears. Copy the JSON into `results/` or into the Notion results table.
+The index page lists every scenario and variant. Set the **device tag** first (`chromebook`, `ipad`, `iphone`, `mac-chrome`, `mac-safari`, `capacitor-ipad`, ...), then tap a variant. After the warm-up and the measured window the report box appears with two buttons: **Copy JSON** puts the report on the clipboard, **Share** hands it to the system share sheet as `scenario-count-adapter-device.json` (AirDrop it to the Mac and drop it into `results/`). Then `npm run results` prints the tables.
 
 Devices on the same network open `http://<your-mac-ip>:5173/`. For Safari on iOS some scenarios (PWA install, Universal Links) need HTTPS: use the deployed URL.
 

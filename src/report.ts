@@ -185,6 +185,68 @@ export function emitReport(report: Report): void {
   }
   console.log('RIG_REPORT ' + JSON.stringify(report));
   window.__rig = { done: true, report };
+  addReportActions(report);
+}
+
+/** File name a device report gets in results/: scenario-count-adapter-device.json. */
+export function reportFileName(report: Pick<Report, 'scenario' | 'adapter' | 'device' | 'params'>): string {
+  const adapter = report.adapter === 'none' ? '' : `-${report.adapter}`;
+  const safe = (s: string): string => s.replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
+  return `${report.scenario}-${report.params['count']}${adapter}-${safe(report.device)}.json`;
+}
+
+/**
+ * Copy and Share buttons, so a report leaves an iPad in one tap. Copy uses the clipboard API
+ * (HTTPS or localhost only) and falls back to selecting the text. Share hands the JSON file
+ * to the system share sheet where the browser supports files (iOS Safari does).
+ */
+function addReportActions(report: Report): void {
+  const bar = document.getElementById('report-actions');
+  const pre = document.getElementById('report');
+  if (!bar || !pre) return;
+  const json = JSON.stringify(report, null, 2);
+  const name = reportFileName(report);
+  bar.innerHTML = '';
+
+  const flash = (button: HTMLButtonElement, text: string): void => {
+    const label = button.textContent;
+    button.textContent = text;
+    setTimeout(() => (button.textContent = label), 1500);
+  };
+
+  const copy = document.createElement('button');
+  copy.textContent = 'Copy JSON';
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(json);
+      flash(copy, 'Copied');
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(pre);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      flash(copy, 'Selected: copy by hand');
+    }
+  });
+  bar.appendChild(copy);
+
+  const file = new File([json], name, { type: 'application/json' });
+  const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+  if (typeof nav.share === 'function') {
+    const share = document.createElement('button');
+    share.textContent = `Share ${name}`;
+    share.addEventListener('click', async () => {
+      const withFile = nav.canShare?.({ files: [file] }) === true;
+      try {
+        await nav.share(withFile ? { files: [file], title: name } : { title: name, text: json });
+      } catch {
+        // The user closed the share sheet; nothing to do.
+      }
+    });
+    bar.appendChild(share);
+  }
+  bar.style.display = 'flex';
 }
 
 export function emitError(message: string): void {

@@ -38,6 +38,8 @@ for (const run of benchRuns()) {
     expect(rig?.error, rig?.error ?? '').toBeUndefined();
     const report = rig?.report as Report;
     expect(report.frames).toBeGreaterThan(0);
+    // The report view must offer Copy (and Share where the browser has navigator.share).
+    expect(await page.locator('#report-actions button').count()).toBeGreaterThan(0);
 
     const file = join(RESULTS_DIR, `${run.key}-${browserName}.json`);
     writeFileSync(file, JSON.stringify(report, null, 2));
