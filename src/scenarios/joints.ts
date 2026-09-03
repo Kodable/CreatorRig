@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { createWorld, isAdapterId, type BodyId, type JointId, type Vec2 } from '../physics';
 import type { RigParams } from '../params';
 import type { FrameStats } from '../report';
-import { anchorGap, COLORS, FixedStepper, PhysicsView, round2 } from './physicsCommon';
+import { anchorGap, COLORS, FixedStepper, PhysicsView, subStepsFrom, round2 } from './physicsCommon';
 import { makeRandom, type Scenario, type ScenarioHandle } from './types';
 
 interface Cart {
@@ -103,7 +103,7 @@ const joints: Scenario = {
       ballsDropped++;
     };
 
-    const stepper = new FixedStepper(world);
+    const stepper = new FixedStepper(world, subStepsFrom(params));
     let broken = 0;
     let maxWheelGap = 0;
     let maxBridgeGap = 0;

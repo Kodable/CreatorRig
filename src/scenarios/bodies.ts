@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { createWorld, isAdapterId } from '../physics';
 import type { RigParams } from '../params';
 import type { FrameStats } from '../report';
-import { bowlVertices, COLORS, FixedStepper, PhysicsView } from './physicsCommon';
+import { bowlVertices, COLORS, FixedStepper, PhysicsView, subStepsFrom } from './physicsCommon';
 import { makeRandom, type Scenario, type ScenarioHandle } from './types';
 
 /**
@@ -40,7 +40,7 @@ const bodies: Scenario = {
       }
     }
 
-    const stepper = new FixedStepper(world);
+    const stepper = new FixedStepper(world, subStepsFrom(params));
     let hash = '';
     let contacts = 0;
 

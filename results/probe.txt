@@ -1,0 +1,10 @@
+box2d bullet=false substeps=1: tunnels 0/200; trace: -1.50 -0.06 -0.04 -0.04 -0.05 -0.05 -0.05 -0.05 -0.05 -0.06 -0.06 -0.06 -0.06 -0.06
+box2d bullet=true substeps=1: tunnels 0/200; trace: -1.50 -0.06 -0.04 -0.04 -0.05 -0.05 -0.05 -0.05 -0.05 -0.06 -0.06 -0.06 -0.06 -0.06
+rapier bullet=false substeps=1: tunnels 0/200; trace: -1.50 -0.06 -0.05 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06
+rapier bullet=true substeps=1: tunnels 0/200; trace: -1.50 -0.06 -0.05 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06 -0.06
+box2d wheel gap under 20 kg load, substeps=4: 0.045
+box2d wheel gap under 20 kg load, substeps=8: 0.009
+box2d wheel gap under 20 kg load, substeps=16: 0.014
+rapier wheel gap under 20 kg load, substeps=4: 0.006
+rapier wheel gap under 20 kg load, substeps=8: 0.000
+rapier wheel gap under 20 kg load, substeps=16: 0.000

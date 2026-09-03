@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { createWorld, isAdapterId } from '../physics';
 import type { RigParams } from '../params';
 import type { FrameStats } from '../report';
-import { COLORS, FixedStepper, PhysicsView, round2 } from './physicsCommon';
+import { COLORS, FixedStepper, PhysicsView, subStepsFrom, round2 } from './physicsCommon';
 import type { Scenario, ScenarioHandle } from './types';
 
 /**
@@ -34,7 +34,7 @@ const stack: Scenario = {
     let maxDrift = 0;
     let toppled = false;
 
-    const stepper = new FixedStepper(world);
+    const stepper = new FixedStepper(world, subStepsFrom(params));
 
     return {
       update(deltaMs: number): void {

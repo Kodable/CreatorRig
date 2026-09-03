@@ -187,8 +187,7 @@ export class RapierWorld extends BaseWorld {
     const rev = j as RAPIER.RevoluteImpulseJoint;
     rev.configureMotorModel(RAPIER.MotorModel.ForceBased);
     rev.configureMotorVelocity(speed, 1);
-    const withMax = rev as unknown as { configureMotorMaxForce?: (f: number) => void };
-    if (typeof withMax.configureMotorMaxForce === 'function') withMax.configureMotorMaxForce(maxTorque);
+    rev.setMotorMaxForce(maxTorque);
   }
 
   getTransform(body: BodyId): Transform {

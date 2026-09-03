@@ -69,6 +69,7 @@ export const MATRIX: ScenarioEntry[] = [
       { label: '20', params: { count: 20 } },
       { label: '30', params: { count: 30 } },
       { label: '40', params: { count: 40 } },
+      { label: '40-sub8', params: { count: 40, substeps: 8 } },
       { label: '50', params: { count: 50 } },
     ],
     adapters: ['box2d', 'rapier'],
@@ -76,11 +77,11 @@ export const MATRIX: ScenarioEntry[] = [
   {
     id: 'joints',
     title: 'Joints: motor carts and a breakable bridge',
-    description: 'N motorized carts drive inside a chain arena while heavy balls load a plank bridge of breakable spring rods. Pass: wheel joints hold. stiff=1 raises Box2D joint stiffness.',
+    description: 'N motorized carts drive inside a chain arena while heavy balls load a plank bridge of breakable spring rods. Pass: wheel joints hold. substeps=8 stiffens Box2D joints; stiff=1 raises its joint hertz.',
     task: 'CW-01.3',
     variants: [
       { label: '100', params: { count: 100 } },
-      { label: '100-stiff', params: { count: 100, stiff: 1 } },
+      { label: '100-sub8', params: { count: 100, substeps: 8 } },
     ],
     adapters: ['box2d', 'rapier'],
   },

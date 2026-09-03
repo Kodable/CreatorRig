@@ -66,7 +66,23 @@ Every run writes the same shape to the page, to the console as one `RIG_REPORT {
 | `box2d` | `phaser-box2d` 1.1.0 (Box2D v3 port, MIT) | 184 KB / 50 KB | Plain JavaScript. Two port quirks are worked around: `b2CreateWorldArray()` must run once, and `b2World_CastRayClosest` never sets its filter, so the adapter uses `b2World_CastRay` with a closest-hit callback. Chains need at least 4 points and are solid on the right, so the adapter reverses and subdivides. |
 | `rapier` | `@dimforge/rapier2d-deterministic-compat` 0.20.0 (Apache-2.0) | 2,155 KB / 814 KB | wasm inlined as base64 by the compat build; the plain wasm package with a Vite wasm plugin would be smaller. Cross-platform deterministic by construction. No rigid distance joint: a rigid `distance` becomes a stiff spring (30 Hz, damping 1). `wheel` motor max torque is applied only if the build exposes `configureMotorMaxForce`. |
 
+**Parity notes learned from the scenarios (CW-01.3)**: a `distance` spring defined by hertz produces different forces per engine (Box2D scales it by the constraint's effective mass, the Rapier adapter by the bodies' reduced mass), so scenarios that must match across engines drive motion with gravity and mass, not springs or motors. Box2D joints are soft: under heavy load a wheel joint opened 0.28 m at 4 sub-steps and 0.12 m at 8; `?substeps=8` is the knob. The Box2D port collapses unit-box towers of 40 or more; Rapier stands 40 with 0.6 m sway. Neither engine let a 6 cm ball at 90 m/s tunnel through a 1 cm wall, with or without the bullet flag.
+
 Both adapters pass the same conformance suite (`src/physics/conformance.test.ts`): settle, contact events, 10-box stack, revolute hold, motor spin, raycast, chain support, spring stretch and breakable joint, weld, body order, stable hash.
+
+## Scenarios
+
+| Id | Task | What it measures | Pass rule |
+| --- | --- | --- | --- |
+| `baseline` | CW-01.1 | Renderer floor: N moving sprites, no physics | p95 frame under 33.4 ms |
+| `physics-smoke` | CW-01.2 | Adapters load in the browser; hash at step 120 | p95 under 33.4 ms |
+| `bodies` | CW-01.3 | N bodies rain into a bowl; physics ms per frame; hash at step 300 | p95 under 33.4 ms |
+| `stack` | CW-01.3 | Tower of N unit boxes at rest; drift of the top box | drift under 0.5 m, no topple, p95 under 33.4 ms |
+| `joints` | CW-01.3 | 100 motor carts in an arena plus a bridge of breakable spring rods | wheel anchor gap under 0.1 m, p95 under 33.4 ms |
+| `ccd` | CW-01.3 | 6 cm ball at 90 m/s fired N times at a 1 cm wall (`bullet=0` variant) | zero tunnels |
+| `catapult` | CW-01.3 | Counterweight trebuchet into a box stack; limits, gravity, contacts | ball flies right, contacts fire, p95 under 33.4 ms |
+
+Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame), `subSteps` and, where meaningful, a `hash` taken at a fixed step for cross-device comparison.
 
 ## Bench (headless, desktop)
 

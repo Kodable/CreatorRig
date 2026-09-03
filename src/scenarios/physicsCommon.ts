@@ -94,6 +94,7 @@ export class FixedStepper {
 
   constructor(
     private world: PhysicsWorld,
+    private subSteps = FIXED_SUBSTEPS,
     private maxStepsPerFrame = 5,
   ) {}
 
@@ -103,7 +104,7 @@ export class FixedStepper {
     this.accumulator = Math.min(this.accumulator + deltaMs / 1000, FIXED_DT * this.maxStepsPerFrame);
     let n = 0;
     while (this.accumulator >= FIXED_DT) {
-      const r = this.world.step(FIXED_DT, FIXED_SUBSTEPS);
+      const r = this.world.step(FIXED_DT, this.subSteps);
       this.accumulator -= FIXED_DT;
       this.steps++;
       n++;
@@ -114,15 +115,22 @@ export class FixedStepper {
   }
 
   /** Physics ms per frame: the part of the frame budget the simulation used. */
-  stats(): { physicsMsP50: number; physicsMsP95: number; physicsMsMax: number; stepsTotal: number } {
+  stats(): { subSteps: number; physicsMsP50: number; physicsMsP95: number; physicsMsMax: number; stepsTotal: number } {
     const sorted = [...this.samples].sort((a, b) => a - b);
     return {
+      subSteps: this.subSteps,
       physicsMsP50: round2(percentile(sorted, 50)),
       physicsMsP95: round2(percentile(sorted, 95)),
       physicsMsMax: round2(sorted[sorted.length - 1] ?? 0),
       stepsTotal: this.steps,
     };
   }
+}
+
+/** ?substeps=8 overrides the fixed 4 sub-steps; Box2D joints stiffen with more sub-steps. */
+export function subStepsFrom(params: { extra: Record<string, string> }): number {
+  const n = Number(params.extra['substeps'] ?? FIXED_SUBSTEPS);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : FIXED_SUBSTEPS;
 }
 
 export function round2(n: number): number {
