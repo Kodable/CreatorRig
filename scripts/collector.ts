@@ -6,6 +6,8 @@ import { reportFileName } from '../src/report';
 
 /** Longest report body accepted, in bytes. Reports are a few KB. */
 const MAX_BODY = 1_000_000;
+/** A hidden tab throttles requestAnimationFrame to about 1 Hz; such a run has almost no frames. */
+export const MIN_FRAMES = 30;
 
 export interface SaveResult {
   status: number;
@@ -20,9 +22,12 @@ export function saveReport(raw: string, resultsDir: string, write: (path: string
   } catch {
     return { status: 400, body: { error: 'body is not JSON' } };
   }
-  const r = report as Partial<{ rig: string; scenario: string; adapter: string; device: string; params: Record<string, string | number> }>;
+  const r = report as Partial<{ rig: string; scenario: string; adapter: string; device: string; params: Record<string, string | number>; frames: number }>;
   if (r.rig !== 'kodable-creator-rig' || typeof r.scenario !== 'string' || typeof r.device !== 'string' || typeof r.params !== 'object' || r.params === null) {
     return { status: 400, body: { error: 'not a rig report' } };
+  }
+  if (typeof r.frames === 'number' && r.frames < MIN_FRAMES) {
+    return { status: 422, body: { error: `only ${r.frames} frames: the tab was hidden during the run; not saved` } };
   }
   const name = reportFileName({ scenario: r.scenario, adapter: r.adapter ?? 'none', device: r.device, params: r.params });
   write(join(resultsDir, name), JSON.stringify(report, null, 2));

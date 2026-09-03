@@ -26,7 +26,7 @@ npm run rig                      # serves on http://<mac-ip>:5173 (the terminal 
 ipconfig getifaddr en0           # the Mac's LAN address, if you need it
 ```
 
-On the device, open `http://<mac-ip>:5173/`, set the device tag, and leave **Send reports to this server** ticked (the box appears only when a collector answers). Every finished run then posts itself; the report view also has a **Send to rig server** button for a manual send. The file lands as `results/scenario-count-adapter-device.json` and the terminal prints the name. `GET /report` lists the saved files. The deployed HTTPS page cannot post to a LAN server, so use the Mac's URL for collection and the deployed URL only when a scenario needs HTTPS.
+On the device, open `http://<mac-ip>:5173/`, set the device tag, and leave **Send reports to this server** ticked (the box appears only when a collector answers). Every finished run then posts itself; the report view also has a **Send to rig server** button for a manual send. The file lands as `results/scenario-count-adapter-device.json` and the terminal prints the name. A rerun from the same device overwrites the file, except that a run with fewer than 30 frames (a hidden tab) is refused, so a throttled rerun cannot replace a good report. `GET /report` lists the saved files. The deployed HTTPS page cannot post to a LAN server, so use the Mac's URL for collection and the deployed URL only when a scenario needs HTTPS.
 
 ## URL parameters
 

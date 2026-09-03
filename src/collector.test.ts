@@ -18,6 +18,14 @@ describe('saveReport', () => {
     expect(r.body.saved).toBe('determinism-200-rapier-chromebook.json');
     expect(JSON.parse(writes['/results/determinism-200-rapier-chromebook.json']!)).toEqual(report);
   });
+  it('refuses a throttled run so it cannot overwrite a good report', () => {
+    const write = (): void => {
+      throw new Error('must not write');
+    };
+    const r = saveReport(JSON.stringify({ ...report, frames: 12 }), '/results', write);
+    expect(r.status).toBe(422);
+    expect(r.body.error).toContain('hidden');
+  });
   it('rejects bodies that are not JSON or not rig reports', () => {
     const write = (): void => {
       throw new Error('must not write');
