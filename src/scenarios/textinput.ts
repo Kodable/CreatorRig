@@ -28,13 +28,14 @@ const textinput: Scenario = {
 
     const canvas = scene.sys.game.canvas;
     const canvasSize0 = { w: canvas.clientWidth, h: canvas.clientHeight, inner: window.innerHeight };
-    const state = { focus: 0, blur: 0, keyboardShows: 0, keyboardHeight: 0, shiftPx: 0, dismissals: 0, typed: 0, canvasResized: false, minInnerHeight: window.innerHeight, native: Capacitor.isNativePlatform(), keyboardPlugin: false };
+    const state = { focus: 0, blur: 0, keyboardShows: 0, keyboardHeight: 0, shiftPx: 0, maxShiftPx: 0, dismissals: 0, typed: 0, canvasResized: false, minInnerHeight: window.innerHeight, native: Capacitor.isNativePlatform(), keyboardPlugin: false };
     const fieldBottomGap = 24;
     const applyShift = (keyboardHeight: number): void => {
       // Keep the field above the keyboard: move it up by whatever the keyboard covers.
       const rect = field.getBoundingClientRect();
       const overlap = rect.bottom + fieldBottomGap - (window.innerHeight - keyboardHeight);
       state.shiftPx = overlap > 0 ? Math.ceil(overlap) : 0;
+      if (state.shiftPx > state.maxShiftPx) state.maxShiftPx = state.shiftPx;
       field.style.transform = `translateY(${-state.shiftPx}px)`;
     };
     const render = (): void => {

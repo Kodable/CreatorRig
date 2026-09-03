@@ -124,7 +124,9 @@ const purchase: Scenario = {
           const p = products.products.find((x) => x.identifier === PRODUCT_ID);
           state.productFound = p !== undefined;
           state.priceString = p?.priceString ?? '';
-          state.period = p ? `${p.subscriptionPeriod.numberOfUnits} ${p.subscriptionPeriod.unit}` : '';
+          // StoreKit reports the unit as a number: 0 day, 1 week, 2 month, 3 year.
+          const UNITS = ['day', 'week', 'month', 'year'];
+          state.period = p ? `${p.subscriptionPeriod.numberOfUnits} ${UNITS[Number(p.subscriptionPeriod.unit)] ?? String(p.subscriptionPeriod.unit)}` : '';
           log(p ? `product ${p.identifier} ${p.priceString} per ${state.period}, group ${p.subscriptionGroupIdentifier}` : `product ${PRODUCT_ID} not found: create the subscription in App Store Connect and wait a few minutes`);
         } catch (err) {
           state.error = String(err);
