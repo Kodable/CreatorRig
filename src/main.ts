@@ -23,6 +23,8 @@ if (NATIVE) {
       if (!q.has('scenario')) return;
       if (!q.has('device')) q.set('device', guessDevice(navigator.userAgent, navigator.maxTouchPoints, true));
       q.set('via', 'universal-link');
+      // A link-opened run posts its report itself; without a collector the Send just reports failure.
+      if (!q.has('send')) q.set('send', '1');
       window.location.href = `./?${q.toString()}`;
     });
   });
