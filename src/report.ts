@@ -268,6 +268,14 @@ function addReportActions(report: Report): void {
   bar.appendChild(send);
   if (report.params['send'] === '1') void post();
 
+  // Download: for browsers on the deployed page, where no collector answers.
+  const download = document.createElement('a');
+  download.textContent = `Download ${name}`;
+  download.className = 'button';
+  download.download = name;
+  download.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  bar.appendChild(download);
+
   const file = new File([json], name, { type: 'application/json' });
   const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
   if (typeof nav.share === 'function') {

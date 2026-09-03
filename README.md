@@ -13,7 +13,7 @@ npm install
 npm run rig          # dev server on the LAN, opens the index page
 ```
 
-The index page lists every scenario and variant. Set the **device tag** first (`chromebook`, `ipad`, `iphone`, `mac-chrome`, `mac-safari`, `capacitor-ipad`, ...), then tap a variant. After the warm-up and the measured window the report box appears with two buttons: **Copy JSON** puts the report on the clipboard, **Share** hands it to the system share sheet as `scenario-count-adapter-device.json` (AirDrop it to the Mac and drop it into `results/`). Then `npm run results` prints the tables.
+The index page lists every scenario and variant. Set the **device tag** first (`chromebook`, `ipad`, `iphone`, `mac-chrome`, `mac-safari`, `capacitor-ipad`, ...), then tap a variant. After the warm-up and the measured window the report box appears with buttons: **Copy JSON** puts the report on the clipboard, **Send to rig server** posts it to `results/` when the page came from the Mac's dev server (see *Collecting device reports*), **Download** saves `scenario-count-adapter-device.json`, and **Share** (iOS) hands the file to the share sheet. Then `npm run results` prints the tables.
 
 Devices on the same network open `http://<your-mac-ip>:5173/`. For Safari on iOS some scenarios (PWA install, Universal Links) need HTTPS: use the deployed URL.
 
