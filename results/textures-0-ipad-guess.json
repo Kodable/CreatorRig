@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "scenario": "textures",
   "adapter": "none",
-  "device": "mac-chrome-guess",
-  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "device": "ipad-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Safari/605.1.15",
   "viewport": {
-    "width": 1728,
-    "height": 962,
+    "width": 1180,
+    "height": 688,
     "dpr": 2
   },
   "params": {
@@ -17,16 +17,16 @@
     "seed": 1,
     "send": "1"
   },
-  "startedAt": "2026-09-03T18:55:17.783Z",
-  "durationMs": 20004,
-  "frames": 2401,
-  "fps": 120,
-  "p50": 8.3,
-  "p95": 9.3,
-  "max": 9.4,
+  "startedAt": "2026-09-03T18:55:08.964Z",
+  "durationMs": 20015,
+  "frames": 1201,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 25,
   "dropped": 0,
-  "slow": 0,
-  "heapMB": 114.5,
+  "slow": 794,
+  "heapMB": null,
   "pass": true,
   "notes": [],
   "extra": {
@@ -61,7 +61,7 @@
     "gpuSupports": {
       "ASTC": true,
       "ETC": true,
-      "S3TC": true
+      "S3TC": false
     },
     "rawBytesTotal": 29360128,
     "compressedBytesTotal": 3272392,
