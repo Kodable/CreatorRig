@@ -9,10 +9,13 @@ import type { Scenario, ScenarioHandle } from './types';
  * foreground and when Safari reports an interruption (a call, Siri, a timer), and plays again so
  * the human hears whether sound survived. Everything is logged on screen and in the report.
  *
- * Device finding: after an interruption iOS Safari reports the context `suspended` and then
- * `running` again, but the audio clock stays frozen and nothing plays. resume() does not help.
- * The rig detects the frozen clock (running, but currentTime did not advance during a beep),
- * closes the context and creates a new one on the next tap, and reports whether that recovered.
+ * Device findings (iPad and iPhone, iOS 18.7): after a Siri or timer interruption the context
+ * reports `suspended` then `running`, but the audio clock stays frozen and nothing plays; resume()
+ * does not help, and a brand-new AudioContext comes up frozen too. The rig therefore tries, once
+ * per tap, a ladder of known cures and reports which one brought sound back: (1) resume, (2) play
+ * a silent HTMLAudioElement on the gesture to reactivate the iOS audio session, then resume,
+ * (3) close and recreate the context. navigator.audioSession.type is set to "playback" where the
+ * API exists.
  */
 const audio: Scenario = {
   id: 'audio',
@@ -37,15 +40,25 @@ const audio: Scenario = {
       interruptions: 0,
       playedAfterInterruptionWithResume: 0,
       frozenClockDetected: 0,
-      recreations: 0,
-      playedAfterRecreate: 0,
+      recoveries: [] as string[],
+      recoveredByResume: 0,
+      recoveredByMediaUnlock: 0,
+      recoveredByRecreate: 0,
+      recoveryFailed: 0,
+      audioSessionApi: typeof (navigator as Navigator & { audioSession?: unknown }).audioSession !== 'undefined',
       lastState: 'none',
       sampleRate: 0,
     };
     let pendingInterruption = false;
     let hiddenNow = false;
+    let busy = false;
+    // A 0.1 s silent WAV; playing it on a gesture is the classic iOS audio-session unlock.
+    const silent = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQQAAAAAAAA=');
+    silent.setAttribute('playsinline', '');
 
     const createContext = (why: string): AudioContext => {
+      const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+      if (session) session.type = 'playback';
       const c = new AudioContext();
       state.sampleRate = c.sampleRate;
       c.addEventListener('statechange', () => {
@@ -63,9 +76,8 @@ const audio: Scenario = {
       return c;
     };
 
-    const beep = async (why: string): Promise<boolean> => {
-      if (!ctx) ctx = createContext('created');
-      const c = ctx;
+    /** One 250 ms tone on the given context; true when the graph ran (ended fired and the clock advanced). */
+    const tone = async (c: AudioContext): Promise<{ played: boolean; running: boolean; clockMoved: boolean }> => {
       try {
         if (c.state !== 'running') await c.resume();
       } catch (err) {
@@ -83,46 +95,90 @@ const audio: Scenario = {
       osc.start(t0);
       osc.stop(t0 + 0.25);
       const ended = await new Promise<boolean>((resolve) => {
-        const timer = setTimeout(() => resolve(false), 1500);
+        const timer = setTimeout(() => resolve(false), 1200);
         osc.onended = () => {
           clearTimeout(timer);
           resolve(true);
         };
       });
       const clockMoved = c.currentTime > t0;
-      const played = running && ended && clockMoved;
-      if (played) state.beeps++;
-      log(`${why}: ${played ? 'beep played' : 'NO sound'} (state ${c.state}, clock ${c.currentTime.toFixed(2)})`);
-      if (running && !clockMoved) {
-        // Frozen clock: the context claims to run but produces nothing. Recreate it.
-        state.frozenClockDetected++;
-        log('clock frozen while running: closing the context, a new one comes with the next beep');
-        try {
-          await c.close();
-        } catch {
-          // ignore
-        }
-        ctx = null;
-        state.recreations++;
-        const again = await beep(`${why}, recreated context`);
-        if (again) state.playedAfterRecreate++;
-        return again;
+      return { played: running && ended && clockMoved, running, clockMoved };
+    };
+
+    const beep = async (why: string): Promise<boolean> => {
+      if (!ctx) ctx = createContext('created');
+      let r = await tone(ctx);
+      log(`${why}: ${r.played ? 'beep played' : 'NO sound'} (state ${ctx.state}, clock ${ctx.currentTime.toFixed(2)})`);
+      if (r.played) {
+        state.beeps++;
+        return true;
       }
-      return played;
+      if (!(r.running && !r.clockMoved)) return false;
+      // Frozen clock while "running": the iOS interruption case. One ladder of cures per tap.
+      state.frozenClockDetected++;
+      // 1. resume again on this gesture
+      r = await tone(ctx);
+      if (r.played) {
+        state.beeps++;
+        state.recoveredByResume++;
+        state.recoveries.push('resume');
+        log('recovered by a second resume');
+        return true;
+      }
+      // 2. silent media element on the gesture, then resume
+      try {
+        await silent.play();
+        log('silent <audio> played');
+      } catch (err) {
+        log(`silent <audio> failed: ${String(err)}`);
+      }
+      r = await tone(ctx);
+      if (r.played) {
+        state.beeps++;
+        state.recoveredByMediaUnlock++;
+        state.recoveries.push('mediaUnlock');
+        log('recovered by the media-element unlock');
+        return true;
+      }
+      // 3. close and recreate
+      try {
+        await ctx.close();
+      } catch {
+        // ignore
+      }
+      ctx = createContext('recreated');
+      r = await tone(ctx);
+      if (r.played) {
+        state.beeps++;
+        state.recoveredByRecreate++;
+        state.recoveries.push('recreate');
+        log('recovered by recreating the context');
+        return true;
+      }
+      state.recoveryFailed++;
+      state.recoveries.push('failed');
+      log(`no cure worked on this tap (state ${ctx.state}, clock ${ctx.currentTime.toFixed(2)}); try again after switching apps and back`);
+      return false;
     };
 
     const onTap = (): void => {
+      if (busy) return;
+      busy = true;
       state.taps++;
       const first = state.taps === 1;
       const afterInterruption = pendingInterruption;
-      const recreationsBefore = state.recreations;
-      void beep(first ? 'first tap' : `tap ${state.taps}`).then((played) => {
-        if (first) state.firstTapPlayed = played;
-        if (afterInterruption) {
-          pendingInterruption = false;
-          if (played && state.recreations === recreationsBefore) state.playedAfterInterruptionWithResume++;
-        }
-      });
+      const frozenBefore = state.frozenClockDetected;
+      void beep(first ? 'first tap' : `tap ${state.taps}`)
+        .then((played) => {
+          if (first) state.firstTapPlayed = played;
+          if (afterInterruption) {
+            pendingInterruption = false;
+            if (played && state.frozenClockDetected === frozenBefore) state.playedAfterInterruptionWithResume++;
+          }
+        })
+        .finally(() => {
+          busy = false;
+        });
     };
     scene.input.on('pointerdown', onTap);
 
@@ -136,10 +192,15 @@ const audio: Scenario = {
       hiddenNow = false;
       state.resumed++;
       log('tab visible again');
-      if (!ctx) return;
-      void beep('after resume').then((played) => {
-        if (played) state.playedAfterResume++;
-      });
+      if (!ctx || busy) return;
+      busy = true;
+      void beep('after resume')
+        .then((played) => {
+          if (played) state.playedAfterResume++;
+        })
+        .finally(() => {
+          busy = false;
+        });
     });
 
     return {
@@ -147,9 +208,10 @@ const audio: Scenario = {
         if (state.taps === 0) return null;
         if (!state.firstTapPlayed) return false;
         if (state.resumed > 0 && state.playedAfterResume === 0) return false;
-        // After an interruption, sound must come back, by resume or by recreating the context.
-        if (state.interruptions > 0 && state.playedAfterInterruptionWithResume === 0 && state.playedAfterRecreate === 0) return false;
-        if (state.frozenClockDetected > 0 && state.playedAfterRecreate === 0) return false;
+        // After an interruption, sound must come back by some cure.
+        const recovered = state.recoveredByResume + state.recoveredByMediaUnlock + state.recoveredByRecreate > 0;
+        if (state.interruptions > 0 && state.playedAfterInterruptionWithResume === 0 && !recovered) return false;
+        if (state.frozenClockDetected > 0 && !recovered) return false;
         return true;
       },
       extra(): Record<string, unknown> {
@@ -158,7 +220,7 @@ const audio: Scenario = {
       notes(): string[] {
         if (state.taps === 0) return ['no tap during the window; tap the stage, background the tab and come back, trigger an interruption, tap again'];
         const notes: string[] = [];
-        if (state.frozenClockDetected > 0) notes.push(`after an interruption the context reported running with a frozen clock ${state.frozenClockDetected} time(s); resume() did not bring sound back, recreating the context ${state.playedAfterRecreate > 0 ? 'did' : 'did NOT'}`);
+        if (state.frozenClockDetected > 0) notes.push(`frozen clock after an interruption ${state.frozenClockDetected} time(s); cures: ${state.recoveries.join(', ')}`);
         if (state.interruptions === 0) notes.push('no interruption seen; start Siri or a timer alarm while the page is open, dismiss it, then tap again');
         return notes;
       },
