@@ -102,6 +102,9 @@ Both adapters pass the same conformance suite (`src/physics/conformance.test.ts`
 | `audio` | CW-01.8 | Web Audio beep on first tap; resume after background; resume after an interruption | beep on first tap, and after each resume |
 | `fonts` | CW-01.8 | Text created before and after `fonts.ready` with the Kodable font | font loads; `extra.ruleNeeded` says whether text must wait for the font |
 | `pwa` | CW-01.8 | Display mode, service worker state, cache entries | standalone and controlled by the service worker when launched from the icon |
+| `purchase` | CW-01.9 | One sandbox consumable through StoreKit 2 (`@capgo/native-purchases`), shell only | transaction id returned |
+| `textinput` | CW-01.9 | DOM input over the canvas with the keyboard in resize mode none and a JS shift | keyboard height arrives, canvas keeps its size, tap outside dismisses |
+| `jettison` | CW-01.9 | Allocate until iOS kills the content process; recover from an IndexedDB envelope after the reload | `recovered=true` with the budget in MB |
 | `determinism` | CW-01.4 | Seeded coaster scene: 200 bodies, 30 joints, one motor, 3,000 fixed steps, run twice; hash of every transform | the two runs agree (`stable`); humans compare `hash` across devices |
 
 Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame), `subSteps` and, where meaningful, a `hash` taken at a fixed step for cross-device comparison.
@@ -139,6 +142,20 @@ It writes 3 KTX files next to each PNG in `public/textures/` and `public/atlas/`
 - The gizmo renders into a layer the scene keeps exactly over the canvas (`.ov-canvas-layer`, from the canvas's offset box each frame), so its pixels are canvas pixels: iPad Safari moved the canvas under a page-positioned gizmo by a constant 6 to 77 px per run. React's `createRoot` empties its container, so that layer is a sibling of the React container inside the input shell.
 - Real input on devices lands between frames and delays the frame callback by 1 to 2 ms at p95 without dropping frames (p50 16.7 ms, no frame over 33.4 ms), while the robot's in-frame events show a clean 16.7 ms; the pass rule is therefore p95 under 20 ms and at most 1 % dropped, and `dragDropped` and `dragSlow` are reported.
 - `flushSync` is the finding. Input-driven store changes from native handlers or from Phaser's loop are rendered by React one frame after Phaser applies them: the gizmo lags the sprite by 3 px at 120 Hz and 6 px at 60 Hz, and a camera jump flashes the gizmo a full screen away for one frame. Wrapping those changes in `flushSync` (the default; `flush=0` shows the lag) brings drift to 0.01 px at a commit cost under 0.1 ms. `gizmo=imperative` moves the gizmo element directly during a drag and tells React on release; it is the fallback if flushSync ever costs too much on a device.
+
+### Capacitor shell (CW-01.9)
+
+`ios/` is a Capacitor 8 app (Swift Package Manager) that bundles `dist/`; `capacitor.config.ts` sets the id `com.surfscore.kodable.creatorrig` (the rig's own, never the production Creator id), the keyboard in resize mode `none`, no content inset and no scrolling. Inside the shell every scenario reports `device=capacitor-ipad` or `capacitor-iphone`.
+
+```bash
+npm run build && npx cap sync ios     # copy dist/ and plugins into the app
+npx cap open ios                      # Xcode: select the team, run on a device
+```
+
+- **Native tweaks**: `AppDelegate.swift` sets the `AVAudioSession` playback category, so sound plays with the ring/silent switch off (check with `audio · tap` in the shell). `RigViewController.swift` defers the bottom-edge gesture and hides the home indicator. `Info.plist` locks landscape, requires full screen and hides the status bar. `App.entitlements` holds the Associated Domains entry; replace `HOST` with the domain that serves `public/.well-known/apple-app-site-association` at its root (see below). `main.ts` reports a lost WebGL context as an error instead of a blank canvas.
+- **Universal Link**: `main.ts` listens for `appUrlOpen` and navigates to the scenario named in the link's query, for example `https://HOST/creator-rig/?scenario=bodies&adapter=box2d&count=200`. iOS reads the AASA from the domain root, so the Pages host (`kodable.github.io/CreatorRig/`) cannot serve it: Kodable has no site at that apex. Choose a host Kodable controls (a Netlify site for the rig, or the `game.kodable.com` static folder that already serves Kodable's AASA) and put the JSON from `public/.well-known/` at its root.
+- **Purchase**: `@capgo/native-purchases` (StoreKit 2, no account). App Store Connect needs an app record for the bundle id with one consumable `com.surfscore.kodable.creatorrig.coin`, and a sandbox tester signed in on the device. The report carries the transaction id and receipt sizes; the console prints `RIG_RECEIPT`.
+- `textinput`, `jettison` and the other shell checks are scenarios (see the table). `scripts/capacitor-wizard.sh` walks a human through the Apple side.
 
 ### Memory, load, audio, fonts, PWA (CW-01.8)
 

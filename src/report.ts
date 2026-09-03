@@ -207,6 +207,40 @@ export function emitReport(report: Report): void {
   addReportActions(report);
 }
 
+const COLLECTOR_KEY = 'rig-collector';
+
+/**
+ * Where reports are posted: the page's own origin, or the address saved from the index page's
+ * "Collector" field (needed inside the Capacitor shell, whose origin is capacitor://localhost).
+ */
+export function collectorUrl(): string {
+  let saved = '';
+  try {
+    saved = localStorage.getItem(COLLECTOR_KEY) ?? '';
+  } catch {
+    // no storage
+  }
+  const base = saved !== '' ? saved.replace(/\/?$/, '/') : window.location.href;
+  return new URL('report', base).toString();
+}
+
+export function saveCollector(url: string): void {
+  try {
+    if (url.trim() === '') localStorage.removeItem(COLLECTOR_KEY);
+    else localStorage.setItem(COLLECTOR_KEY, url.trim());
+  } catch {
+    // no storage
+  }
+}
+
+export function savedCollector(): string {
+  try {
+    return localStorage.getItem(COLLECTOR_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 /** Params that do not distinguish a variant and stay out of the file name. */
 const RUN_ONLY_PARAMS = new Set(['count', 'duration', 'warmup', 'seed', 'send']);
 
@@ -269,11 +303,11 @@ function addReportActions(report: Report): void {
   const post = async (): Promise<void> => {
     send.disabled = true;
     try {
-      const res = await fetch(new URL('report', window.location.href), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json });
+      const res = await fetch(collectorUrl(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json });
       const data = (await res.json().catch(() => ({}))) as { saved?: string; error?: string };
       send.textContent = res.ok ? `Saved results/${data.saved ?? name}` : `Rejected: ${data.error ?? res.status}`;
     } catch {
-      send.textContent = 'No rig server here: open the rig from the Mac (http://<mac-ip>:5173)';
+      send.textContent = 'No rig server reachable: set the Collector field on the index page to http://<mac-ip>:5173';
     }
   };
   send.addEventListener('click', () => void post());

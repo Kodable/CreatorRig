@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["SG83N65WAM.com.surfscore.kodable.creatorrig"],
+        "components": [
+          { "/": "/creator-rig", "comment": "the rig shell; the query names the scenario" },
+          { "/": "/creator-rig/*" }
+        ]
+      }
+    ]
+  }
+}

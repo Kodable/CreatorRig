@@ -216,6 +216,30 @@ export const MATRIX: ScenarioEntry[] = [
     variants: [{ label: 'check', params: { duration: 2 } }],
     adapters: [],
   },
+  {
+    id: 'purchase',
+    title: 'Purchase: one sandbox consumable (shell only)',
+    description: 'StoreKit 2 through @capgo/native-purchases inside the Capacitor shell. Tap to buy the test coin with a sandbox tester; the report carries the transaction id and receipt sizes.',
+    task: 'CW-01.9',
+    variants: [{ label: 'coin', params: { duration: 90 }, manual: true }],
+    adapters: [],
+  },
+  {
+    id: 'textinput',
+    title: 'Text input over the canvas (shell)',
+    description: 'A DOM input over the canvas with the keyboard in resize mode none and a JS shift by the keyboard height. Pass: keyboard height arrives, the canvas keeps its size, a tap outside dismisses.',
+    task: 'CW-01.9',
+    variants: [{ label: 'field', params: { duration: 45 }, manual: true }],
+    adapters: [],
+  },
+  {
+    id: 'jettison',
+    title: 'Jettison: allocate until iOS kills the process, then recover',
+    description: 'Writes a recovery envelope to IndexedDB, allocates 32 MB per frame until the content process dies, and after the reload reports recovered=true with the budget. Never run in a tab you care about.',
+    task: 'CW-01.9',
+    variants: [{ label: '32mb', params: { duration: 120, chunk: 32, maxMB: 3000 }, manual: true }],
+    adapters: [],
+  },
 ];
 
 export interface BenchRun {

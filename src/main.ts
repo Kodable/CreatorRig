@@ -1,6 +1,7 @@
+import { Capacitor } from '@capacitor/core';
 import Phaser from 'phaser';
 import { buildUrl, guessDevice, parseParams, type RigParams } from './params';
-import { buildReport, emitError, emitReport, FrameSampler, type FrameStats } from './report';
+import { buildReport, collectorUrl, emitError, emitReport, FrameSampler, saveCollector, savedCollector, type FrameStats } from './report';
 import { MATRIX } from './scenarios/matrix';
 import { loadScenario } from './scenarios/registry';
 import type { Scenario, ScenarioHandle } from './scenarios/types';
@@ -10,6 +11,22 @@ const STAGE_WIDTH = 1024;
 const STAGE_HEIGHT = 768;
 
 const params = parseParams(window.location.search);
+/** True inside the Capacitor shell (CW-01.9); the device tag then reads capacitor-ipad or capacitor-iphone. */
+const NATIVE = Capacitor.isNativePlatform();
+
+// Universal Link into the shell: the link's query names the scenario (…?scenario=bodies&adapter=box2d).
+if (NATIVE) {
+  void import('@capacitor/app').then(({ App }) => {
+    void App.addListener('appUrlOpen', ({ url }) => {
+      const opened = new URL(url);
+      const q = new URLSearchParams(opened.search);
+      if (!q.has('scenario')) return;
+      if (!q.has('device')) q.set('device', guessDevice(navigator.userAgent, navigator.maxTouchPoints, true));
+      q.set('via', 'universal-link');
+      window.location.href = `./?${q.toString()}`;
+    });
+  });
+}
 
 // PWA app shell (CW-01.8). Production only, so the dev server never serves stale files; ?sw=0 skips
 // it so a cold-load measurement sees every byte on the page's own network.
@@ -27,7 +44,7 @@ function renderIndex(): void {
   const root = document.getElementById('index');
   if (!root) return;
   root.hidden = false;
-  const device = guessDevice(navigator.userAgent, navigator.maxTouchPoints);
+  const device = guessDevice(navigator.userAgent, navigator.maxTouchPoints, NATIVE);
 
   const header = document.createElement('div');
   header.innerHTML = `
@@ -37,7 +54,8 @@ function renderIndex(): void {
     <label>Device tag <input id="device" value="${device}" size="18"></label>
     <label>Duration <input id="duration" type="number" value="20" min="3" max="600" size="5"> s</label>
     <label>Adapter <select id="adapter"><option value="none">none</option></select></label>
-    <label id="send-label" hidden><input id="send" type="checkbox" checked> Send reports to this server (results/)</label>
+    <label id="send-label" hidden><input id="send" type="checkbox" checked> Send reports to the collector (results/)</label>
+    <label title="Where reports are posted. Empty = this page's own server. Inside the Capacitor shell set http://<mac-ip>:5173">Collector <input id="collector" size="28" placeholder="this server"></label>
   `;
   root.appendChild(header);
 
@@ -46,6 +64,8 @@ function renderIndex(): void {
   const adapterSelect = header.querySelector<HTMLSelectElement>('#adapter');
   const sendLabel = header.querySelector<HTMLLabelElement>('#send-label');
   const sendInput = header.querySelector<HTMLInputElement>('#send');
+  const collectorInput = header.querySelector<HTMLInputElement>('#collector');
+  if (collectorInput) collectorInput.value = savedCollector();
 
   const list = document.createElement('div');
   root.appendChild(list);
@@ -100,15 +120,23 @@ function renderIndex(): void {
   sendInput?.addEventListener('change', render);
   render();
 
-  // Offer auto-send only where a collector answers (the Vite dev or preview server, not Pages).
-  void fetch(new URL('report', window.location.href), { method: 'HEAD' })
-    .then((res) => {
-      if (res.ok && sendLabel) {
-        sendLabel.hidden = false;
+  // Offer auto-send only where a collector answers (the Vite dev or preview server, or the address in the Collector field).
+  const probeCollector = (): void => {
+    fetch(collectorUrl(), { method: 'HEAD' })
+      .then((res) => {
+        if (sendLabel) sendLabel.hidden = !res.ok;
         render();
-      }
-    })
-    .catch(() => undefined);
+      })
+      .catch(() => {
+        if (sendLabel) sendLabel.hidden = true;
+        render();
+      });
+  };
+  collectorInput?.addEventListener('change', () => {
+    saveCollector(collectorInput.value);
+    probeCollector();
+  });
+  probeCollector();
 }
 
 async function runScenario(p: RigParams): Promise<void> {
@@ -116,7 +144,7 @@ async function runScenario(p: RigParams): Promise<void> {
   if (stage) stage.style.display = 'block';
   const hud = document.getElementById('hud');
   const hashBox = document.getElementById('hash');
-  const device = p.device !== '' ? p.device : guessDevice(navigator.userAgent, navigator.maxTouchPoints);
+  const device = p.device !== '' ? p.device : guessDevice(navigator.userAgent, navigator.maxTouchPoints, NATIVE);
 
   const loaded = await loadScenario(p.scenario);
   if (!loaded) {
@@ -179,7 +207,7 @@ async function runScenario(p: RigParams): Promise<void> {
   window.addEventListener('error', (e) => emitError(e.message));
   window.addEventListener('unhandledrejection', (e) => emitError(String(e.reason)));
 
-  new Phaser.Game({
+  const game = new Phaser.Game({
     type: Phaser.WEBGL,
     parent: 'game',
     width: STAGE_WIDTH,
@@ -190,5 +218,10 @@ async function runScenario(p: RigParams): Promise<void> {
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     scene: [RigScene],
+  });
+  // A lost WebGL context (iOS under memory pressure, GPU reset) must surface, never fail silently.
+  game.canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    emitError('webglcontextlost: the GPU context was lost; the runtime must rebuild textures or reload');
   });
 }

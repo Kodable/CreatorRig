@@ -22,6 +22,9 @@ const LOADERS: Record<string, () => Promise<{ default: Scenario }>> = {
   audio: () => import('./audio'),
   fonts: () => import('./fonts'),
   pwa: () => import('./pwa'),
+  purchase: () => import('./purchase'),
+  textinput: () => import('./textinput'),
+  jettison: () => import('./jettison'),
 };
 
 export async function loadScenario(id: string): Promise<Scenario | null> {

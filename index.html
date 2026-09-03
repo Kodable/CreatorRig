@@ -111,6 +111,12 @@
       .ov-handle-nw { left: 0; top: 0; } .ov-handle-n { left: 50%; top: 0; } .ov-handle-ne { left: 100%; top: 0; } .ov-handle-e { left: 100%; top: 50%; }
       .ov-handle-se { left: 100%; top: 100%; } .ov-handle-s { left: 50%; top: 100%; } .ov-handle-sw { left: 0; top: 100%; } .ov-handle-w { left: 0; top: 50%; }
       .ov-handle-rotate { left: 50%; top: -28px; border-radius: 50%; background: var(--accent); }
+      /* CW-01.9 text input check: a DOM field over the canvas, 16 px so iOS does not zoom, selectable. */
+      .ti-field {
+        position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 6; width: 360px;
+        font: 16px -apple-system, BlinkMacSystemFont, sans-serif; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--accent);
+        background: #fff; color: #1a2142; user-select: text; -webkit-user-select: text; transition: transform 120ms ease-out;
+      }
       #hash {
         position: fixed; top: 8px; right: 8px; z-index: 10; padding: 8px 12px; border-radius: 8px; display: none;
         background: rgba(255,255,255,0.94); color: #1a2142; font: 700 28px/1.1 ui-monospace, Menlo, monospace;

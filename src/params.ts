@@ -59,7 +59,8 @@ export function buildUrl(base: string, params: Record<string, string | number>):
  * A stable device guess for when no ?device= tag was supplied. It is only a hint;
  * device runs by hand must pass an explicit tag so results are labeled correctly.
  */
-export function guessDevice(ua: string, maxTouchPoints: number): string {
+export function guessDevice(ua: string, maxTouchPoints: number, nativeShell = false): string {
+  if (nativeShell) return /iPhone/.test(ua) ? 'capacitor-iphone' : 'capacitor-ipad';
   if (/iPhone/.test(ua)) return 'iphone-guess';
   if (/iPad/.test(ua) || (/Macintosh/.test(ua) && maxTouchPoints > 1)) return 'ipad-guess';
   if (/CrOS/.test(ua)) return 'chromebook-guess';
