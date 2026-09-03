@@ -1,6 +1,9 @@
 node_modules/
 dist/
-results/*.json
+# Headless bench output is noise; device reports (tagged by device) are evidence and are committed.
+results/playwright.json
+results/*-chromium.json
+results/*-webkit.json
 playwright-report/
 test-results/
 .DS_Store

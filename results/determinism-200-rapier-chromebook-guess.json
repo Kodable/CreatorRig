@@ -1,0 +1,60 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "determinism",
+  "adapter": "rapier",
+  "device": "chromebook-guess",
+  "ua": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 1366,
+    "height": 633,
+    "dpr": 1
+  },
+  "params": {
+    "count": 200,
+    "duration": 15,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T17:51:36.384Z",
+  "durationMs": 47706,
+  "frames": 2198,
+  "fps": 46.1,
+  "p50": 16.7,
+  "p95": 33.4,
+  "max": 33.7,
+  "dropped": 92,
+  "slow": 768,
+  "heapMB": 68.7,
+  "pass": true,
+  "notes": [
+    "measured window extended by 32.7 s until the scenario finished"
+  ],
+  "extra": {
+    "bodies": 200,
+    "joints": 30,
+    "motors": 1,
+    "subSteps": 4,
+    "hashStep": 3000,
+    "hash": "3f70d0ba",
+    "hashRerun": "3f70d0ba",
+    "stable": true,
+    "checkpoints": {
+      "300": "7d81e830",
+      "1000": "f73a0c57",
+      "3000": "3f70d0ba"
+    },
+    "checkpointsRerun": {
+      "300": "7d81e830",
+      "1000": "f73a0c57",
+      "3000": "3f70d0ba"
+    },
+    "stepsDone": [
+      3000,
+      3000
+    ],
+    "physicsMsP50": 15.1,
+    "physicsMsP95": 16.3
+  }
+}

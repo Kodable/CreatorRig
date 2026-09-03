@@ -1,0 +1,58 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "determinism",
+  "adapter": "rapier",
+  "device": "ipad-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Safari/605.1.15",
+  "viewport": {
+    "width": 1180,
+    "height": 688,
+    "dpr": 2
+  },
+  "params": {
+    "count": 200,
+    "duration": 15,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T17:51:29.196Z",
+  "durationMs": 15022,
+  "frames": 902,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 19,
+  "dropped": 0,
+  "slow": 574,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "bodies": 200,
+    "joints": 30,
+    "motors": 1,
+    "subSteps": 4,
+    "hashStep": 3000,
+    "hash": "3f70d0ba",
+    "hashRerun": "3f70d0ba",
+    "stable": true,
+    "checkpoints": {
+      "300": "7d81e830",
+      "1000": "f73a0c57",
+      "3000": "3f70d0ba"
+    },
+    "checkpointsRerun": {
+      "300": "7d81e830",
+      "1000": "f73a0c57",
+      "3000": "3f70d0ba"
+    },
+    "stepsDone": [
+      3000,
+      3000
+    ],
+    "physicsMsP50": 12,
+    "physicsMsP95": 13
+  }
+}
