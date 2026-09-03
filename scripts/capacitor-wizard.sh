@@ -219,7 +219,8 @@ say "Live mode: the app loads http://${MAC_IP}:5173 so web changes need no app r
 step "In a terminal in the repo: npm run dev        (leave it running)"
 step "In another: CAP_SERVER_URL=http://${MAC_IP}:5173 npx cap sync ios"
 step "Connect the iPad by USB, unlock it, tap Trust. In Xcode pick the iPad as the run destination and press Run."
-step "First launch on the device: Settings > General > VPN & Device Management > trust the developer app. Allow 'Local Network' when the app asks."
+step "Keep 'npm run dev' running the whole time: the app loads the Mac's server on every launch and shows an empty screen when it is off."
+step "First launch on the device: allow 'Local Network' when the app asks (Settings > Privacy & Security > Local Network > Creator Rig if you missed it). No entry appears under VPN & Device Management with the team profile; that is normal."
 step "The rig index appears in the app. The device tag reads capacitor-ipad. Run 'baseline 200' and confirm the report says device=capacitor-ipad."
 pause "Report seen with device=capacitor-ipad? Press Enter."
 
