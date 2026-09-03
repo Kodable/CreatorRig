@@ -153,9 +153,14 @@ export const MATRIX: ScenarioEntry[] = [
   {
     id: 'textures',
     title: 'Textures: raw PNG vs KTX',
-    description: 'The 2048x1536 backdrop and the item atlas, raw and compressed (KTX: ASTC, ETC2, S3TC), side by side. Reports GPU bytes per texture. Needs the KTX files from PVRTexTool.',
+    description: 'The 2048x1536 backdrop and the item atlas, raw and compressed (KTX), side by side. Reports GPU bytes per texture. auto lets the GPU pick; astc, etc2 and s3tc force one format.',
     task: 'CW-01.6',
-    variants: [{ label: 'both', params: {} }],
+    variants: [
+      { label: 'auto', params: {} },
+      { label: 'astc', params: { format: 'ASTC' } },
+      { label: 'etc2', params: { format: 'ETC' } },
+      { label: 's3tc', params: { format: 'S3TC' } },
+    ],
     adapters: [],
   },
 ];

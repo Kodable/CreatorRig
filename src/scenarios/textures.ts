@@ -37,10 +37,11 @@ interface Probe {
   bytes: number;
 }
 
-/** Which KTX files exist on the server, with their payload size, without loading them. */
-async function probeKtx(spec: TextureSpec): Promise<Probe[]> {
+/** Which KTX files exist on the server, with their payload size, without loading them. `only` restricts to one format. */
+async function probeKtx(spec: TextureSpec, only: string): Promise<Probe[]> {
   const found: Probe[] = [];
   for (const format of Object.keys(spec.ktx) as (keyof TextureSpec['ktx'])[]) {
+    if (only !== '' && only !== format) continue;
     const url = spec.ktx[format];
     try {
       const res = await fetch(url, { method: 'HEAD' });
@@ -63,9 +64,11 @@ async function probeKtx(spec: TextureSpec): Promise<Probe[]> {
 const textures: Scenario = {
   id: 'textures',
   defaultCount: 0,
-  async create(scene: Phaser.Scene, _params: RigParams): Promise<ScenarioHandle> {
+  async create(scene: Phaser.Scene, params: RigParams): Promise<ScenarioHandle> {
+    // ?format=ASTC|ETC|S3TC offers only that format, to test each file on a device that supports several.
+    const only = (params.extra['format'] ?? '').toUpperCase();
     const probes = new Map<string, Probe[]>();
-    for (const t of TEXTURES) probes.set(t.key, await probeKtx(t));
+    for (const t of TEXTURES) probes.set(t.key, await probeKtx(t, only));
 
     await loadAll(scene, (load) => {
       for (const t of TEXTURES) {
@@ -138,6 +141,7 @@ const textures: Scenario = {
           rawBytesTotal: rawBytes,
           compressedBytesTotal: anyKtx ? compressedBytes : null,
           compressedRendered,
+          formatForced: only || null,
           budgetBytes: 128 * 1048576,
         };
       },

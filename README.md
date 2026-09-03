@@ -117,25 +117,13 @@ node scripts/pack-atlas.mjs <folder-of-pngs> public/atlas/creator-items 2048   #
 - `spine`: skeletons in a grid, cycling the 6 Floofs, each looping its idle animation, through `@esotericsoftware/spine-phaser-v4` **4.2.120**. The runtime's major.minor must match the export (4.2.43); the 4.3 line of the plugin does not load 4.2 data. The plugin installs at run time inside the scenario, so other scenarios do not carry the Spine runtime. Headless: about 4.6 draw calls per skeleton.
 - `textures`: loads the backdrop and the atlas raw, and compressed through `load.texture` when the KTX files exist next to the PNGs. It probes the files with HEAD first, lets Phaser pick the first format the GPU supports, and draws raw and compressed side by side. `extra.textures[]` gives raw bytes (width x height x 4) and the KTX payload per texture; `extra.gpuSupports` says which formats the device offers. Pass is `null` until the KTX files exist, then `true` when every compressed texture rendered.
 
-**KTX files (human, once, from the same PNGs)** with PVRTexTool CLI (free after sign-up at https://developer.imaginationtech.com/pvrtextool/; Homebrew has no formula). After the install, one command makes all 6 files; it finds the CLI on the PATH or under `/Applications`, or takes `PVRTEXTOOL=/path/to/PVRTexToolCLI`:
+**KTX files** come from one command on the Mac, no other install (PVRTexTool has no macOS build any more):
 
 ```bash
-scripts/make-ktx.sh
+npm run ktx     # ASTC 6x6 via astcenc, ETC2 RGBA8 via EtcTool (both from @gpu-tex-enc), S3TC BC3 via dxt-js + a KTX 1 header
 ```
 
-The same, by hand:
-
-```bash
-cd public
-PVRTexToolCLI -i textures/backdrop.png -o textures/backdrop-astc.ktx -f ASTC_6x6,UBN,lRGB -q astcmedium
-PVRTexToolCLI -i textures/backdrop.png -o textures/backdrop-etc2.ktx -f ETC2_RGBA,UBN,lRGB -q etcfast
-PVRTexToolCLI -i textures/backdrop.png -o textures/backdrop-s3tc.ktx -f BC3,UBN,lRGB
-PVRTexToolCLI -i atlas/creator-items.png -o atlas/creator-items-astc.ktx -f ASTC_6x6,UBN,lRGB -q astcmedium
-PVRTexToolCLI -i atlas/creator-items.png -o atlas/creator-items-etc2.ktx -f ETC2_RGBA,UBN,lRGB -q etcfast
-PVRTexToolCLI -i atlas/creator-items.png -o atlas/creator-items-s3tc.ktx -f BC3,UBN,lRGB
-```
-
-Phaser reads the KTX 1 container (the PVRTexTool default). ASTC serves the iPad, ETC2 the Chromebook, S3TC desktop GPUs.
+It writes 3 KTX files next to each PNG in `public/textures/` and `public/atlas/` (committed, so the deployed page has them). The `textures` variants `astc`, `etc2` and `s3tc` force one format through `?format=`, so each file can be checked on a device that supports several; `auto` lets Phaser pick. Headless: 28 MB raw becomes 3.3 MB as ASTC 6x6 or 7.3 MB as ETC2 or S3TC. Phaser reads the KTX 1 container. ASTC serves the iPad, ETC2 the Chromebook, S3TC desktop GPUs.
 
 ### Determinism (CW-01.4)
 

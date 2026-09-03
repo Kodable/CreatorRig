@@ -17,7 +17,9 @@
     "bench": "vite build && playwright test",
     "bench:chromium": "vite build && playwright test --project=chromium",
     "bench:webkit": "vite build && playwright test --project=webkit",
-    "results": "node scripts/summarize.mjs"
+    "results": "node scripts/summarize.mjs",
+    "ktx": "node scripts/make-ktx.mjs",
+    "atlas": "node scripts/pack-atlas.mjs"
   },
   "dependencies": {
     "@dimforge/rapier2d-deterministic-compat": "^0.20.0",
@@ -26,9 +28,13 @@
     "phaser-box2d": "^1.1.0"
   },
   "devDependencies": {
+    "@gpu-tex-enc/astc": "^4.7.1",
+    "@gpu-tex-enc/bc": "^1.0.11",
+    "@gpu-tex-enc/etc": "^1.0.3",
     "@playwright/test": "1.62.1",
     "@types/node": "^22.0.0",
     "@types/pngjs": "^6.0.5",
+    "dxt-js": "^0.0.3",
     "pngjs": "^7.0.0",
     "typescript": "^5.6.0",
     "vite": "8.2.2",
