@@ -51,7 +51,27 @@ const audio: Scenario = {
     };
     let pendingInterruption = false;
     let hiddenNow = false;
-    let busy = false;
+    // Each tap starts a new run; an older ladder stops at its next step. Never block taps:
+    // on iOS resume() on an interrupted context can hang forever.
+    let run = 0;
+    const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T | undefined> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const t = new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => {
+          log(`${label} did not settle within ${ms} ms`);
+          resolve(undefined);
+        }, ms);
+      });
+      try {
+        return await Promise.race([p, t]);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const flash = (x: number, y: number): void => {
+      const ring = scene.add.circle(x, y, 30).setStrokeStyle(4, 0xffb40f);
+      scene.tweens.add({ targets: ring, scale: 2, alpha: 0, duration: 300, onComplete: () => ring.destroy() });
+    };
     // A 0.1 s silent WAV; playing it on a gesture is the classic iOS audio-session unlock.
     const silent = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQQAAAAAAAA=');
     silent.setAttribute('playsinline', '');
@@ -79,7 +99,7 @@ const audio: Scenario = {
     /** One 250 ms tone on the given context; true when the graph ran (ended fired and the clock advanced). */
     const tone = async (c: AudioContext): Promise<{ played: boolean; running: boolean; clockMoved: boolean }> => {
       try {
-        if (c.state !== 'running') await c.resume();
+        if (c.state !== 'running') await withTimeout(c.resume(), 1500, 'resume()');
       } catch (err) {
         log(`resume failed: ${String(err)}`);
       }
@@ -106,8 +126,10 @@ const audio: Scenario = {
     };
 
     const beep = async (why: string): Promise<boolean> => {
+      const my = ++run;
       if (!ctx) ctx = createContext('created');
       let r = await tone(ctx);
+      if (my !== run) return r.played;
       log(`${why}: ${r.played ? 'beep played' : 'NO sound'} (state ${ctx.state}, clock ${ctx.currentTime.toFixed(2)})`);
       if (r.played) {
         state.beeps++;
@@ -118,6 +140,7 @@ const audio: Scenario = {
       state.frozenClockDetected++;
       // 1. resume again on this gesture
       r = await tone(ctx);
+      if (my !== run) return r.played;
       if (r.played) {
         state.beeps++;
         state.recoveredByResume++;
@@ -127,12 +150,13 @@ const audio: Scenario = {
       }
       // 2. silent media element on the gesture, then resume
       try {
-        await silent.play();
+        await withTimeout(silent.play(), 1500, 'silent <audio>.play()');
         log('silent <audio> played');
       } catch (err) {
         log(`silent <audio> failed: ${String(err)}`);
       }
       r = await tone(ctx);
+      if (my !== run) return r.played;
       if (r.played) {
         state.beeps++;
         state.recoveredByMediaUnlock++;
@@ -142,12 +166,13 @@ const audio: Scenario = {
       }
       // 3. close and recreate
       try {
-        await ctx.close();
+        await withTimeout(ctx.close(), 1500, 'close()');
       } catch {
         // ignore
       }
       ctx = createContext('recreated');
       r = await tone(ctx);
+      if (my !== run) return r.played;
       if (r.played) {
         state.beeps++;
         state.recoveredByRecreate++;
@@ -161,24 +186,19 @@ const audio: Scenario = {
       return false;
     };
 
-    const onTap = (): void => {
-      if (busy) return;
-      busy = true;
+    const onTap = (pointer: Phaser.Input.Pointer): void => {
+      flash(pointer.x, pointer.y);
       state.taps++;
       const first = state.taps === 1;
       const afterInterruption = pendingInterruption;
       const frozenBefore = state.frozenClockDetected;
-      void beep(first ? 'first tap' : `tap ${state.taps}`)
-        .then((played) => {
-          if (first) state.firstTapPlayed = played;
-          if (afterInterruption) {
-            pendingInterruption = false;
-            if (played && state.frozenClockDetected === frozenBefore) state.playedAfterInterruptionWithResume++;
-          }
-        })
-        .finally(() => {
-          busy = false;
-        });
+      void beep(first ? 'first tap' : `tap ${state.taps}`).then((played) => {
+        if (first) state.firstTapPlayed = played;
+        if (afterInterruption) {
+          pendingInterruption = false;
+          if (played && state.frozenClockDetected === frozenBefore) state.playedAfterInterruptionWithResume++;
+        }
+      });
     };
     scene.input.on('pointerdown', onTap);
 
@@ -192,15 +212,10 @@ const audio: Scenario = {
       hiddenNow = false;
       state.resumed++;
       log('tab visible again');
-      if (!ctx || busy) return;
-      busy = true;
-      void beep('after resume')
-        .then((played) => {
-          if (played) state.playedAfterResume++;
-        })
-        .finally(() => {
-          busy = false;
-        });
+      if (!ctx) return;
+      void beep('after resume').then((played) => {
+        if (played) state.playedAfterResume++;
+      });
     });
 
     return {
