@@ -123,15 +123,20 @@ const overlay: Scenario = {
     store.subscribe(applyState);
     applyState();
 
-    // Coordinate helpers. Game pixels are the 1024x768 stage; CSS pixels are the page.
+    // Coordinate helpers. Game pixels are the 1024x768 stage; CSS pixels are the page. The canvas
+    // rectangle is read live: Phaser's cached canvasBounds went stale on the iPad when Safari's
+    // toolbar moved, and every DOM position was off by a constant 18 px.
+    const canvasRect = (): { x: number; y: number; sx: number; sy: number } => {
+      const r = scene.sys.game.canvas.getBoundingClientRect();
+      return { x: r.left, y: r.top, sx: STAGE.w / Math.max(1, r.width), sy: STAGE.h / Math.max(1, r.height) };
+    };
     const view = (): { x: number; y: number } => {
       const c = store.getState().camera;
       return { x: c.scrollX + (STAGE.w / 2) * (1 - 1 / c.zoom), y: c.scrollY + (STAGE.h / 2) * (1 - 1 / c.zoom) };
     };
     const toGame = (clientX: number, clientY: number): { x: number; y: number } => {
-      const b = scene.scale.canvasBounds;
-      const s = scene.scale.displayScale;
-      return { x: (clientX - b.x) * s.x, y: (clientY - b.y) * s.y };
+      const b = canvasRect();
+      return { x: (clientX - b.x) * b.sx, y: (clientY - b.y) * b.sy };
     };
     const toWorld = (clientX: number, clientY: number): { x: number; y: number } => {
       const g = toGame(clientX, clientY);
@@ -140,11 +145,10 @@ const overlay: Scenario = {
       return { x: v.x + g.x / z, y: v.y + g.y / z };
     };
     const project: Project = (wx, wy) => {
-      const b = scene.scale.canvasBounds;
-      const s = scene.scale.displayScale;
+      const b = canvasRect();
       const v = view();
       const z = store.getState().camera.zoom;
-      return { x: b.x + ((wx - v.x) * z) / s.x, y: b.y + ((wy - v.y) * z) / s.y, scale: z / s.x };
+      return { x: b.x + ((wx - v.x) * z) / b.sx, y: b.y + ((wy - v.y) * z) / b.sy, scale: z / b.sx };
     };
     const zoomAt = (clientX: number, clientY: number, factor: number): void => {
       const c = store.getState().camera;
@@ -282,13 +286,13 @@ const overlay: Scenario = {
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         const zoom = Math.min(4, Math.max(0.25, (pinch.zoom0 * dist) / Math.max(1, pinch.dist0)));
-        const s = scene.scale.displayScale;
+        const rect = canvasRect();
         const p = pinch;
         mutate(() =>
           store.setCamera({
             zoom,
-            scrollX: p.scroll0.x - ((mid.x - p.mid0.x) * s.x) / zoom,
-            scrollY: p.scroll0.y - ((mid.y - p.mid0.y) * s.y) / zoom,
+            scrollX: p.scroll0.x - ((mid.x - p.mid0.x) * rect.sx) / zoom,
+            scrollY: p.scroll0.y - ((mid.y - p.mid0.y) * rect.sy) / zoom,
           }),
         );
         return;
@@ -304,8 +308,8 @@ const overlay: Scenario = {
           else setLive(d.id, x, y);
         } else if (d.mode === 'pan') {
           const c = store.getState().camera;
-          const s = scene.scale.displayScale;
-          store.setCamera({ scrollX: c.scrollX - ((e.clientX - d.last.x) * s.x) / c.zoom, scrollY: c.scrollY - ((e.clientY - d.last.y) * s.y) / c.zoom });
+          const b = canvasRect();
+          store.setCamera({ scrollX: c.scrollX - ((e.clientX - d.last.x) * b.sx) / c.zoom, scrollY: c.scrollY - ((e.clientY - d.last.y) * b.sy) / c.zoom });
         } else if (d.mode === 'resize' && d.id !== null && d.start) {
           const f = Math.max(0.1, Math.hypot(w.x - d.start.x, w.y - d.start.y) / Math.max(1, d.startDist));
           store.setProps(d.id, { scaleX: d.start.scaleX * f, scaleY: d.start.scaleY * f });
@@ -360,8 +364,7 @@ const overlay: Scenario = {
         const r = g.getBoundingClientRect();
         const gp = toGame(r.left + r.width / 2, r.top + r.height / 2);
         const wp = cam.getWorldPoint(gp.x, gp.y);
-        const s = scene.scale.displayScale.x;
-        const d = (Math.hypot(wp.x - img.x, wp.y - img.y) * cam.zoom) / s;
+        const d = (Math.hypot(wp.x - img.x, wp.y - img.y) * cam.zoom) / canvasRect().sx;
         if (d > (drift.length > 0 ? Math.max(...drift) : -1)) driftMaxAt = `${bot.phase} t=${Math.round(bot.t)} frame=${bot.frame} selected=${selectedId}`;
         drift.push(d);
         const mode = pinch ? 'pinch' : drag ? drag.mode : 'idle';
@@ -381,8 +384,8 @@ const overlay: Scenario = {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     };
     const center = (): { x: number; y: number } => {
-      const b = scene.scale.canvasBounds;
-      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+      const r = scene.sys.game.canvas.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     };
     const robotStep = (dt: number): void => {
       bot.t += dt;

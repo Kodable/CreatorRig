@@ -18,7 +18,7 @@
     "robot": "1",
     "send": "1"
   },
-  "startedAt": "2026-09-03T19:24:49.032Z",
+  "startedAt": "2026-09-03T19:29:43.513Z",
   "durationMs": 20015,
   "frames": 1201,
   "fps": 60,
@@ -26,11 +26,11 @@
   "p95": 17,
   "max": 23,
   "dropped": 0,
-  "slow": 799,
+  "slow": 796,
   "heapMB": null,
   "pass": false,
   "notes": [
-    "gizmo drift max 120.03 px (p95 is the pass value; a max of one screen is a one-frame flash on a camera jump)"
+    "gizmo drift max 122.17 px (p95 is the pass value; a max of one screen is a one-frame flash on a camera jump)"
   ],
   "extra": {
     "objects": 60,
@@ -40,35 +40,61 @@
     "dragFrames": {
       "p50": 16.7,
       "p95": 16.7,
-      "max": 17.2,
+      "max": 17.4,
       "n": 953
     },
     "latencyMs": {
       "p50": 2,
-      "p95": 3,
+      "p95": 2,
       "max": 8,
       "n": 947
     },
     "typingLatencyMs": {
-      "p50": 5,
-      "p95": 5,
-      "max": 6,
+      "p50": 4,
+      "p95": 4,
+      "max": 4,
       "n": 39
     },
     "driftPx": {
-      "p50": 4,
-      "p95": 4.06,
-      "max": 120.03,
+      "p50": 18,
+      "p95": 18.06,
+      "max": 122.17,
       "n": 1381
     },
+    "driftByMode": {
+      "move": {
+        "p50": 18,
+        "p95": 18,
+        "max": 122.17,
+        "n": 362
+      },
+      "resize": {
+        "p50": 18,
+        "p95": 18.02,
+        "max": 18.02,
+        "n": 230
+      },
+      "idle": {
+        "p50": 18.04,
+        "p95": 18.07,
+        "max": 18.07,
+        "n": 429
+      },
+      "pan": {
+        "p50": 18,
+        "p95": 18.02,
+        "max": 18.03,
+        "n": 360
+      }
+    },
     "driftMaxAt": "drag t=30 frame=2 selected=16",
-    "driftOutliers": 1,
+    "driftOutliers": 1381,
     "pointerMoves": 947,
     "reactCommits": 1355,
     "reactCommitMs": {
       "p50": 0,
       "p95": 1,
-      "max": 6,
+      "max": 5,
       "n": 1355
     },
     "storeNotifies": 1358,

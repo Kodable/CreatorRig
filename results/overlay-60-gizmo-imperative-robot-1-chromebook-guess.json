@@ -16,90 +16,89 @@
     "warmup": 3,
     "seed": 1,
     "robot": "1",
+    "gizmo": "imperative",
     "send": "1"
   },
-  "startedAt": "2026-09-03T19:29:41.070Z",
+  "startedAt": "2026-09-03T19:30:17.233Z",
   "durationMs": 20008,
-  "frames": 1196,
-  "fps": 59.8,
+  "frames": 1193,
+  "fps": 59.6,
   "p50": 16.7,
   "p95": 16.8,
-  "max": 49.8,
+  "max": 50,
   "dropped": 2,
-  "slow": 54,
-  "heapMB": 100.5,
+  "slow": 71,
+  "heapMB": 107,
   "pass": true,
-  "notes": [
-    "gizmo drift max 119.7 px (p95 is the pass value; a max of one screen is a one-frame flash on a camera jump)"
-  ],
+  "notes": [],
   "extra": {
     "objects": 60,
     "mode": "robot",
-    "gizmo": "react",
+    "gizmo": "imperative",
     "flushSync": true,
     "dragFrames": {
       "p50": 16.64,
       "p95": 16.67,
-      "max": 19.98,
-      "n": 947
+      "max": 21.65,
+      "n": 943
     },
     "latencyMs": {
-      "p50": 7.4,
-      "p95": 12.1,
-      "max": 19.1,
-      "n": 941
+      "p50": 6.9,
+      "p95": 12.2,
+      "max": 18.9,
+      "n": 937
     },
     "typingLatencyMs": {
-      "p50": 13.1,
-      "p95": 16.1,
-      "max": 16.4,
+      "p50": 12.8,
+      "p95": 16.2,
+      "max": 17.2,
       "n": 40
     },
     "driftPx": {
       "p50": 0.01,
       "p95": 0.01,
-      "max": 119.7,
+      "max": 0.01,
       "n": 1370
     },
     "driftByMode": {
       "move": {
         "p50": 0.01,
         "p95": 0.01,
-        "max": 119.7,
+        "max": 0.01,
         "n": 357
       },
       "resize": {
         "p50": 0.01,
         "p95": 0.01,
         "max": 0.01,
-        "n": 230
+        "n": 226
       },
       "idle": {
         "p50": 0,
         "p95": 0.01,
         "max": 0.01,
-        "n": 424
+        "n": 428
       },
       "pan": {
-        "p50": 0,
+        "p50": 0.01,
         "p95": 0.01,
         "max": 0.01,
         "n": 359
       }
     },
-    "driftMaxAt": "drag t=30 frame=2 selected=16",
-    "driftOutliers": 1,
-    "pointerMoves": 941,
-    "reactCommits": 1348,
+    "driftMaxAt": "zoom t=2114 frame=419 selected=16",
+    "driftOutliers": 0,
+    "pointerMoves": 937,
+    "reactCommits": 990,
     "reactCommitMs": {
       "p50": 2.7,
-      "p95": 3.9,
-      "max": 38,
-      "n": 1348
+      "p95": 5.6,
+      "max": 32.9,
+      "n": 990
     },
-    "storeNotifies": 1351,
+    "storeNotifies": 993,
     "longTasks": 2,
-    "longTaskMaxMs": 116,
+    "longTaskMaxMs": 138,
     "drawCallsP50": 1,
     "drawCallsP95": 1
   }

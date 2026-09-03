@@ -17,16 +17,16 @@
     "seed": 1,
     "send": "1"
   },
-  "startedAt": "2026-09-03T19:24:11.136Z",
+  "startedAt": "2026-09-03T19:30:48.993Z",
   "durationMs": 20008,
-  "frames": 1184,
-  "fps": 59.2,
+  "frames": 1197,
+  "fps": 59.8,
   "p50": 16.7,
   "p95": 16.8,
-  "max": 49.1,
-  "dropped": 3,
-  "slow": 38,
-  "heapMB": 88,
+  "max": 50,
+  "dropped": 1,
+  "slow": 25,
+  "heapMB": 116.1,
   "pass": false,
   "notes": [],
   "extra": {
@@ -35,42 +35,68 @@
     "gizmo": "react",
     "flushSync": true,
     "dragFrames": {
-      "p50": 16.67,
-      "p95": 20,
-      "max": 21.67,
-      "n": 186
+      "p50": 16.66,
+      "p95": 18.33,
+      "max": 18.34,
+      "n": 279
     },
     "latencyMs": {
-      "p50": 19.9,
-      "p95": 30,
-      "max": 53.5,
-      "n": 120
+      "p50": 17.4,
+      "p95": 27,
+      "max": 39,
+      "n": 216
     },
     "typingLatencyMs": {
-      "p50": 24.4,
-      "p95": 27.3,
-      "max": 27.3,
-      "n": 4
+      "p50": 16.8,
+      "p95": 17.7,
+      "max": 17.7,
+      "n": 6
     },
     "driftPx": {
       "p50": 0.01,
-      "p95": 0.01,
-      "max": 0.01,
-      "n": 945
+      "p95": 2,
+      "max": 2,
+      "n": 1001
     },
-    "driftMaxAt": "drag t=0 frame=0 selected=6",
+    "driftByMode": {
+      "move": {
+        "p50": 0.01,
+        "p95": 0.01,
+        "max": 0.01,
+        "n": 61
+      },
+      "idle": {
+        "p50": 0.01,
+        "p95": 2,
+        "max": 2,
+        "n": 774
+      },
+      "resize": {
+        "p50": 0.01,
+        "p95": 0.01,
+        "max": 0.01,
+        "n": 81
+      },
+      "rotate": {
+        "p50": 0.01,
+        "p95": 0.01,
+        "max": 0.01,
+        "n": 85
+      }
+    },
+    "driftMaxAt": "drag t=0 frame=0 selected=3",
     "driftOutliers": 0,
-    "pointerMoves": 120,
-    "reactCommits": 129,
+    "pointerMoves": 205,
+    "reactCommits": 226,
     "reactCommitMs": {
-      "p50": 4.7,
-      "p95": 11.5,
-      "max": 30.8,
-      "n": 129
+      "p50": 2.8,
+      "p95": 6,
+      "max": 29.4,
+      "n": 226
     },
-    "storeNotifies": 129,
+    "storeNotifies": 226,
     "longTasks": 4,
-    "longTaskMaxMs": 121,
+    "longTaskMaxMs": 123,
     "drawCallsP50": 1,
     "drawCallsP95": 1
   }
