@@ -20,7 +20,9 @@
     "results": "node scripts/summarize.mjs",
     "ktx": "node scripts/make-ktx.mjs",
     "atlas": "node scripts/pack-atlas.mjs",
-    "load": "node scripts/load-time.mjs"
+    "load": "node scripts/load-time.mjs",
+    "start": "node scripts/serve.mjs",
+    "heroku-postbuild": "npm run build"
   },
   "dependencies": {
     "@capacitor/app": "8.1.1",
