@@ -36,6 +36,18 @@ export const MATRIX: ScenarioEntry[] = [
     ],
     adapters: [],
   },
+  {
+    id: 'physics-smoke',
+    title: 'Physics smoke: bodies in a bowl',
+    description:
+      'N circles and boxes dropped into a chain-shape bowl through the physics interface. Proves each adapter loads in the browser and shows the transform hash.',
+    task: 'CW-01.2',
+    variants: [
+      { label: '100', params: { count: 100 } },
+      { label: '300', params: { count: 300 } },
+    ],
+    adapters: ['box2d', 'rapier'],
+  },
 ];
 
 export interface BenchRun {

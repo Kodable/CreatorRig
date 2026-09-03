@@ -20,7 +20,9 @@
     "results": "node scripts/summarize.mjs"
   },
   "dependencies": {
-    "phaser": "4.2.1"
+    "@dimforge/rapier2d-deterministic-compat": "^0.20.0",
+    "phaser": "4.2.1",
+    "phaser-box2d": "^1.1.0"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
