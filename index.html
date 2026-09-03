@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Kodable Creator Rig</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #1a2142;
+        --muted: #6b7190;
+        --line: #d6dae8;
+        --bg: #f4f5f9;
+        --surface: #ffffff;
+        --accent: #ffb40f;
+        --ok: #3e8f2a;
+        --bad: #b23a3a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #e7e9f4;
+          --muted: #9aa1c0;
+          --line: #2c3560;
+          --bg: #0f1428;
+          --surface: #171e3a;
+          --ok: #8ed677;
+          --bad: #f08a8a;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      #index { max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
+      #index h1 { font-size: 22px; margin: 0 0 4px; }
+      #index p { color: var(--muted); margin: 0 0 16px; max-width: 70ch; }
+      #index label { display: inline-flex; gap: 8px; align-items: center; margin: 0 16px 16px 0; }
+      #index input, #index select {
+        font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px;
+        background: var(--surface); color: var(--ink);
+      }
+      .scenario { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+      .scenario h2 { font-size: 16px; margin: 0 0 4px; }
+      .scenario .desc { color: var(--muted); margin: 0 0 8px; }
+      .variants { display: flex; flex-wrap: wrap; gap: 8px; }
+      .variants a {
+        display: inline-block; padding: 6px 10px; border-radius: 999px; text-decoration: none;
+        background: var(--accent); color: #1a2142; font-weight: 600; font-size: 13px;
+      }
+      #stage { position: fixed; inset: 0; display: none; background: #000; }
+      #game { position: absolute; inset: 0; }
+      #hud {
+        position: fixed; top: 8px; left: 8px; z-index: 10; padding: 6px 10px; border-radius: 6px;
+        background: rgba(0,0,0,0.6); color: #fff; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        pointer-events: none; white-space: pre;
+      }
+      #report {
+        position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 10; max-height: 45vh; overflow: auto;
+        margin: 0; padding: 10px 12px; border-radius: 8px; display: none;
+        background: rgba(255,255,255,0.94); color: #1a2142;
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap;
+      }
+      #report.pass { border: 3px solid var(--ok); }
+      #report.fail { border: 3px solid var(--bad); }
+      #report.na { border: 3px solid var(--accent); }
+      #hash {
+        position: fixed; top: 8px; right: 8px; z-index: 10; padding: 8px 12px; border-radius: 8px; display: none;
+        background: rgba(255,255,255,0.94); color: #1a2142; font: 700 28px/1.1 ui-monospace, Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="index" hidden></main>
+    <div id="stage">
+      <div id="game"></div>
+      <div id="hud"></div>
+      <div id="hash"></div>
+      <pre id="report"></pre>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
