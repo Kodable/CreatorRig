@@ -1,0 +1,2615 @@
+{
+ "frames": {
+  "SolarSystem_obj_planet_earth": {
+   "frame": {
+    "x": 2,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_jupiter": {
+   "frame": {
+    "x": 152,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_mars": {
+   "frame": {
+    "x": 302,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_mercury": {
+   "frame": {
+    "x": 452,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_moon": {
+   "frame": {
+    "x": 602,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_neptune": {
+   "frame": {
+    "x": 752,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_saturn": {
+   "frame": {
+    "x": 902,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_sun_sliver": {
+   "frame": {
+    "x": 1052,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_sun_whole": {
+   "frame": {
+    "x": 1202,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_uranus": {
+   "frame": {
+    "x": 1352,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "SolarSystem_obj_planet_venus": {
+   "frame": {
+    "x": 1502,
+    "y": 2,
+    "w": 148,
+    "h": 148
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 148
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 148
+   }
+  },
+  "HabitatHero_cc_obst_snowballforUI": {
+   "frame": {
+    "x": 1652,
+    "y": 2,
+    "w": 148,
+    "h": 139
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 139
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 139
+   }
+  },
+  "Backyard_collectable_keyGem_color": {
+   "frame": {
+    "x": 1802,
+    "y": 2,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Backyard_collectable_keyPortal_color": {
+   "frame": {
+    "x": 2,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Backyard_obstacle_cactus_color": {
+   "frame": {
+    "x": 152,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Backyard_obstacle_spiderWeb_color": {
+   "frame": {
+    "x": 302,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Bugged_obj_bugwall_color": {
+   "frame": {
+    "x": 452,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Bugged_obj_collectbug_color": {
+   "frame": {
+    "x": 602,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_cherryblossom_color": {
+   "frame": {
+    "x": 752,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_coffeecup_color": {
+   "frame": {
+    "x": 902,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_item_dollarwing_color": {
+   "frame": {
+    "x": 1052,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_item_key_color": {
+   "frame": {
+    "x": 1202,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_obj_boxes_color": {
+   "frame": {
+    "x": 1352,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_obj_bushflowers_color": {
+   "frame": {
+    "x": 1502,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_obj_cone_color": {
+   "frame": {
+    "x": 1652,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_obj_poop_color": {
+   "frame": {
+    "x": 1802,
+    "y": 152,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_obj_trashcat_color": {
+   "frame": {
+    "x": 2,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "City_trashbag_color": {
+   "frame": {
+    "x": 152,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_cauldron_color": {
+   "frame": {
+    "x": 302,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_chalis_color": {
+   "frame": {
+    "x": 452,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_crystal_ball_color": {
+   "frame": {
+    "x": 602,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_crystal_spikes_color": {
+   "frame": {
+    "x": 752,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_dragon_color": {
+   "frame": {
+    "x": 902,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_gem_color": {
+   "frame": {
+    "x": 1052,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_magic_potion_color": {
+   "frame": {
+    "x": 1202,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_potion_heart_color": {
+   "frame": {
+    "x": 1352,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_spell_book_color": {
+   "frame": {
+    "x": 1502,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Fantasy_wizard_color": {
+   "frame": {
+    "x": 1652,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_color_brocolli": {
+   "frame": {
+    "x": 1802,
+    "y": 272,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_color_carrot": {
+   "frame": {
+    "x": 2,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_color_donut": {
+   "frame": {
+    "x": 152,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_color_flagBasic": {
+   "frame": {
+    "x": 302,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_color_flagCandyCane": {
+   "frame": {
+    "x": 452,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_color_icecream": {
+   "frame": {
+    "x": 602,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_color_mushroom": {
+   "frame": {
+    "x": 752,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_obj_ammo_tomato_color": {
+   "frame": {
+    "x": 902,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_shade_brocolli": {
+   "frame": {
+    "x": 1052,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_shade_carrot": {
+   "frame": {
+    "x": 1202,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_shade_donut": {
+   "frame": {
+    "x": 1352,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_shade_flagBasic": {
+   "frame": {
+    "x": 1502,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_shade_flagCandyCane": {
+   "frame": {
+    "x": 1652,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_shade_icecream": {
+   "frame": {
+    "x": 1802,
+    "y": 392,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Food_shade_mushroom": {
+   "frame": {
+    "x": 2,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "HabitatHero_cc_bananas": {
+   "frame": {
+    "x": 152,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "HabitatHero_cc_deadfish": {
+   "frame": {
+    "x": 302,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "HabitatHero_cc_succulent": {
+   "frame": {
+    "x": 452,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Halloween_obj_hal_candycorn_color": {
+   "frame": {
+    "x": 602,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Halloween_obj_hal_ghost_color": {
+   "frame": {
+    "x": 752,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Halloween_obj_hal_jackolantern_color": {
+   "frame": {
+    "x": 902,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Halloween_obj_hal_skulloon_color": {
+   "frame": {
+    "x": 1052,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_acid_rain_color": {
+   "frame": {
+    "x": 1202,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_balloon_0_color": {
+   "frame": {
+    "x": 1352,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_balloon_1_color": {
+   "frame": {
+    "x": 1502,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_balloon_cluster_color": {
+   "frame": {
+    "x": 1652,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_balloon_star_color": {
+   "frame": {
+    "x": 1802,
+    "y": 512,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_bee_dart_color": {
+   "frame": {
+    "x": 2,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_blimp_color": {
+   "frame": {
+    "x": 152,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_cloud_bear_color": {
+   "frame": {
+    "x": 302,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_cloud_star_color": {
+   "frame": {
+    "x": 452,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_flower_color": {
+   "frame": {
+    "x": 602,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_helicopter_color": {
+   "frame": {
+    "x": 752,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_obj_obs_cloud1_color": {
+   "frame": {
+    "x": 902,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_obj_obs_cloud2_color": {
+   "frame": {
+    "x": 1052,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_ParaCrate_color": {
+   "frame": {
+    "x": 1202,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_penguin_parachute_color": {
+   "frame": {
+    "x": 1352,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Sky_pig_parachute_color": {
+   "frame": {
+    "x": 1502,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Space_obj_ammo_laser_color": {
+   "frame": {
+    "x": 1652,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Space_obj_item_comet_color": {
+   "frame": {
+    "x": 1802,
+    "y": 632,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Space_obj_item_crescentMoonFace_color": {
+   "frame": {
+    "x": 2,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Space_obj_item_planet_color": {
+   "frame": {
+    "x": 152,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Space_obj_item_ringPlanet_color": {
+   "frame": {
+    "x": 302,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Space_obj_obs_meteor_color": {
+   "frame": {
+    "x": 452,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Space_spacerock_color": {
+   "frame": {
+    "x": 602,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Space_sun_color": {
+   "frame": {
+    "x": 752,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_collectable_keyGem_color": {
+   "frame": {
+    "x": 902,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_collectable_keyShell_color": {
+   "frame": {
+    "x": 1052,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_obj_6-packRings": {
+   "frame": {
+    "x": 1202,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_obj_item_starfish_color": {
+   "frame": {
+    "x": 1352,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_obj_item_trident_color": {
+   "frame": {
+    "x": 1502,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_obj_item_urchin_color": {
+   "frame": {
+    "x": 1652,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_obj_net02": {
+   "frame": {
+    "x": 1802,
+    "y": 752,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_obj_Plankton": {
+   "frame": {
+    "x": 2,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_obj_plasticBag": {
+   "frame": {
+    "x": 152,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "UnderWater_shrimp_color": {
+   "frame": {
+    "x": 302,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Valentines_coll_bear_color": {
+   "frame": {
+    "x": 452,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Valentines_coll_heart_gem_color": {
+   "frame": {
+    "x": 602,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Valentines_flag_val1_color": {
+   "frame": {
+    "x": 752,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Valentines_flag_val2_color": {
+   "frame": {
+    "x": 902,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Valentines_obstacle_arrowheart_color": {
+   "frame": {
+    "x": 1052,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Valentines_obstacle_cupidarrow_color": {
+   "frame": {
+    "x": 1202,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Valentines_obstacle_spikedheart_color": {
+   "frame": {
+    "x": 1352,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Valentines_obstacle_thornyrose_color": {
+   "frame": {
+    "x": 1502,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Winter_obj_item_candyspikes_color": {
+   "frame": {
+    "x": 1652,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Winter_obj_item_cocoa_color": {
+   "frame": {
+    "x": 1802,
+    "y": 872,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Winter_obj_item_gift_color": {
+   "frame": {
+    "x": 2,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Winter_obj_item_mailbox_color": {
+   "frame": {
+    "x": 152,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_color_flytrap": {
+   "frame": {
+    "x": 302,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_color_rose": {
+   "frame": {
+    "x": 452,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_color_spikeStick": {
+   "frame": {
+    "x": 602,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_color_stickFlag": {
+   "frame": {
+    "x": 752,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_color_strawberry": {
+   "frame": {
+    "x": 902,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_color_thistle": {
+   "frame": {
+    "x": 1052,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_color_vineFlag": {
+   "frame": {
+    "x": 1202,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_shade_flytrap": {
+   "frame": {
+    "x": 1352,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_shade_rose": {
+   "frame": {
+    "x": 1502,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_shade_spikeStick": {
+   "frame": {
+    "x": 1652,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_shade_stickFlag": {
+   "frame": {
+    "x": 1802,
+    "y": 992,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_shade_strawberry": {
+   "frame": {
+    "x": 2,
+    "y": 1112,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_shade_thistle": {
+   "frame": {
+    "x": 152,
+    "y": 1112,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Woodland_shade_vineFlag": {
+   "frame": {
+    "x": 302,
+    "y": 1112,
+    "w": 148,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 118
+   }
+  },
+  "Halloween_obj_hal_boneBullet_color": {
+   "frame": {
+    "x": 452,
+    "y": 1112,
+    "w": 148,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 117
+   }
+  },
+  "Halloween_obj_hal_boneBullet_tint": {
+   "frame": {
+    "x": 602,
+    "y": 1112,
+    "w": 148,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 117
+   }
+  },
+  "Halloween_obj_hal_broomBullet_color": {
+   "frame": {
+    "x": 752,
+    "y": 1112,
+    "w": 148,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 117
+   }
+  },
+  "Halloween_obj_hal_broomBullet_tint": {
+   "frame": {
+    "x": 902,
+    "y": 1112,
+    "w": 148,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 117
+   }
+  },
+  "Space_planetlove_color": {
+   "frame": {
+    "x": 1052,
+    "y": 1112,
+    "w": 148,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 115
+   }
+  },
+  "UnderWater_clownfish_color": {
+   "frame": {
+    "x": 1202,
+    "y": 1112,
+    "w": 148,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 115
+   }
+  },
+  "UnderWater_seahorse_color": {
+   "frame": {
+    "x": 1352,
+    "y": 1112,
+    "w": 148,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 115
+   }
+  },
+  "HabitatHero_cc_obst_bugswarm": {
+   "frame": {
+    "x": 1502,
+    "y": 1112,
+    "w": 148,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 96
+   }
+  },
+  "HabitatHero_cc_obst_snowball": {
+   "frame": {
+    "x": 1652,
+    "y": 1112,
+    "w": 148,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 96
+   }
+  },
+  "HabitatHero_cc_obst_viper": {
+   "frame": {
+    "x": 1802,
+    "y": 1112,
+    "w": 148,
+    "h": 96
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 148,
+    "h": 96
+   },
+   "sourceSize": {
+    "w": 148,
+    "h": 96
+   }
+  }
+ },
+ "meta": {
+  "app": "creator-rig pack-atlas",
+  "version": "1.0",
+  "image": "creator-items.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 2048,
+   "h": 2048
+  },
+  "scale": "1"
+ }
+}

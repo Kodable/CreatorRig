@@ -14,6 +14,9 @@ const LOADERS: Record<string, () => Promise<{ default: Scenario }>> = {
   catapult: () => import('./catapult'),
   determinism: () => import('./determinism'),
   particles: () => import('./particles'),
+  sprites: () => import('./sprites'),
+  spine: () => import('./spine'),
+  textures: () => import('./textures'),
 };
 
 export async function loadScenario(id: string): Promise<Scenario | null> {

@@ -127,6 +127,37 @@ export const MATRIX: ScenarioEntry[] = [
     ],
     adapters: ['box2d'],
   },
+  {
+    id: 'sprites',
+    title: 'Sprites: Creator item atlas',
+    description: 'N images from the real Creator item atlas (one 2048 page) moving and rotating. Reports draw calls per frame.',
+    task: 'CW-01.6',
+    variants: [
+      { label: '500', params: { count: 500 } },
+      { label: '2000', params: { count: 2000 } },
+    ],
+    adapters: [],
+  },
+  {
+    id: 'spine',
+    title: 'Spine: Floof skeletons',
+    description: 'N Floof skeletons (Spine 4.2 export, spine-phaser-v4 4.2 runtime) looping their idle animations in a grid. The count that holds 30 fps is the skeleton budget.',
+    task: 'CW-01.6',
+    variants: [
+      { label: '10', params: { count: 10 } },
+      { label: '30', params: { count: 30 } },
+      { label: '60', params: { count: 60 } },
+    ],
+    adapters: [],
+  },
+  {
+    id: 'textures',
+    title: 'Textures: raw PNG vs KTX',
+    description: 'The 2048x1536 backdrop and the item atlas, raw and compressed (KTX: ASTC, ETC2, S3TC), side by side. Reports GPU bytes per texture. Needs the KTX files from PVRTexTool.',
+    task: 'CW-01.6',
+    variants: [{ label: 'both', params: {} }],
+    adapters: [],
+  },
 ];
 
 export interface BenchRun {

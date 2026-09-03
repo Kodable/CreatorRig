@@ -94,6 +94,9 @@ Both adapters pass the same conformance suite (`src/physics/conformance.test.ts`
 | `ccd` | CW-01.3 | 6 cm ball at 90 m/s fired N times at a 1 cm wall (`bullet=0` variant) | zero tunnels |
 | `catapult` | CW-01.3 | Counterweight trebuchet into a box stack; limits, gravity, contacts | ball flies right, contacts fire, p95 under 33.4 ms |
 | `particles` | CW-01.5 | N live additive particles over the 200-body bowl; `emitters=5` splits the count | p95 under 33.4 ms with the emitters at target; largest passing count ÷ 4 = per-effect cap |
+| `sprites` | CW-01.6 | N images from the real Creator item atlas (one 2048 page); draw calls per frame | p95 under 33.4 ms |
+| `spine` | CW-01.6 | N Floof skeletons (Spine 4.2 export) looping idle animations; draw calls per frame | p95 under 33.4 ms; humans check the art |
+| `textures` | CW-01.6 | Backdrop and atlas raw vs KTX (ASTC, ETC2, S3TC); GPU bytes per texture | compressed textures render; `null` until the KTX files exist |
 | `determinism` | CW-01.4 | Seeded coaster scene: 200 bodies, 30 joints, one motor, 3,000 fixed steps, run twice; hash of every transform | the two runs agree (`stable`); humans compare `hash` across devices |
 
 Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame), `subSteps` and, where meaningful, a `hash` taken at a fixed step for cross-device comparison.
@@ -101,6 +104,32 @@ Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame
 ### Particles (CW-01.5)
 
 `particles` layers Phaser particle emitters (one 16 px soft disc texture, additive blending, gravity, scale and alpha fades) over the 200-body `bodies` scene on the `box2d` adapter. Each emitter flows every update and is hard-capped with `maxAliveParticles`, and the flow is sized to fill the cap at 30 fps, so the live count equals the target on any device that keeps up. Variants: 1,000, 5,000 and 20,000 from one emitter, and `5x500` (2,500 over 5 emitters). `extra.particlesAliveMax` must reach the target for the run to count. `npm run results` prints a third table: per device, the largest single-emitter count that held 30 fps and that number divided by 4, the proposed per-effect cap.
+
+### Sprites, Spine and textures (CW-01.6)
+
+**Assets** live in `public/`: `atlas/creator-items.{png,json}` is the Creator object-browser art (the color layers of the props in `K3Unity/Assets/K3/Art/Objects/Browser/Items`, without the white `_shade` masks, scaled to 148 px and packed by `scripts/pack-atlas.mjs` into one 2048 page in Phaser JSON-hash format), `spine/floofs/` is the Floof family exported from Spine 4.2.43 (6 skeletons, one 2-page atlas, premultiplied alpha), and `textures/backdrop.png` is a real 2048 x 1536 course backdrop.
+
+```bash
+node scripts/pack-atlas.mjs <folder-of-pngs> public/atlas/creator-items 2048   # re-pack the atlas
+```
+
+- `sprites`: images from the atlas, moving and rotating. `extra.drawCallsP50` counts WebGL draw calls per frame (the rig wraps `drawElements` and `drawArrays`, since Phaser 4's WebGL renderer has no counter). One texture batches into 1 draw call.
+- `spine`: skeletons in a grid, cycling the 6 Floofs, each looping its idle animation, through `@esotericsoftware/spine-phaser-v4` **4.2.120**. The runtime's major.minor must match the export (4.2.43); the 4.3 line of the plugin does not load 4.2 data. The plugin installs at run time inside the scenario, so other scenarios do not carry the Spine runtime. Headless: about 4.6 draw calls per skeleton.
+- `textures`: loads the backdrop and the atlas raw, and compressed through `load.texture` when the KTX files exist next to the PNGs. It probes the files with HEAD first, lets Phaser pick the first format the GPU supports, and draws raw and compressed side by side. `extra.textures[]` gives raw bytes (width x height x 4) and the KTX payload per texture; `extra.gpuSupports` says which formats the device offers. Pass is `null` until the KTX files exist, then `true` when every compressed texture rendered.
+
+**KTX files (human, once, from the same PNGs)** with PVRTexTool CLI (free, Imagination Technologies; `toktx` from KTX-Software also works for ASTC):
+
+```bash
+cd public
+PVRTexToolCLI -i textures/backdrop.png -o textures/backdrop-astc.ktx -f ASTC_6x6,UBN,lRGB -q astcmedium
+PVRTexToolCLI -i textures/backdrop.png -o textures/backdrop-etc2.ktx -f ETC2_RGBA,UBN,lRGB -q etcfast
+PVRTexToolCLI -i textures/backdrop.png -o textures/backdrop-s3tc.ktx -f BC3,UBN,lRGB
+PVRTexToolCLI -i atlas/creator-items.png -o atlas/creator-items-astc.ktx -f ASTC_6x6,UBN,lRGB -q astcmedium
+PVRTexToolCLI -i atlas/creator-items.png -o atlas/creator-items-etc2.ktx -f ETC2_RGBA,UBN,lRGB -q etcfast
+PVRTexToolCLI -i atlas/creator-items.png -o atlas/creator-items-s3tc.ktx -f BC3,UBN,lRGB
+```
+
+Phaser reads the KTX 1 container (the PVRTexTool default). ASTC serves the iPad, ETC2 the Chromebook, S3TC desktop GPUs.
 
 ### Determinism (CW-01.4)
 
