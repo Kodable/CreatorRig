@@ -2,13 +2,15 @@ import type Phaser from 'phaser';
 import { createWorld, FIXED_DT, FIXED_SUBSTEPS, isAdapterId } from '../physics';
 import type { RigParams } from '../params';
 import type { FrameStats } from '../report';
-import { COLORS, PhysicsView, round2 } from './physicsCommon';
+import { COLORS, FixedStepper, PhysicsView, round2 } from './physicsCommon';
 import { makeRandom, type Scenario, type ScenarioHandle } from './types';
 
 /**
  * Continuous collision: a small ball at pinball speed is fired at a wall about one pixel thick,
  * N times. Any launch that ends on the far side of the wall is a tunnel. Pinball and catapult
  * courses fail visibly if this fails. ?bullet=0 turns continuous collision off for comparison.
+ * ?resume=1 gives every launch a fake 2,000 ms frame right after the ball leaves (an app switch
+ * on a tablet): the fixed-step accumulator clamps it, and the ball must still not tunnel.
  */
 const ccd: Scenario = {
   id: 'ccd',
@@ -18,6 +20,8 @@ const ccd: Scenario = {
     const launches = params.count > 0 ? params.count : this.defaultCount;
     const speed = Number(params.extra['speed'] ?? 90);
     const bullet = (params.extra['bullet'] ?? '1') !== '0';
+    const resume = (params.extra['resume'] ?? '0') === '1';
+    const resumeDeltaMs = 2000;
     const world = await createWorld(params.adapter, { gravity: { x: 0, y: 0 } });
     const view = new PhysicsView(scene, world, { ppm: 32, originX: 512, originY: 400 });
 
@@ -33,6 +37,7 @@ const ccd: Scenario = {
     let tunnels = 0;
     let bounced = 0;
     let msTotal = 0;
+    let resumeSteps = 0;
     let lastBall: number | null = null;
 
     const random = makeRandom(params.seed);
@@ -43,7 +48,13 @@ const ccd: Scenario = {
       const v = speed * (0.9 + random() * 0.2);
       const ball = world.createBody({ position: { x: -3 - phase, y: (done % 20) * 0.4 - 4 }, linearVelocity: { x: v, y: 0 }, bullet });
       world.addShape(ball, { kind: 'circle', radius }, { restitution: 0.5, density: 1 });
-      for (let i = 0; i < stepsPerLaunch; i++) world.step(FIXED_DT, FIXED_SUBSTEPS);
+      let stepped = 0;
+      if (resume) {
+        // The first frame after a background switch: one huge delta through the clamped accumulator.
+        stepped = new FixedStepper(world).update(resumeDeltaMs);
+        resumeSteps = stepped;
+      }
+      for (let i = stepped; i < stepsPerLaunch; i++) world.step(FIXED_DT, FIXED_SUBSTEPS);
       const x = world.getTransform(ball).position.x;
       if (x > radius) tunnels++;
       else bounced++;
@@ -90,12 +101,15 @@ const ccd: Scenario = {
           wallThickness: 0.01,
           ballRadius: radius,
           msPerLaunch: round2(done > 0 ? msTotal / done : 0),
+          resume,
+          ...(resume ? { resumeDeltaMs, resumeStepsTaken: resumeSteps } : {}),
         };
       },
       notes(): string[] {
         const notes: string[] = [];
         if (done < launches) notes.push(`only ${done} of ${launches} launches ran in the window; raise duration`);
         if (!bullet) notes.push('continuous collision off (bullet=0)');
+        if (resume) notes.push(`each launch began with a ${resumeDeltaMs} ms frame, clamped to ${resumeSteps} fixed steps`);
         return notes;
       },
     };

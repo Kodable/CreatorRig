@@ -88,11 +88,12 @@ export const MATRIX: ScenarioEntry[] = [
   {
     id: 'ccd',
     title: 'Continuous collision: ball vs 1 px wall',
-    description: 'A 6 cm ball at 90 m/s is fired N times at a wall 1 cm thick. Pass: zero tunnels. bullet=0 turns continuous collision off for comparison.',
+    description: 'A 6 cm ball at 90 m/s is fired N times at a wall 1 cm thick. Pass: zero tunnels. bullet=0 turns continuous collision off for comparison; resume=1 starts every launch with a fake 2,000 ms frame (app switch) through the clamped accumulator.',
     task: 'CW-01.3',
     variants: [
       { label: '1000', params: { count: 1000 } },
       { label: '1000-nobullet', params: { count: 1000, bullet: 0 } },
+      { label: '1000-resume', params: { count: 1000, resume: 1 } },
     ],
     adapters: ['box2d', 'rapier'],
   },

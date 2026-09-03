@@ -91,7 +91,7 @@ Both adapters pass the same conformance suite (`src/physics/conformance.test.ts`
 | `bodies` | CW-01.3 | N bodies rain into a bowl; physics ms per frame; hash at step 300 | p95 under 33.4 ms |
 | `stack` | CW-01.3 | Tower of N unit boxes at rest; drift of the top box | drift under 0.5 m, no topple, p95 under 33.4 ms |
 | `joints` | CW-01.3 | 100 motor carts in an arena plus a bridge of breakable spring rods | wheel anchor gap under 0.1 m, p95 under 33.4 ms |
-| `ccd` | CW-01.3 | 6 cm ball at 90 m/s fired N times at a 1 cm wall (`bullet=0` variant) | zero tunnels |
+| `ccd` | CW-01.3 | 6 cm ball at 90 m/s fired N times at a 1 cm wall (`bullet=0` variant; `resume=1` starts each launch with a fake 2,000 ms frame through the clamped accumulator) | zero tunnels |
 | `catapult` | CW-01.3 | Counterweight trebuchet into a box stack; limits, gravity, contacts | ball flies right, contacts fire, p95 under 33.4 ms |
 | `particles` | CW-01.5 | N live additive particles over the 200-body bowl; `emitters=5` splits the count | p95 under 33.4 ms with the emitters at target; largest passing count ÷ 4 = per-effect cap |
 | `sprites` | CW-01.6 | N images from the real Creator item atlas (one 2048 page); draw calls per frame | p95 under 33.4 ms |
