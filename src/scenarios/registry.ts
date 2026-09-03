@@ -7,6 +7,11 @@ import type { Scenario } from './types';
 const LOADERS: Record<string, () => Promise<{ default: Scenario }>> = {
   baseline: () => import('./baseline'),
   'physics-smoke': () => import('./physics-smoke'),
+  bodies: () => import('./bodies'),
+  stack: () => import('./stack'),
+  joints: () => import('./joints'),
+  ccd: () => import('./ccd'),
+  catapult: () => import('./catapult'),
 };
 
 export async function loadScenario(id: string): Promise<Scenario | null> {

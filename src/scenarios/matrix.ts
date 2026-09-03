@@ -48,6 +48,61 @@ export const MATRIX: ScenarioEntry[] = [
     ],
     adapters: ['box2d', 'rapier'],
   },
+  {
+    id: 'bodies',
+    title: 'Bodies: rain into a bowl',
+    description: 'N dynamic circles and boxes rain into a chain bowl. The count where a device drops under 30 fps is its live-object cap.',
+    task: 'CW-01.3',
+    variants: [
+      { label: '200', params: { count: 200 } },
+      { label: '500', params: { count: 500 } },
+      { label: '1000', params: { count: 1000 } },
+    ],
+    adapters: ['box2d', 'rapier'],
+  },
+  {
+    id: 'stack',
+    title: 'Stack: tower at rest',
+    description: 'A tower of N unit boxes must stand still. Reports the drift of the top box; pass is under 0.5 m and no topple.',
+    task: 'CW-01.3',
+    variants: [
+      { label: '20', params: { count: 20 } },
+      { label: '30', params: { count: 30 } },
+      { label: '40', params: { count: 40 } },
+      { label: '50', params: { count: 50 } },
+    ],
+    adapters: ['box2d', 'rapier'],
+  },
+  {
+    id: 'joints',
+    title: 'Joints: motor carts and a breakable bridge',
+    description: 'N motorized carts drive inside a chain arena while heavy balls load a plank bridge of breakable spring rods. Pass: wheel joints hold. stiff=1 raises Box2D joint stiffness.',
+    task: 'CW-01.3',
+    variants: [
+      { label: '100', params: { count: 100 } },
+      { label: '100-stiff', params: { count: 100, stiff: 1 } },
+    ],
+    adapters: ['box2d', 'rapier'],
+  },
+  {
+    id: 'ccd',
+    title: 'Continuous collision: ball vs 1 px wall',
+    description: 'A 6 cm ball at 90 m/s is fired N times at a wall 1 cm thick. Pass: zero tunnels. bullet=0 turns continuous collision off for comparison.',
+    task: 'CW-01.3',
+    variants: [
+      { label: '1000', params: { count: 1000 } },
+      { label: '1000-nobullet', params: { count: 1000, bullet: 0 } },
+    ],
+    adapters: ['box2d', 'rapier'],
+  },
+  {
+    id: 'catapult',
+    title: 'Catapult: hinge, spring, motor, stack',
+    description: 'A hinged arm with a spring launches a ball into a stack of boxes. Sanity check for limits, motors, springs and contact events together.',
+    task: 'CW-01.3',
+    variants: [{ label: '30', params: { count: 30 } }],
+    adapters: ['box2d', 'rapier'],
+  },
 ];
 
 export interface BenchRun {

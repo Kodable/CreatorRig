@@ -42,6 +42,10 @@ export class Box2DWorld extends BaseWorld {
     const def = B2.b2DefaultWorldDef();
     const g = options.gravity ?? { x: 0, y: -10 };
     def.gravity = new B2.b2Vec2(g.x, g.y);
+    if (options.stiffJoints) {
+      def.jointHertz = 240;
+      def.jointDampingRatio = 2;
+    }
     this.world = B2.b2CreateWorld(def);
   }
 

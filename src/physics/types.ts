@@ -78,7 +78,9 @@ interface JointBase {
   anchorB: Vec2;
   /**
    * World distance between the two anchor points above which the joint is destroyed.
-   * Measured after every step by the interface layer, so it behaves the same on every engine.
+   * Measured after every step by the interface layer. Use it on `distance` joints with a spring:
+   * those stretch measurably on every engine. Revolute and weld joints only stretch on engines
+   * with soft joints (Box2D), so a gap rule on them is not portable.
    */
   breakDistance?: number;
 }
@@ -159,6 +161,11 @@ export interface PhysicsWorld {
 
 export interface WorldOptions {
   gravity?: Vec2;
+  /**
+   * Box2D only: raise the world's joint softness (jointHertz 240, damping 2) so joints stretch
+   * less under load. Rapier joints are stiff by construction and ignore this.
+   */
+  stiffJoints?: boolean;
 }
 
 /** The fixed step every scenario uses. 1/60 s with 4 sub-steps. */
