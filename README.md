@@ -93,9 +93,14 @@ Both adapters pass the same conformance suite (`src/physics/conformance.test.ts`
 | `joints` | CW-01.3 | 100 motor carts in an arena plus a bridge of breakable spring rods | wheel anchor gap under 0.1 m, p95 under 33.4 ms |
 | `ccd` | CW-01.3 | 6 cm ball at 90 m/s fired N times at a 1 cm wall (`bullet=0` variant) | zero tunnels |
 | `catapult` | CW-01.3 | Counterweight trebuchet into a box stack; limits, gravity, contacts | ball flies right, contacts fire, p95 under 33.4 ms |
+| `particles` | CW-01.5 | N live additive particles over the 200-body bowl; `emitters=5` splits the count | p95 under 33.4 ms with the emitters at target; largest passing count ÷ 4 = per-effect cap |
 | `determinism` | CW-01.4 | Seeded coaster scene: 200 bodies, 30 joints, one motor, 3,000 fixed steps, run twice; hash of every transform | the two runs agree (`stable`); humans compare `hash` across devices |
 
 Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame), `subSteps` and, where meaningful, a `hash` taken at a fixed step for cross-device comparison.
+
+### Particles (CW-01.5)
+
+`particles` layers Phaser particle emitters (one 16 px soft disc texture, additive blending, gravity, scale and alpha fades) over the 200-body `bodies` scene on the `box2d` adapter. Each emitter flows every update and is hard-capped with `maxAliveParticles`, and the flow is sized to fill the cap at 30 fps, so the live count equals the target on any device that keeps up. Variants: 1,000, 5,000 and 20,000 from one emitter, and `5x500` (2,500 over 5 emitters). `extra.particlesAliveMax` must reach the target for the run to count. `npm run results` prints a third table: per device, the largest single-emitter count that held 30 fps and that number divided by 4, the proposed per-effect cap.
 
 ### Determinism (CW-01.4)
 

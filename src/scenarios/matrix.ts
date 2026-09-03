@@ -113,6 +113,20 @@ export const MATRIX: ScenarioEntry[] = [
     variants: [{ label: '200', params: { count: 200, duration: 15 } }],
     adapters: ['box2d', 'rapier'],
   },
+  {
+    id: 'particles',
+    title: 'Particles: additive emitters over the bowl',
+    description:
+      'N live additive particles over the 200-body bowl scene. The largest count that holds 30 fps, divided by 4, is the per-effect cap. 5x500 spreads 2,500 particles over 5 emitters, the way effects are used.',
+    task: 'CW-01.5',
+    variants: [
+      { label: '1000', params: { count: 1000 } },
+      { label: '5000', params: { count: 5000 } },
+      { label: '20000', params: { count: 20000 } },
+      { label: '5x500', params: { count: 2500, emitters: 5 } },
+    ],
+    adapters: ['box2d'],
+  },
 ];
 
 export interface BenchRun {

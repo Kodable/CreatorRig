@@ -13,6 +13,7 @@ const LOADERS: Record<string, () => Promise<{ default: Scenario }>> = {
   ccd: () => import('./ccd'),
   catapult: () => import('./catapult'),
   determinism: () => import('./determinism'),
+  particles: () => import('./particles'),
 };
 
 export async function loadScenario(id: string): Promise<Scenario | null> {

@@ -60,3 +60,24 @@ if (groups.size > 0) {
     console.log(`| ${key} | ${runs[0].step ?? '-'} | ${cells} | ${agree} |`);
   }
 }
+
+// Particle budget: per device, the largest single-emitter count that held 30 fps (p95 under 33.4 ms)
+// with the emitters at their target. Divided by 4 it is the proposed per-effect cap (CW-01.5).
+const budget = new Map();
+for (const r of rows) {
+  if (r.scenario !== 'particles' || Number(r.extra?.emitters ?? 1) !== 1) continue;
+  const count = Number(r.params.count);
+  const held = r.p95 <= 33.4 && Number(r.extra?.particlesAliveMax ?? 0) >= count * 0.9;
+  const entry = budget.get(r.device) ?? { held: 0, failed: Infinity };
+  if (held) entry.held = Math.max(entry.held, count);
+  else entry.failed = Math.min(entry.failed, count);
+  budget.set(r.device, entry);
+}
+if (budget.size > 0) {
+  console.log('');
+  console.log('| device | largest particle count at 30 fps | first count that failed | per-effect cap (÷4) |');
+  console.log('| --- | --- | --- | --- |');
+  for (const [device, e] of [...budget.entries()].sort()) {
+    console.log(`| ${device} | ${e.held || '-'} | ${Number.isFinite(e.failed) ? e.failed : '-'} | ${e.held ? Math.floor(e.held / 4) : '-'} |`);
+  }
+}
