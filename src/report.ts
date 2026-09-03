@@ -34,6 +34,18 @@ export interface Report {
   extra: Record<string, unknown>;
 }
 
+/** Longest the measured window may extend past `duration` while a scenario is busy. */
+export const MAX_EXTEND_MS = 120_000;
+
+/**
+ * Whether the measured window ends now. It ends at `endAt`, unless the scenario is busy, in which
+ * case it ends when the scenario is done or at `capAt`, whichever comes first.
+ */
+export function windowEnds(now: number, endAt: number, capAt: number, busy: boolean): boolean {
+  if (now < endAt) return false;
+  return !busy || now >= capAt;
+}
+
 export interface FrameStats {
   durationMs: number;
   frames: number;
@@ -78,16 +90,22 @@ export class FrameSampler {
   private last = 0;
   private warmupUntil = 0;
   private endAt = 0;
+  private capAt = 0;
+  private busy: () => boolean = () => false;
   private raf = 0;
   private resolve: ((stats: FrameStats) => void) | null = null;
   /** Live read for the HUD: intervals of the last second. */
   recent: number[] = [];
+  /** How far the window ran past `duration` because the scenario was still busy. */
+  extendedMs = 0;
 
-  start(warmupMs: number, durationMs: number): Promise<FrameStats> {
+  start(warmupMs: number, durationMs: number, busy?: () => boolean): Promise<FrameStats> {
     const now = performance.now();
     this.last = now;
     this.warmupUntil = now + warmupMs;
     this.endAt = this.warmupUntil + durationMs;
+    this.capAt = this.endAt + MAX_EXTEND_MS;
+    this.busy = busy ?? (() => false);
     this.intervals = [];
     return new Promise((resolve) => {
       this.resolve = resolve;
@@ -102,7 +120,8 @@ export class FrameSampler {
     if (this.recent.length > 60) this.recent.shift();
     if (now >= this.warmupUntil) {
       this.intervals.push(dt);
-      if (now >= this.endAt) {
+      if (windowEnds(now, this.endAt, this.capAt, this.busy())) {
+        this.extendedMs = Math.max(0, now - this.endAt);
         const stats = summarize(this.intervals);
         this.resolve?.(stats);
         this.resolve = null;

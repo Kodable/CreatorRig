@@ -120,7 +120,7 @@ async function runScenario(p: RigParams): Promise<void> {
         emitError(`scenario.create failed: ${(err as Error).message}`);
         return;
       }
-      const stats = await sampler.start(effective.warmup * 1000, effective.duration * 1000);
+      const stats = await sampler.start(effective.warmup * 1000, effective.duration * 1000, () => handle?.busy?.() === true);
       finish(stats);
     }
     override update(time: number, delta: number): void {
@@ -144,6 +144,8 @@ async function runScenario(p: RigParams): Promise<void> {
     const pass = handle?.pass ? handle.pass(stats) : null;
     const extra = handle?.extra ? handle.extra() : {};
     const notes = handle?.notes ? handle.notes() : [];
+    if (sampler.extendedMs >= 500) notes.push(`measured window extended by ${(sampler.extendedMs / 1000).toFixed(1)} s until the scenario finished`);
+    if (handle?.busy?.()) notes.push('scenario still busy at the cap; the device is too slow for this variant');
     emitReport(buildReport(effective, device, stats, startedAt, pass, notes, extra));
   };
 

@@ -17,6 +17,12 @@ export interface ScenarioHandle {
   notes?(): string[];
   /** Text for the top-right hash box. Shown large so a human can compare devices. */
   hash?(): string | null;
+  /**
+   * True while the scenario still has fixed work to finish (a step count, a rerun). The measured
+   * window extends past `duration` until this returns false or the cap is reached, so a slow
+   * device does not need a hand-tuned duration.
+   */
+  busy?(): boolean;
 }
 
 export interface Scenario {

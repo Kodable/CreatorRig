@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { percentile, reportFileName, summarize } from './report';
+import { percentile, reportFileName, summarize, windowEnds } from './report';
 import { parseParams, buildUrl, guessDevice } from './params';
 import { MATRIX, benchRuns } from './scenarios/matrix';
 
@@ -27,6 +27,20 @@ describe('summarize', () => {
     expect(stats.max).toBe(40);
     expect(stats.dropped).toBe(1);
     expect(stats.slow).toBe(2);
+  });
+});
+
+describe('windowEnds', () => {
+  it('never ends before the duration', () => {
+    expect(windowEnds(90, 100, 220, false)).toBe(false);
+    expect(windowEnds(90, 100, 220, true)).toBe(false);
+  });
+  it('ends at the duration when the scenario is idle', () => {
+    expect(windowEnds(100, 100, 220, false)).toBe(true);
+  });
+  it('extends while the scenario is busy, up to the cap', () => {
+    expect(windowEnds(150, 100, 220, true)).toBe(false);
+    expect(windowEnds(220, 100, 220, true)).toBe(true);
   });
 });
 

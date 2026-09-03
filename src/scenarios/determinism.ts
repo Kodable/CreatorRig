@@ -282,10 +282,14 @@ const determinism: Scenario = {
       notes(): string[] {
         const [a, b] = runs;
         const notes: string[] = [];
-        if (!a || !complete(a)) notes.push(`run 1 reached ${a?.scene.steps ?? 0} of ${targetSteps} steps; raise ?duration=`);
-        else if (!b || !complete(b)) notes.push(`run 2 reached ${b?.scene.steps ?? 0} of ${targetSteps} steps; raise ?duration=`);
+        if (!a || !complete(a)) notes.push(`run 1 reached ${a?.scene.steps ?? 0} of ${targetSteps} steps`);
+        else if (!b || !complete(b)) notes.push(`run 2 reached ${b?.scene.steps ?? 0} of ${targetSteps} steps`);
         else if (a.hashes[targetSteps] !== b.hashes[targetSteps]) notes.push('same browser, same seed, different hash: the adapter is not stable');
         return notes;
+      },
+      busy(): boolean {
+        const b = runs[1];
+        return !b || !complete(b);
       },
       hash(): string | null {
         const [a, b] = runs;

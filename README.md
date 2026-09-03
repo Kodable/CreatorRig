@@ -44,7 +44,7 @@ Every run writes the same shape to the page, to the console as one `RIG_REPORT {
 }
 ```
 
-`p50`, `p95` and `max` are frame intervals in ms. `dropped` counts frames over 33.4 ms (missed 30 fps). `slow` counts frames over 16.8 ms (missed 60 fps). `pass` is `null` when the scenario has no automatic rule, for example a determinism hash a human compares across devices.
+`p50`, `p95` and `max` are frame intervals in ms. `dropped` counts frames over 33.4 ms (missed 30 fps). `slow` counts frames over 16.8 ms (missed 60 fps). `pass` is `null` when the scenario has no automatic rule, for example a determinism hash a human compares across devices. A scenario with fixed work (a step count) can report itself `busy`; the measured window then runs past `duration` until the work is done, at most 120 s more, and `notes` records the extension.
 
 ## Physics interface (CW-01.2)
 
@@ -92,7 +92,7 @@ Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame
 - The hash box shows the run-1 hash in large text, then `✓` when run 2 matched or `✗` and the second hash when it did not.
 - `extra.stable` is the same-browser check (`pass`). `extra.checkpoints` places a divergence in time when two devices differ.
 - Run the `200` variant on every device with the same `?seed=` and `?substeps=`, paste the reports into `results/`, then `npm run results` prints a second table: one row per scenario, params and adapter, the hash per device, and whether they agree.
-- The run needs about 6,000 steps of physics time; the variant sets `duration=15`. If a slow device reports fewer than 3,000 steps in `stepsDone`, raise `?duration=`.
+- The run needs about 6,000 steps of physics time. The scenario reports itself busy until both runs reach step 3,000, and the measured window extends past `duration` until then (cap 120 s), so a slow device needs no hand-tuned duration. The report notes the extension. `stepsDone` must read `[3000, 3000]`.
 
 ## Bench (headless, desktop)
 
