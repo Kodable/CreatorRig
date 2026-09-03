@@ -1,0 +1,139 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "soak",
+  "adapter": "box2d",
+  "device": "chromebook-guess",
+  "ua": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 1366,
+    "height": 633,
+    "dpr": 1
+  },
+  "params": {
+    "count": 200,
+    "duration": 600,
+    "warmup": 3,
+    "seed": 1,
+    "sampleEvery": "30",
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T20:26:22.801Z",
+  "durationMs": 600006,
+  "frames": 35955,
+  "fps": 59.9,
+  "p50": 16.7,
+  "p95": 16.8,
+  "max": 549.9,
+  "dropped": 10,
+  "slow": 1650,
+  "heapMB": 88.7,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "bodies": 200,
+    "particles": 1000,
+    "skeletons": 10,
+    "minutes": 10.03,
+    "heapStartMB": 70.5,
+    "heapPeakMB": 104.3,
+    "heapFinalMB": 84.5,
+    "heapSamples": [
+      {
+        "t": 0,
+        "heapMB": 70.5
+      },
+      {
+        "t": 30,
+        "heapMB": 92.1
+      },
+      {
+        "t": 60,
+        "heapMB": 103.8
+      },
+      {
+        "t": 90,
+        "heapMB": 87.8
+      },
+      {
+        "t": 120,
+        "heapMB": 98.9
+      },
+      {
+        "t": 150,
+        "heapMB": 85.6
+      },
+      {
+        "t": 180,
+        "heapMB": 86.9
+      },
+      {
+        "t": 210,
+        "heapMB": 93
+      },
+      {
+        "t": 240,
+        "heapMB": 94.2
+      },
+      {
+        "t": 270,
+        "heapMB": 104.3
+      },
+      {
+        "t": 300,
+        "heapMB": 99.2
+      },
+      {
+        "t": 330,
+        "heapMB": 78.5
+      },
+      {
+        "t": 360,
+        "heapMB": 88.8
+      },
+      {
+        "t": 390,
+        "heapMB": 100.6
+      },
+      {
+        "t": 420,
+        "heapMB": 93
+      },
+      {
+        "t": 450,
+        "heapMB": 99.6
+      },
+      {
+        "t": 480,
+        "heapMB": 95.9
+      },
+      {
+        "t": 510,
+        "heapMB": 80.8
+      },
+      {
+        "t": 540,
+        "heapMB": 93.5
+      },
+      {
+        "t": 570,
+        "heapMB": 82
+      },
+      {
+        "t": 600,
+        "heapMB": 84.5
+      }
+    ],
+    "textures": 3,
+    "gameObjects": 216,
+    "previousRunDied": false,
+    "contacts": 2428,
+    "hashStep": 300,
+    "hash": "1a6b4807",
+    "subSteps": 4,
+    "physicsMsP50": 0.2,
+    "physicsMsP95": 0.4,
+    "physicsMsMax": 73.2,
+    "stepsTotal": 36125
+  }
+}

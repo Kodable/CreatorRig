@@ -1,0 +1,47 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "pwa",
+  "adapter": "none",
+  "device": "ipad-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Safari/605.1.15",
+  "viewport": {
+    "width": 1180,
+    "height": 788,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 2,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T20:37:47.629Z",
+  "durationMs": 2017,
+  "frames": 121,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 18,
+  "dropped": 0,
+  "slow": 79,
+  "heapMB": null,
+  "pass": false,
+  "notes": [],
+  "extra": {
+    "standalone": true,
+    "launchedFromIcon": false,
+    "displayMode": "standalone",
+    "swSupported": false,
+    "swState": "unsupported",
+    "swControlled": false,
+    "swScope": "",
+    "cacheNames": [],
+    "cacheEntries": 0,
+    "secureContext": false,
+    "viewport": "1180x788",
+    "screen": "820x1180",
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Safari/605.1.15"
+  }
+}
