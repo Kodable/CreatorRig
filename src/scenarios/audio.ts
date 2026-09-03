@@ -183,7 +183,22 @@ const audio: Scenario = {
       state.recoveryFailed++;
       state.recoveries.push('failed');
       log(`no cure worked on this tap (state ${ctx.state}, clock ${ctx.currentTime.toFixed(2)}); try again after switching apps and back`);
+      showReloadButton();
       return false;
+    };
+
+    // The only cure seen on the iPad: a reload. This is the pattern a runtime would offer.
+    let reloadButton: Phaser.GameObjects.Text | null = null;
+    const showReloadButton = (): void => {
+      if (reloadButton) return;
+      reloadButton = scene.add
+        .text(512, 620, 'Sound is stuck. Tap here to reload and fix it', { fontSize: '26px', color: '#1a2142', backgroundColor: '#ffb40f', padding: { x: 18, y: 12 } })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
+      reloadButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+        event.stopPropagation();
+        window.location.reload();
+      });
     };
 
     const onTap = (pointer: Phaser.Input.Pointer): void => {
