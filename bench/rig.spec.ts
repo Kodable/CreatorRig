@@ -31,8 +31,9 @@ for (const run of benchRuns()) {
     });
 
     await page.goto(`/?${q.toString()}`);
+    const duration = Number(run.params['duration'] ?? DURATION);
     await page.waitForFunction(() => window.__rig?.done === true, null, {
-      timeout: (DURATION + WARMUP + 30) * 1000,
+      timeout: (duration + WARMUP + 60) * 1000,
     });
     const rig = await page.evaluate(() => window.__rig);
     expect(rig?.error, rig?.error ?? '').toBeUndefined();

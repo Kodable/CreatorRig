@@ -19,7 +19,8 @@
     "bench:webkit": "vite build && playwright test --project=webkit",
     "results": "node scripts/summarize.mjs",
     "ktx": "node scripts/make-ktx.mjs",
-    "atlas": "node scripts/pack-atlas.mjs"
+    "atlas": "node scripts/pack-atlas.mjs",
+    "load": "node scripts/load-time.mjs"
   },
   "dependencies": {
     "@dimforge/rapier2d-deterministic-compat": "^0.20.0",

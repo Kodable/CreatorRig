@@ -181,6 +181,41 @@ export const MATRIX: ScenarioEntry[] = [
     ],
     adapters: [],
   },
+  {
+    id: 'soak',
+    title: 'Soak: play scene left running',
+    description: '200 bodies, 1,000 additive particles from 5 emitters and 10 Floof skeletons. Samples the JS heap where the browser exposes it and notices a reload or a memory kill. 10min is the device run.',
+    task: 'CW-01.8',
+    variants: [
+      { label: '1min', params: { count: 200, duration: 60, sampleEvery: 10 } },
+      { label: '10min', params: { count: 200, duration: 600, sampleEvery: 30 }, manual: true },
+    ],
+    adapters: ['box2d'],
+  },
+  {
+    id: 'audio',
+    title: 'Audio: Web Audio unlock on Safari',
+    description: 'Tap to play a beep; background and resume; trigger an interruption (Siri, timer) and come back. Reports what played.',
+    task: 'CW-01.8',
+    variants: [{ label: 'tap', params: { duration: 60 }, manual: true }],
+    adapters: [],
+  },
+  {
+    id: 'fonts',
+    title: 'Fonts: text before and after fonts.ready',
+    description: 'A Kodable-font text created before the font loads and one after. Reports whether the first baked fallback glyphs, which sets the runtime rule.',
+    task: 'CW-01.8',
+    variants: [{ label: 'kodable', params: { duration: 3 } }],
+    adapters: [],
+  },
+  {
+    id: 'pwa',
+    title: 'PWA: standalone and service worker',
+    description: 'Reports display mode, service worker state and cached entries. Run it from the Home Screen icon on the iPad.',
+    task: 'CW-01.8',
+    variants: [{ label: 'check', params: { duration: 2 } }],
+    adapters: [],
+  },
 ];
 
 export interface BenchRun {

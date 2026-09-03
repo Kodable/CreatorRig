@@ -21,7 +21,8 @@ export default defineConfig({
         launchOptions: {
           // Headless Chromium renders WebGL through SwiftShader. Keep the GPU blocklist off
           // so the WebGL context is created; numbers are for harness checks, not devices.
-          args: ['--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'],
+          // --enable-precise-memory-info: performance.memory is otherwise quantized and rate limited (soak).
+          args: ['--ignore-gpu-blocklist', '--enable-unsafe-swiftshader', '--enable-precise-memory-info'],
         },
       },
     },

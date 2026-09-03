@@ -11,6 +11,12 @@ const STAGE_HEIGHT = 768;
 
 const params = parseParams(window.location.search);
 
+// PWA app shell (CW-01.8). Production only, so the dev server never serves stale files; ?sw=0 skips
+// it so a cold-load measurement sees every byte on the page's own network.
+if (import.meta.env.PROD && 'serviceWorker' in navigator && params.extra['sw'] !== '0') {
+  navigator.serviceWorker.register(new URL('sw.js', window.location.href).toString()).catch((err: unknown) => console.warn('RIG_SW', String(err)));
+}
+
 if (params.scenario === '') {
   renderIndex();
 } else {
@@ -138,7 +144,13 @@ async function runScenario(p: RigParams): Promise<void> {
       const stats = await sampler.start(effective.warmup * 1000, effective.duration * 1000, () => handle?.busy?.() === true);
       finish(stats);
     }
+    private firstFrameMarked = false;
     override update(time: number, delta: number): void {
+      if (handle && !this.firstFrameMarked) {
+        // First interactive frame of the scenario: the load-time measurement reads this mark.
+        this.firstFrameMarked = true;
+        performance.mark('rig:first-frame');
+      }
       handle?.update?.(delta, time);
       if (hud) {
         hud.textContent =

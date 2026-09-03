@@ -16,6 +16,20 @@ export interface EmitterPlan {
   lifespanMs: number;
 }
 
+/** One 16x16 soft disc, shared by every emitter (single texture, single batch). */
+export function sparkTexture(scene: Phaser.Scene): string {
+  if (!scene.textures.exists('spark')) {
+    const g = scene.add.graphics();
+    for (let r = 8, a = 0.15; r >= 2; r -= 2, a += 0.25) {
+      g.fillStyle(0xffffff, a);
+      g.fillCircle(8, 8, r);
+    }
+    g.generateTexture('spark', 16, 16);
+    g.destroy();
+  }
+  return 'spark';
+}
+
 /**
  * Splits a target live count across emitters. Each emitter flows every update (frequency 0) and
  * is hard-capped with maxAliveParticles, so the live count equals the target on any device that
@@ -41,14 +55,7 @@ const particles: Scenario = {
     const plan = emitterPlan(count, Number(params.extra['emitters'] ?? 1) || 1);
     const under = await bodies.create(scene, { ...params, count: 200 });
 
-    // One 16x16 soft disc, shared by every emitter (single texture, single batch).
-    const g = scene.add.graphics();
-    for (let r = 8, a = 0.15; r >= 2; r -= 2, a += 0.25) {
-      g.fillStyle(0xffffff, a);
-      g.fillCircle(8, 8, r);
-    }
-    g.generateTexture('spark', 16, 16);
-    g.destroy();
+    sparkTexture(scene);
 
     const tints = [0xffb40f, 0x05aeed, 0xc32f96, 0x61bb46, 0xffffff];
     const emitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];

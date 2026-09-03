@@ -18,6 +18,10 @@ const LOADERS: Record<string, () => Promise<{ default: Scenario }>> = {
   spine: () => import('./spine'),
   textures: () => import('./textures'),
   overlay: () => import('./overlay'),
+  soak: () => import('./soak'),
+  audio: () => import('./audio'),
+  fonts: () => import('./fonts'),
+  pwa: () => import('./pwa'),
 };
 
 export async function loadScenario(id: string): Promise<Scenario | null> {
