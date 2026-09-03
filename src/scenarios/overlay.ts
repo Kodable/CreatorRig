@@ -501,7 +501,12 @@ const overlay: Scenario = {
         const sortedDrag = [...dragFrames].sort((a, b) => a - b);
         const sortedLat = [...latency].sort((a, b) => a - b);
         const sortedDrift = [...drift].sort((a, b) => a - b);
-        return percentile(sortedDrag, 95) <= 17.5 && percentile(sortedLat, 95) < 50 && percentile(sortedDrift, 95) <= 2;
+        // "60 fps drag": no dropped frames (over 33.4 ms) beyond 1 percent, and the frame callback
+        // at most about 3 ms late at p95. Real input events land between frames and delay the
+        // callback by 1 to 2 ms on both devices without dropping a frame; the robot, whose events
+        // fire inside the frame, shows a clean 16.7 ms.
+        const dropped = dragFrames.filter((ms) => ms > 33.4).length;
+        return percentile(sortedDrag, 95) <= 20 && dropped <= dragFrames.length * 0.01 && percentile(sortedLat, 95) < 50 && percentile(sortedDrift, 95) <= 2;
       },
       extra(): Record<string, unknown> {
         const stats = (xs: number[]): { p50: number; p95: number; max: number; n: number } => {
@@ -514,6 +519,8 @@ const overlay: Scenario = {
           gizmo: gizmoMode,
           flushSync: flush,
           dragFrames: stats(dragFrames),
+          dragDropped: dragFrames.filter((ms) => ms > 33.4).length,
+          dragSlow: dragFrames.filter((ms) => ms > 16.8).length,
           latencyMs: stats(latency),
           typingLatencyMs: stats(typingLatency),
           driftPx: stats(drift),

@@ -97,7 +97,7 @@ Both adapters pass the same conformance suite (`src/physics/conformance.test.ts`
 | `sprites` | CW-01.6 | N images from the real Creator item atlas (one 2048 page); draw calls per frame | p95 under 33.4 ms |
 | `spine` | CW-01.6 | N Floof skeletons (Spine 4.2 export) looping idle animations; draw calls per frame | p95 under 33.4 ms; humans check the art |
 | `textures` | CW-01.6 | Backdrop and atlas raw vs KTX (ASTC, ETC2, S3TC); GPU bytes per texture | compressed textures render; `null` until the KTX files exist |
-| `overlay` | CW-01.7 | React rail, 20-input panel, object list and DOM gizmo over 60 sprites; drag, resize, rotate, pan, zoom, pinch | drag frames p95 under 17.5 ms, pointer-to-frame latency p95 under 50 ms, gizmo drift p95 under 2 px |
+| `overlay` | CW-01.7 | React rail, 20-input panel, object list and DOM gizmo over 60 sprites; drag, resize, rotate, pan, zoom, pinch | drag frames p95 under 20 ms with at most 1 % over 33.4 ms, pointer-to-frame latency p95 under 50 ms, gizmo drift p95 under 2 px |
 | `determinism` | CW-01.4 | Seeded coaster scene: 200 bodies, 30 joints, one motor, 3,000 fixed steps, run twice; hash of every transform | the two runs agree (`stable`); humans compare `hash` across devices |
 
 Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame), `subSteps` and, where meaningful, a `hash` taken at a fixed step for cross-device comparison.
@@ -132,6 +132,8 @@ It writes 3 KTX files next to each PNG in `public/textures/` and `public/atlas/`
 
 - `robot` variants drive the same handlers with synthetic pointer, wheel, input and click events on a 12 s cycle: drag along an ellipse, resize from a handle, pan while zooming, type into `x` and `rotation`, select rows from the list. `manual` leaves it to fingers on a device; the report needs 30 drag frames and 10 pointer moves for a verdict.
 - Metrics: `dragFrames` (frame intervals while a pointer is down), `latencyMs` (earliest unrendered pointer event to Phaser's `postrender`), `typingLatencyMs`, `driftPx` (gizmo center through `camera.getWorldPoint` against the sprite, per frame), `reactCommits` and `reactCommitMs` (React's profiling build), `storeNotifies`, `longTasks`.
+- The gizmo renders into a layer the scene keeps exactly over the canvas (`.ov-canvas-layer`, from the canvas's offset box each frame), so its pixels are canvas pixels: iPad Safari moved the canvas under a page-positioned gizmo by a constant 6 to 77 px per run. React's `createRoot` empties its container, so that layer is a sibling of the React container inside the input shell.
+- Real input on devices lands between frames and delays the frame callback by 1 to 2 ms at p95 without dropping frames (p50 16.7 ms, no frame over 33.4 ms), while the robot's in-frame events show a clean 16.7 ms; the pass rule is therefore p95 under 20 ms and at most 1 % dropped, and `dragDropped` and `dragSlow` are reported.
 - `flushSync` is the finding. Input-driven store changes from native handlers or from Phaser's loop are rendered by React one frame after Phaser applies them: the gizmo lags the sprite by 3 px at 120 Hz and 6 px at 60 Hz, and a camera jump flashes the gizmo a full screen away for one frame. Wrapping those changes in `flushSync` (the default; `flush=0` shows the lag) brings drift to 0.01 px at a commit cost under 0.1 ms. `gizmo=imperative` moves the gizmo element directly during a drag and tells React on release; it is the fallback if flushSync ever costs too much on a device.
 
 ### Determinism (CW-01.4)

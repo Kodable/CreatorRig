@@ -18,19 +18,19 @@
     "robot": "1",
     "send": "1"
   },
-  "startedAt": "2026-09-03T19:37:10.854Z",
+  "startedAt": "2026-09-03T19:47:18.642Z",
   "durationMs": 20016,
   "frames": 1201,
   "fps": 60,
   "p50": 17,
   "p95": 17,
-  "max": 23,
+  "max": 21,
   "dropped": 0,
-  "slow": 798,
+  "slow": 795,
   "heapMB": null,
-  "pass": false,
+  "pass": true,
   "notes": [
-    "gizmo drift max 120.24 px (p95 is the pass value; a max of one screen is a one-frame flash on a camera jump)"
+    "gizmo drift max 119.71 px (p95 is the pass value; a max of one screen is a one-frame flash on a camera jump)"
   ],
   "extra": {
     "objects": 60,
@@ -41,63 +41,63 @@
       "p50": 16.7,
       "p95": 16.7,
       "max": 17.1,
-      "n": 953
+      "n": 952
     },
     "latencyMs": {
       "p50": 2,
       "p95": 3,
       "max": 8,
-      "n": 947
+      "n": 946
     },
     "typingLatencyMs": {
       "p50": 4,
-      "p95": 5,
+      "p95": 4,
       "max": 5,
-      "n": 39
+      "n": 40
     },
     "driftPx": {
-      "p50": 6,
-      "p95": 6.06,
-      "max": 120.24,
+      "p50": 0.01,
+      "p95": 0.06,
+      "max": 119.71,
       "n": 1381
     },
     "driftByMode": {
       "move": {
-        "p50": 6,
-        "p95": 6,
-        "max": 120.24,
-        "n": 362
+        "p50": 0.01,
+        "p95": 0.01,
+        "max": 119.71,
+        "n": 361
       },
       "resize": {
-        "p50": 6.01,
-        "p95": 6.02,
-        "max": 6.03,
+        "p50": 0.01,
+        "p95": 0.03,
+        "max": 0.03,
         "n": 230
       },
       "idle": {
-        "p50": 6.04,
-        "p95": 6.07,
-        "max": 6.07,
-        "n": 429
+        "p50": 0.04,
+        "p95": 0.07,
+        "max": 0.07,
+        "n": 430
       },
       "pan": {
-        "p50": 6.01,
-        "p95": 6.02,
-        "max": 6.03,
+        "p50": 0.01,
+        "p95": 0.02,
+        "max": 0.03,
         "n": 360
       }
     },
     "driftMaxAt": "drag t=30 frame=2 selected=16",
-    "driftOutliers": 1381,
-    "pointerMoves": 947,
-    "reactCommits": 1355,
+    "driftOutliers": 1,
+    "pointerMoves": 946,
+    "reactCommits": 1354,
     "reactCommitMs": {
       "p50": 0,
       "p95": 1,
       "max": 6,
-      "n": 1355
+      "n": 1354
     },
-    "storeNotifies": 1358,
+    "storeNotifies": 1357,
     "longTasks": 0,
     "longTaskMaxMs": 0,
     "drawCallsP50": 1,

@@ -15,88 +15,89 @@
     "duration": 20,
     "warmup": 3,
     "seed": 1,
+    "gizmo": "imperative",
     "send": "1"
   },
-  "startedAt": "2026-09-03T20:00:36.042Z",
+  "startedAt": "2026-09-03T20:01:05.395Z",
   "durationMs": 20008,
-  "frames": 1192,
-  "fps": 59.6,
+  "frames": 1195,
+  "fps": 59.7,
   "p50": 16.7,
   "p95": 16.8,
-  "max": 66.6,
-  "dropped": 3,
-  "slow": 62,
-  "heapMB": 61.1,
+  "max": 33.4,
+  "dropped": 1,
+  "slow": 61,
+  "heapMB": 69.4,
   "pass": false,
   "notes": [],
   "extra": {
     "objects": 60,
     "mode": "manual",
-    "gizmo": "react",
+    "gizmo": "imperative",
     "flushSync": true,
     "dragFrames": {
       "p50": 16.66,
-      "p95": 19.99,
-      "max": 21.67,
-      "n": 446
+      "p95": 18.3,
+      "max": 23.33,
+      "n": 506
     },
     "latencyMs": {
-      "p50": 14.5,
-      "p95": 20.6,
-      "max": 44.1,
-      "n": 428
+      "p50": 12.1,
+      "p95": 19.8,
+      "max": 44.2,
+      "n": 488
     },
     "typingLatencyMs": {
-      "p50": 15.4,
-      "p95": 15.7,
-      "max": 15.7,
+      "p50": 11.2,
+      "p95": 21.8,
+      "max": 21.8,
       "n": 2
     },
     "driftPx": {
-      "p50": 0.01,
+      "p50": 0,
       "p95": 0.01,
       "max": 0.01,
-      "n": 905
+      "n": 674
     },
     "driftByMode": {
       "move": {
         "p50": 0.01,
         "p95": 0.01,
         "max": 0.01,
-        "n": 71
+        "n": 96
       },
       "idle": {
-        "p50": 0.01,
+        "p50": 0,
         "p95": 0.01,
         "max": 0.01,
-        "n": 707
+        "n": 337
       },
       "resize": {
         "p50": 0.01,
         "p95": 0.01,
         "max": 0.01,
-        "n": 38
+        "n": 141
       },
       "rotate": {
         "p50": 0,
-        "p95": 0,
-        "max": 0,
-        "n": 89
+        "p95": 0.01,
+        "max": 0.01,
+        "n": 100
       }
     },
     "driftMaxAt": "drag t=0 frame=0 selected=6",
     "driftOutliers": 0,
-    "pointerMoves": 548,
-    "reactCommits": 554,
+    "pointerMoves": 517,
+    "reactCommits": 428,
     "reactCommitMs": {
-      "p50": 1.3,
-      "p95": 3.9,
-      "max": 39.2,
-      "n": 554
+      "p50": 2.5,
+      "p95": 4.7,
+      "max": 29.3,
+      "n": 428
     },
-    "storeNotifies": 554,
-    "longTasks": 3,
-    "longTaskMaxMs": 154,
+    "storeNotifies": 428,
+    "longTasks": 2,
+    "longTaskMaxMs": 128,
     "drawCallsP50": 1,
     "drawCallsP95": 1
   }
