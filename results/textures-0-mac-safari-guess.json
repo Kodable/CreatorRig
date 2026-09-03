@@ -1,0 +1,72 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "textures",
+  "adapter": "none",
+  "device": "mac-safari-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.2 Safari/605.1.15",
+  "viewport": {
+    "width": 1728,
+    "height": 1027,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T18:49:44.161Z",
+  "durationMs": 20017,
+  "frames": 1201,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 18,
+  "dropped": 0,
+  "slow": 757,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "textures": [
+      {
+        "key": "backdrop",
+        "size": "2048x1536",
+        "rawBytes": 12582912,
+        "ktxFound": [
+          "ASTC:1400900",
+          "ETC:3145796",
+          "S3TC:3145796"
+        ],
+        "ktxUsed": "ASTC",
+        "compressedBytes": 1400900,
+        "compressionAlgorithm": "COMPRESSED_RGBA_ASTC_6x6_KHR"
+      },
+      {
+        "key": "items",
+        "size": "2048x2048",
+        "rawBytes": 16777216,
+        "ktxFound": [
+          "ASTC:1871492",
+          "ETC:4194372",
+          "S3TC:4194372"
+        ],
+        "ktxUsed": "ASTC",
+        "compressedBytes": 1871492,
+        "compressionAlgorithm": "COMPRESSED_RGBA_ASTC_6x6_KHR"
+      }
+    ],
+    "gpuSupports": {
+      "ASTC": true,
+      "ETC": true,
+      "S3TC": true
+    },
+    "rawBytesTotal": 29360128,
+    "compressedBytesTotal": 3272392,
+    "compressedRendered": 2,
+    "formatForced": null,
+    "budgetBytes": 134217728
+  }
+}

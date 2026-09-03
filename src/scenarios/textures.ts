@@ -108,7 +108,9 @@ const textures: Scenario = {
       const label = scene.add.text(16, y + 184, `${t.key} ${t.width}x${t.height}  raw ${(rawTextureBytes(t.width, t.height) / 1048576).toFixed(1)} MB`, { fontSize: '14px', color: '#ffffff' });
       label.setDepth(1);
       const found = probes.get(t.key) ?? [];
-      const used = found.find((p) => supported?.[p.format]) ?? null;
+      // The format Phaser actually uploaded, read back from the texture (ETC2 names contain "ETC2").
+      const algorithmName = String(algorithm);
+      const used = found.find((p) => algorithmName.includes(p.format === 'ETC' ? 'ETC2' : p.format)) ?? null;
       rawBytes += rawTextureBytes(t.width, t.height);
       if (used && algorithm !== 0) {
         compressedBytes += used.bytes;

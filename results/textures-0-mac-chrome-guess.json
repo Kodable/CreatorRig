@@ -1,0 +1,69 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "textures",
+  "adapter": "none",
+  "device": "mac-chrome-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 1728,
+    "height": 962,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "format": "S3TC",
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T18:50:42.454Z",
+  "durationMs": 20009,
+  "frames": 2401,
+  "fps": 120,
+  "p50": 8.3,
+  "p95": 9.3,
+  "max": 9.4,
+  "dropped": 0,
+  "slow": 0,
+  "heapMB": 79.2,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "textures": [
+      {
+        "key": "backdrop",
+        "size": "2048x1536",
+        "rawBytes": 12582912,
+        "ktxFound": [
+          "S3TC:3145796"
+        ],
+        "ktxUsed": "S3TC",
+        "compressedBytes": 3145796,
+        "compressionAlgorithm": "COMPRESSED_RGBA_S3TC_DXT5_EXT"
+      },
+      {
+        "key": "items",
+        "size": "2048x2048",
+        "rawBytes": 16777216,
+        "ktxFound": [
+          "S3TC:4194372"
+        ],
+        "ktxUsed": "S3TC",
+        "compressedBytes": 4194372,
+        "compressionAlgorithm": "COMPRESSED_RGBA_S3TC_DXT5_EXT"
+      }
+    ],
+    "gpuSupports": {
+      "ASTC": true,
+      "ETC": true,
+      "S3TC": true
+    },
+    "rawBytesTotal": 29360128,
+    "compressedBytesTotal": 7340168,
+    "compressedRendered": 2,
+    "formatForced": "S3TC",
+    "budgetBytes": 134217728
+  }
+}

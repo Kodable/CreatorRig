@@ -1,0 +1,69 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "textures",
+  "adapter": "none",
+  "device": "ipad-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Safari/605.1.15",
+  "viewport": {
+    "width": 1180,
+    "height": 688,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "format": "S3TC",
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T18:50:36.000Z",
+  "durationMs": 20015,
+  "frames": 1201,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 18,
+  "dropped": 0,
+  "slow": 796,
+  "heapMB": null,
+  "pass": false,
+  "notes": [],
+  "extra": {
+    "textures": [
+      {
+        "key": "backdrop",
+        "size": "2048x1536",
+        "rawBytes": 12582912,
+        "ktxFound": [
+          "S3TC:3145796"
+        ],
+        "ktxUsed": null,
+        "compressedBytes": null,
+        "compressionAlgorithm": 0
+      },
+      {
+        "key": "items",
+        "size": "2048x2048",
+        "rawBytes": 16777216,
+        "ktxFound": [
+          "S3TC:4194372"
+        ],
+        "ktxUsed": null,
+        "compressedBytes": null,
+        "compressionAlgorithm": 0
+      }
+    ],
+    "gpuSupports": {
+      "ASTC": true,
+      "ETC": true,
+      "S3TC": false
+    },
+    "rawBytesTotal": 29360128,
+    "compressedBytesTotal": 0,
+    "compressedRendered": 0,
+    "formatForced": "S3TC",
+    "budgetBytes": 134217728
+  }
+}

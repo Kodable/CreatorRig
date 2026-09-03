@@ -207,11 +207,23 @@ export function emitReport(report: Report): void {
   addReportActions(report);
 }
 
-/** File name a device report gets in results/: scenario-count-adapter-device.json. */
+/** Params that do not distinguish a variant and stay out of the file name. */
+const RUN_ONLY_PARAMS = new Set(['count', 'duration', 'warmup', 'seed', 'send']);
+
+/**
+ * File name a device report gets in results/: scenario-count[-key-value...][-adapter]-device.json.
+ * Variant params such as substeps=8 or format=S3TC are part of the name, so variants of one
+ * scenario from one device do not overwrite each other.
+ */
 export function reportFileName(report: Pick<Report, 'scenario' | 'adapter' | 'device' | 'params'>): string {
-  const adapter = report.adapter === 'none' ? '' : `-${report.adapter}`;
   const safe = (s: string): string => s.replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
-  return `${report.scenario}-${report.params['count']}${adapter}-${safe(report.device)}.json`;
+  const adapter = report.adapter === 'none' ? '' : `-${report.adapter}`;
+  const variant = Object.entries(report.params)
+    .filter(([k]) => !RUN_ONLY_PARAMS.has(k))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `-${safe(k)}-${safe(String(v))}`)
+    .join('');
+  return `${report.scenario}-${report.params['count']}${variant}${adapter}-${safe(report.device)}.json`;
 }
 
 /**

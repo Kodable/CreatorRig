@@ -1,0 +1,41 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "spine",
+  "adapter": "none",
+  "device": "mac-chrome-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 1728,
+    "height": 962,
+    "dpr": 2
+  },
+  "params": {
+    "count": 60,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T18:39:51.365Z",
+  "durationMs": 20008,
+  "frames": 2401,
+  "fps": 120,
+  "p50": 8.3,
+  "p95": 9.2,
+  "max": 9.4,
+  "dropped": 0,
+  "slow": 0,
+  "heapMB": 143.1,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "skeletons": 60,
+    "bones": 930,
+    "scale": 0.11,
+    "spineRuntime": "4.2.120",
+    "export": "4.2.43",
+    "drawCallsP50": 273,
+    "drawCallsP95": 281
+  }
+}

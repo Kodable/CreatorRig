@@ -1,0 +1,39 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "sprites",
+  "adapter": "none",
+  "device": "chromebook-guess",
+  "ua": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 1366,
+    "height": 633,
+    "dpr": 1
+  },
+  "params": {
+    "count": 500,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T18:32:55.951Z",
+  "durationMs": 20024,
+  "frames": 1203,
+  "fps": 60.1,
+  "p50": 16.6,
+  "p95": 16.8,
+  "max": 17,
+  "dropped": 0,
+  "slow": 51,
+  "heapMB": 49.8,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "sprites": 500,
+    "atlasFrames": 130,
+    "atlasBytesRaw": 16777216,
+    "drawCallsP50": 1,
+    "drawCallsP95": 1
+  }
+}

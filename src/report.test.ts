@@ -49,6 +49,10 @@ describe('reportFileName', () => {
     expect(reportFileName({ scenario: 'determinism', adapter: 'rapier', device: 'ipad', params: { count: 200 } })).toBe('determinism-200-rapier-ipad.json');
     expect(reportFileName({ scenario: 'baseline', adapter: 'none', device: 'Mac Safari', params: { count: 1000 } })).toBe('baseline-1000-mac-safari.json');
   });
+  it('keeps variant params in the name and drops run-only params', () => {
+    expect(reportFileName({ scenario: 'textures', adapter: 'none', device: 'ipad', params: { count: 0, format: 'S3TC', duration: 20, send: '1' } })).toBe('textures-0-format-s3tc-ipad.json');
+    expect(reportFileName({ scenario: 'stack', adapter: 'box2d', device: 'ipad', params: { count: 40, substeps: 8, seed: 1 } })).toBe('stack-40-substeps-8-box2d-ipad.json');
+  });
 });
 
 describe('params', () => {
