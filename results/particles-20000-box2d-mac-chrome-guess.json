@@ -1,0 +1,49 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "particles",
+  "adapter": "box2d",
+  "device": "mac-chrome-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 1728,
+    "height": 962,
+    "dpr": 2
+  },
+  "params": {
+    "count": 20000,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T18:04:57.260Z",
+  "durationMs": 20007,
+  "frames": 2133,
+  "fps": 106.6,
+  "p50": 8.3,
+  "p95": 9.3,
+  "max": 1899.9,
+  "dropped": 1,
+  "slow": 8,
+  "heapMB": 144.8,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "particlesTarget": 20000,
+    "emitters": 1,
+    "perEmitter": 20000,
+    "quantityPerUpdate": 446,
+    "particlesAlive": 20000,
+    "particlesAliveMax": 20000,
+    "bodies": 200,
+    "contacts": 2428,
+    "hashStep": 300,
+    "hash": "1a6b4807",
+    "subSteps": 4,
+    "physicsMsP50": 0,
+    "physicsMsP95": 0.7,
+    "physicsMsMax": 6.2,
+    "stepsTotal": 1267
+  }
+}
