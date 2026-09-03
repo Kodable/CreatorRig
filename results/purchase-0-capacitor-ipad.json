@@ -1,0 +1,60 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "purchase",
+  "adapter": "none",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "http://192.168.86.173:5173",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 120,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T22:38:39.983Z",
+  "durationMs": 120006,
+  "frames": 7201,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 43,
+  "dropped": 1,
+  "slow": 4719,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "productId": "com.surfscore.kodable.creatorrig.monthly",
+    "native": true,
+    "billingSupported": true,
+    "productFound": true,
+    "priceString": "$0.99",
+    "period": "7 0",
+    "taps": 1,
+    "transactionId": "2000001231275173",
+    "subscriptionState": "subscribed",
+    "expirationDate": "2026-09-03T22:41:59Z",
+    "isActive": true,
+    "environment": "Sandbox",
+    "receiptBytes": 0,
+    "jwsBytes": 5593,
+    "purchaseMs": 15581,
+    "restoreChecked": true,
+    "restoredActive": true,
+    "restoreMs": 9853,
+    "error": "",
+    "log": [
+      "0.5s billing supported: true",
+      "1.2s product com.surfscore.kodable.creatorrig.monthly $0.99 per 7 0, group 22357359",
+      "24.5s subscribed: transaction 2000001231275173, state subscribed, active true, expires 2026-09-03T22:41:59Z, env Sandbox, receipt 0 B, jws 5593 B, 15581 ms",
+      "38.3s entitlement: com.surfscore.kodable.creatorrig.monthly state subscribed active true expires 2026-09-03T22:41:59Z (9853 ms)"
+    ]
+  }
+}

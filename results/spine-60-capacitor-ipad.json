@@ -1,0 +1,42 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "spine",
+  "adapter": "none",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "capacitor://localhost",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 60,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T23:22:23.135Z",
+  "durationMs": 20016,
+  "frames": 1199,
+  "fps": 59.9,
+  "p50": 17,
+  "p95": 17,
+  "max": 23,
+  "dropped": 0,
+  "slow": 783,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "skeletons": 60,
+    "bones": 930,
+    "scale": 0.11,
+    "spineRuntime": "4.2.120",
+    "export": "4.2.43",
+    "drawCallsP50": 273,
+    "drawCallsP95": 281
+  }
+}

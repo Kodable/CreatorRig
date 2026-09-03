@@ -1,0 +1,142 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "soak",
+  "adapter": "box2d",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "capacitor://localhost",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 200,
+    "duration": 600,
+    "warmup": 3,
+    "seed": 1,
+    "sampleEvery": "30",
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T23:25:38.991Z",
+  "durationMs": 600015,
+  "frames": 36004,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 26,
+  "dropped": 0,
+  "slow": 23896,
+  "heapMB": null,
+  "pass": null,
+  "notes": [
+    "this browser does not expose the JS heap; on iPhone or iPad read Safari Web Inspector > Timelines > Memory from the Mac while the soak runs"
+  ],
+  "extra": {
+    "bodies": 200,
+    "particles": 1000,
+    "skeletons": 10,
+    "minutes": 10.05,
+    "heapStartMB": null,
+    "heapPeakMB": null,
+    "heapFinalMB": null,
+    "heapSamples": [
+      {
+        "t": 0,
+        "heapMB": null
+      },
+      {
+        "t": 30,
+        "heapMB": null
+      },
+      {
+        "t": 60,
+        "heapMB": null
+      },
+      {
+        "t": 90,
+        "heapMB": null
+      },
+      {
+        "t": 120,
+        "heapMB": null
+      },
+      {
+        "t": 150,
+        "heapMB": null
+      },
+      {
+        "t": 180,
+        "heapMB": null
+      },
+      {
+        "t": 210,
+        "heapMB": null
+      },
+      {
+        "t": 240,
+        "heapMB": null
+      },
+      {
+        "t": 270,
+        "heapMB": null
+      },
+      {
+        "t": 300,
+        "heapMB": null
+      },
+      {
+        "t": 330,
+        "heapMB": null
+      },
+      {
+        "t": 360,
+        "heapMB": null
+      },
+      {
+        "t": 390,
+        "heapMB": null
+      },
+      {
+        "t": 420,
+        "heapMB": null
+      },
+      {
+        "t": 450,
+        "heapMB": null
+      },
+      {
+        "t": 480,
+        "heapMB": null
+      },
+      {
+        "t": 510,
+        "heapMB": null
+      },
+      {
+        "t": 540,
+        "heapMB": null
+      },
+      {
+        "t": 570,
+        "heapMB": null
+      },
+      {
+        "t": 600,
+        "heapMB": null
+      }
+    ],
+    "textures": 3,
+    "gameObjects": 216,
+    "previousRunDied": false,
+    "contacts": 2401,
+    "hashStep": 300,
+    "hash": "041f2424",
+    "subSteps": 4,
+    "physicsMsP50": 0,
+    "physicsMsP95": 1,
+    "physicsMsMax": 6,
+    "stepsTotal": 36178
+  }
+}

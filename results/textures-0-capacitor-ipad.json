@@ -1,0 +1,73 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "textures",
+  "adapter": "none",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "capacitor://localhost",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T23:24:58.742Z",
+  "durationMs": 20015,
+  "frames": 1201,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 22,
+  "dropped": 0,
+  "slow": 790,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "textures": [
+      {
+        "key": "backdrop",
+        "size": "2048x1536",
+        "rawBytes": 12582912,
+        "ktxFound": [
+          "ASTC:0",
+          "ETC:0",
+          "S3TC:0"
+        ],
+        "ktxUsed": "ASTC",
+        "compressedBytes": 0,
+        "compressionAlgorithm": "COMPRESSED_RGBA_ASTC_6x6_KHR"
+      },
+      {
+        "key": "items",
+        "size": "2048x2048",
+        "rawBytes": 16777216,
+        "ktxFound": [
+          "ASTC:0",
+          "ETC:0",
+          "S3TC:0"
+        ],
+        "ktxUsed": "ASTC",
+        "compressedBytes": 0,
+        "compressionAlgorithm": "COMPRESSED_RGBA_ASTC_6x6_KHR"
+      }
+    ],
+    "gpuSupports": {
+      "ASTC": true,
+      "ETC": true,
+      "S3TC": false
+    },
+    "rawBytesTotal": 29360128,
+    "compressedBytesTotal": 0,
+    "compressedRendered": 2,
+    "formatForced": null,
+    "budgetBytes": 134217728
+  }
+}

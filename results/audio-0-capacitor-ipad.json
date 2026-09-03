@@ -1,0 +1,81 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "audio",
+  "adapter": "none",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "http://192.168.86.173:5173",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 60,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T23:04:29.183Z",
+  "durationMs": 60028,
+  "frames": 3454,
+  "fps": 57.5,
+  "p50": 17,
+  "p95": 17,
+  "max": 2150,
+  "dropped": 7,
+  "slow": 2240,
+  "heapMB": null,
+  "pass": false,
+  "notes": [
+    "frozen clock after an interruption 2 time(s); cures: failed"
+  ],
+  "extra": {
+    "taps": 25,
+    "beeps": 8,
+    "firstTapPlayed": true,
+    "hidden": 1,
+    "resumed": 1,
+    "playedAfterResume": 1,
+    "interruptions": 1,
+    "playedAfterInterruptionWithResume": 0,
+    "frozenClockDetected": 2,
+    "recoveries": [
+      "failed"
+    ],
+    "recoveredByResume": 0,
+    "recoveredByMediaUnlock": 0,
+    "recoveredByRecreate": 0,
+    "recoveryFailed": 1,
+    "audioSessionApi": true,
+    "lastState": "running",
+    "sampleRate": 48000,
+    "contextState": "running",
+    "log": [
+      "1.3s AudioContext created, state suspended, 48000 Hz",
+      "1.3s context state: running",
+      "1.6s first tap: beep played (state running, clock 0.26)",
+      "2.6s tap 2: beep played (state running, clock 1.26)",
+      "4.2s tap 10: beep played (state running, clock 2.87)",
+      "10.2s tap 11: beep played (state running, clock 8.92)",
+      "11.4s tab hidden",
+      "13.3s tab visible again",
+      "13.5s after resume: beep played (state running, clock 12.23)",
+      "14.5s tap 12: beep played (state running, clock 13.17)",
+      "16.1s tap 18: beep played (state running, clock 14.82)",
+      "22.7s tap 19: beep played (state running, clock 21.35)",
+      "26.5s context state: suspended",
+      "27.7s context state: running",
+      "32.2s tap 24: NO sound (state running, clock 25.03)",
+      "33.6s tap 25: NO sound (state running, clock 25.03)",
+      "36.3s silent <audio>.play() did not settle within 1500 ms",
+      "36.3s silent <audio> played",
+      "37.5s AudioContext recreated, state suspended, 48000 Hz",
+      "37.6s context state: closed",
+      "37.6s context state: running",
+      "38.8s no cure worked on this tap (state running, clock 0.00); try again after switching apps and back"
+    ]
+  }
+}

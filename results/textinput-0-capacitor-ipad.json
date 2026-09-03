@@ -1,0 +1,48 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "textinput",
+  "adapter": "none",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "http://192.168.86.173:5173",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 45,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T23:06:35.270Z",
+  "durationMs": 45093,
+  "frames": 2548,
+  "fps": 56.5,
+  "p50": 17,
+  "p95": 17,
+  "max": 1365,
+  "dropped": 11,
+  "slow": 1671,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "focus": 4,
+    "blur": 4,
+    "keyboardShows": 4,
+    "keyboardHeight": 422,
+    "shiftPx": 0,
+    "dismissals": 3,
+    "typed": 13,
+    "canvasResized": false,
+    "minInnerHeight": 820,
+    "native": true,
+    "keyboardPlugin": true,
+    "canvasCss": "1093x820",
+    "innerHeightAtStart": 820
+  }
+}

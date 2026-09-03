@@ -1,0 +1,50 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "particles",
+  "adapter": "box2d",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "capacitor://localhost",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 20000,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T23:21:46.141Z",
+  "durationMs": 20019,
+  "frames": 1199,
+  "fps": 59.9,
+  "p50": 17,
+  "p95": 19,
+  "max": 24,
+  "dropped": 0,
+  "slow": 720,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "particlesTarget": 20000,
+    "emitters": 1,
+    "perEmitter": 20000,
+    "quantityPerUpdate": 446,
+    "particlesAlive": 19554,
+    "particlesAliveMax": 20000,
+    "bodies": 200,
+    "contacts": 2401,
+    "hashStep": 300,
+    "hash": "041f2424",
+    "subSteps": 4,
+    "physicsMsP50": 0,
+    "physicsMsP95": 1,
+    "physicsMsMax": 5,
+    "stepsTotal": 1376
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "jettison",
+  "adapter": "none",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "capacitor://localhost",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 0,
+    "duration": 120,
+    "warmup": 3,
+    "seed": 1,
+    "chunk": "32",
+    "maxMB": "3000",
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T23:36:08.486Z",
+  "durationMs": 120023,
+  "frames": 7202,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 22,
+  "dropped": 0,
+  "slow": 4712,
+  "heapMB": null,
+  "pass": true,
+  "notes": [
+    "the content process died after about 2592 MB of typed arrays; that is this device's budget"
+  ],
+  "extra": {
+    "recovered": true,
+    "killedAtMB": 2592,
+    "heapAtKillMB": null,
+    "previousStartedAt": "2026-09-03T23:36:05.849Z",
+    "chunkMB": 32
+  }
+}

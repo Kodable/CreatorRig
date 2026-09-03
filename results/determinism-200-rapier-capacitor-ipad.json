@@ -1,0 +1,59 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "determinism",
+  "adapter": "rapier",
+  "device": "capacitor-ipad",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+  "origin": "capacitor://localhost",
+  "viewport": {
+    "width": 1180,
+    "height": 820,
+    "dpr": 2
+  },
+  "params": {
+    "count": 200,
+    "duration": 15,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T23:19:22.023Z",
+  "durationMs": 15015,
+  "frames": 900,
+  "fps": 59.9,
+  "p50": 17,
+  "p95": 17,
+  "max": 20,
+  "dropped": 0,
+  "slow": 595,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "bodies": 200,
+    "joints": 30,
+    "motors": 1,
+    "subSteps": 4,
+    "hashStep": 3000,
+    "hash": "3f70d0ba",
+    "hashRerun": "3f70d0ba",
+    "stable": true,
+    "checkpoints": {
+      "300": "7d81e830",
+      "1000": "f73a0c57",
+      "3000": "3f70d0ba"
+    },
+    "checkpointsRerun": {
+      "300": "7d81e830",
+      "1000": "f73a0c57",
+      "3000": "3f70d0ba"
+    },
+    "stepsDone": [
+      3000,
+      3000
+    ],
+    "physicsMsP50": 12,
+    "physicsMsP95": 13
+  }
+}
