@@ -66,6 +66,13 @@ export class PhysicsView {
     this.gfx.fillRect(p.x - halfWidth * this.opts.ppm, p.y - halfHeight * this.opts.ppm, halfWidth * 2 * this.opts.ppm, halfHeight * 2 * this.opts.ppm);
   }
 
+  /** Removes every drawn object; used when a scenario rebuilds its world. */
+  destroy(): void {
+    for (const it of this.items) it.obj.destroy();
+    this.items = [];
+    this.gfx.destroy();
+  }
+
   remove(body: BodyId): void {
     const i = this.items.findIndex((it) => it.body === body);
     if (i < 0) return;

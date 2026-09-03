@@ -104,6 +104,15 @@ export const MATRIX: ScenarioEntry[] = [
     variants: [{ label: '30', params: { count: 30 } }],
     adapters: ['box2d', 'rapier'],
   },
+  {
+    id: 'determinism',
+    title: 'Determinism: replay hash',
+    description:
+      'A seeded coaster scene (200 bodies, 30 joints, one motor) steps 3,000 fixed steps as fast as the frame budget allows, hashes every transform, then runs again. Compare the big hash across devices; pass means the two runs in this browser agree.',
+    task: 'CW-01.4',
+    variants: [{ label: '200', params: { count: 200, duration: 15 } }],
+    adapters: ['box2d', 'rapier'],
+  },
 ];
 
 export interface BenchRun {

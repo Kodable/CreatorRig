@@ -19,7 +19,8 @@ for (const run of benchRuns()) {
   test(run.key, async ({ page, browserName }) => {
     const q = new URLSearchParams();
     for (const [k, v] of Object.entries(run.params)) q.set(k, String(v));
-    q.set('duration', String(DURATION));
+    // A variant may need a fixed run length (determinism steps 6,000 times); RIG_DURATION covers the rest.
+    q.set('duration', String(run.params['duration'] ?? DURATION));
     q.set('warmup', String(WARMUP));
     q.set('device', `playwright-${browserName}`);
 

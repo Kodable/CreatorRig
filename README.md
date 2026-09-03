@@ -81,8 +81,18 @@ Both adapters pass the same conformance suite (`src/physics/conformance.test.ts`
 | `joints` | CW-01.3 | 100 motor carts in an arena plus a bridge of breakable spring rods | wheel anchor gap under 0.1 m, p95 under 33.4 ms |
 | `ccd` | CW-01.3 | 6 cm ball at 90 m/s fired N times at a 1 cm wall (`bullet=0` variant) | zero tunnels |
 | `catapult` | CW-01.3 | Counterweight trebuchet into a box stack; limits, gravity, contacts | ball flies right, contacts fire, p95 under 33.4 ms |
+| `determinism` | CW-01.4 | Seeded coaster scene: 200 bodies, 30 joints, one motor, 3,000 fixed steps, run twice; hash of every transform | the two runs agree (`stable`); humans compare `hash` across devices |
 
 Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame), `subSteps` and, where meaningful, a `hash` taken at a fixed step for cross-device comparison.
+
+### Determinism (CW-01.4)
+
+`determinism` decides the engine. It builds one seeded scene: a 10-car train (20 wheel hinges, 9 couplers) rolls off a tilted plateau into a valley and over the hills, 168 loose bodies rain in one every 12 steps, and a motorized paddle above the pile flings the ones that hit it. The scene steps 3,000 fixed steps as fast as the frame budget allows: the wall clock decides only how many steps a frame takes, never the step size, so the result does not depend on the device's frame rate. At steps 300, 1,000 and 3,000 it records the hash, then destroys the world, builds it again and repeats.
+
+- The hash box shows the run-1 hash in large text, then `✓` when run 2 matched or `✗` and the second hash when it did not.
+- `extra.stable` is the same-browser check (`pass`). `extra.checkpoints` places a divergence in time when two devices differ.
+- Run the `200` variant on every device with the same `?seed=` and `?substeps=`, paste the reports into `results/`, then `npm run results` prints a second table: one row per scenario, params and adapter, the hash per device, and whether they agree.
+- The run needs about 6,000 steps of physics time; the variant sets `duration=15`. If a slow device reports fewer than 3,000 steps in `stepsDone`, raise `?duration=`.
 
 ## Bench (headless, desktop)
 
@@ -91,7 +101,7 @@ npm run bench              # builds, then runs every matrix entry in Chromium an
 npm run results            # prints results/*.json as a Markdown table
 ```
 
-Headless numbers are for harness checks and regressions. They are not device numbers. Shorten runs with `RIG_DURATION=3 RIG_WARMUP=1 npm run bench`.
+Headless numbers are for harness checks and regressions. They are not device numbers. Shorten runs with `RIG_DURATION=3 RIG_WARMUP=1 npm run bench`; a variant with its own `duration` (determinism) keeps it. `npx playwright test -g determinism` runs one scenario.
 
 ## Tests
 
