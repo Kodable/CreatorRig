@@ -218,10 +218,10 @@ export const MATRIX: ScenarioEntry[] = [
   },
   {
     id: 'purchase',
-    title: 'Purchase: one sandbox consumable (shell only)',
-    description: 'StoreKit 2 through @capgo/native-purchases inside the Capacitor shell. Tap to buy the test coin with a sandbox tester; the report carries the transaction id and receipt sizes.',
+    title: 'Purchase: sandbox subscription (shell only)',
+    description: 'StoreKit 2 subscriptions through @capgo/native-purchases inside the Capacitor shell. Subscribe with a sandbox tester, then restore and read the entitlement back; the report carries the transaction, state, expiration and receipt sizes.',
     task: 'CW-01.9',
-    variants: [{ label: 'coin', params: { duration: 90 }, manual: true }],
+    variants: [{ label: 'monthly', params: { duration: 120 }, manual: true }],
     adapters: [],
   },
   {

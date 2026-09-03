@@ -193,7 +193,7 @@ ENV_FILE=".env.capacitor"
 TOTAL_STAGES=9
 BUNDLE_ID="com.surfscore.kodable.creatorrig"
 TEAM_ID="SG83N65WAM"
-PRODUCT_ID="${BUNDLE_ID}.coin"
+PRODUCT_ID="${BUNDLE_ID}.monthly"
 MAC_IP="$(ipconfig getifaddr en0 2>/dev/null || echo '<mac-ip>')"
 
 banner "Creator Rig: Capacitor shell on the iPad and iPhone"
@@ -228,12 +228,12 @@ step "The rig index appears in the app. The device tag reads capacitor-ipad. Run
 pause "Report seen with device=capacitor-ipad? Press Enter."
 
 # ---- stage 3 ------------------------------------------------------------
-stage "App Store Connect: app record and the sandbox consumable"
-say "The purchase scenario buys one consumable. It needs an app record and a product; nothing is submitted for review."
+stage "App Store Connect: app record and the sandbox subscription"
+say "The purchase scenario subscribes to one auto-renewable subscription. It needs an app record, a subscription group and a product; nothing is submitted for review."
 open_url "https://appstoreconnect.apple.com/apps"
 step "Apps > + > New App: platform iOS, name 'Kodable Creator Rig' (any unique name), primary language English, Bundle ID ${BUNDLE_ID}, SKU creator-rig."
-step "In the app: Monetization > In-App Purchases > + > Consumable. Reference name 'Test coin', Product ID: ${PRODUCT_ID}."
-step "Add one price (lowest tier) and one localization (display name 'Test coin', description 'Rig test purchase'). Save. Status 'Ready to Submit' or 'Missing Metadata' both work in sandbox."
+step "In the app: Monetization > Subscriptions > + Subscription Group, reference name 'Creator Rig'. Inside it: + Subscription, reference name 'Rig monthly', Product ID: ${PRODUCT_ID}."
+step "Duration 1 month; add one price (lowest tier); one localization for the subscription (display name 'Rig monthly') and one for the group. Save. 'Ready to Submit' or 'Missing Metadata' both work in sandbox; a sandbox month renews every 5 minutes."
 open_url "https://appstoreconnect.apple.com/business"
 step "Agreements: the Paid Apps agreement must be Active, or sandbox purchases fail with an error about agreements."
 ask IAP_PRODUCT_ID "Product ID as saved (Enter for ${PRODUCT_ID}):"
@@ -247,8 +247,9 @@ step "Sandbox > Testers > +. Use an email that is not an existing Apple account 
 step "On the iPad: Settings > App Store > Sandbox Account (bottom) > sign in with that tester."
 ask SANDBOX_TESTER_EMAIL "Sandbox tester email:"
 write_env SANDBOX_TESTER_EMAIL "$SANDBOX_TESTER_EMAIL"
-step "In the shell: open 'purchase · coin', tap 'Buy the test coin'. Complete the sandbox sheet with the tester password."
-step "The report shows transactionId and receipt sizes; Xcode's console prints RIG_RECEIPT. Send the report to the collector."
+step "In the shell: open 'purchase · monthly', tap 'Subscribe'. Complete the sandbox sheet with the tester password. Then tap 'Restore and check entitlement'."
+step "The report shows transactionId, subscriptionState, expirationDate and receipt sizes; Xcode's console prints RIG_RECEIPT with the JWS. Send the report to the collector."
+note "To watch a renewal: wait 5 minutes, tap 'Restore and check entitlement' again; the expiration moves. Sandbox subscriptions auto-renew up to 12 times, then expire."
 pause "Purchase completed? Press Enter."
 
 # ---- stage 5 ------------------------------------------------------------
