@@ -10,6 +10,8 @@ export interface Report {
   adapter: string;
   device: string;
   ua: string;
+  /** Where the page came from: http://<mac>:5173 (dev server), capacitor://localhost (bundled), https://… (deployed). */
+  origin: string;
   viewport: { width: number; height: number; dpr: number };
   params: Record<string, string | number>;
   startedAt: string;
@@ -164,6 +166,7 @@ export function buildReport(
     adapter: params.adapter,
     device,
     ua: navigator.userAgent,
+    origin: window.location.origin,
     viewport: { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio },
     params: {
       count: params.count,

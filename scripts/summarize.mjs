@@ -13,9 +13,11 @@ try {
 
 const rows = files
   .map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')))
+  // Only rig reports; load-*.json files from scripts/load-time.mjs have their own shape.
+  .filter((r) => r.rig === 'kodable-creator-rig')
   .sort((a, b) => a.scenario.localeCompare(b.scenario) || a.device.localeCompare(b.device));
 
-const header = ['scenario', 'params', 'adapter', 'device', 'fps', 'p50 ms', 'p95 ms', 'dropped', 'heap MB', 'pass', 'extra'];
+const header = ['scenario', 'params', 'adapter', 'device', 'origin', 'fps', 'p50 ms', 'p95 ms', 'dropped', 'heap MB', 'pass', 'extra'];
 console.log(`| ${header.join(' | ')} |`);
 console.log(`| ${header.map(() => '---').join(' | ')} |`);
 for (const r of rows) {
@@ -28,7 +30,7 @@ for (const r of rows) {
     .join(' ');
   const pass = r.pass === null ? 'n/a' : r.pass ? 'pass' : 'FAIL';
   console.log(
-    `| ${r.scenario} | ${params} | ${r.adapter} | ${r.device} | ${r.fps} | ${r.p50} | ${r.p95} | ${r.dropped}/${r.frames} | ${r.heapMB ?? '-'} | ${pass} | ${extra} |`,
+    `| ${r.scenario} | ${params} | ${r.adapter} | ${r.device} | ${(r.origin ?? '').replace(/^https?:\/\//, '').replace('capacitor://localhost', 'bundled') || '-'} | ${r.fps} | ${r.p50} | ${r.p95} | ${r.dropped}/${r.frames} | ${r.heapMB ?? '-'} | ${pass} | ${extra} |`,
   );
 }
 
