@@ -252,21 +252,13 @@ step "The report shows transactionId and receipt sizes; Xcode's console prints R
 pause "Purchase completed? Press Enter."
 
 # ---- stage 5 ------------------------------------------------------------
-stage "Universal Link: choose the host and publish the AASA file"
-say "iOS fetches https://HOST/.well-known/apple-app-site-association from the domain ROOT. kodable.github.io has no site at its root, so GitHub Pages cannot host it."
-say "Plan: a Heroku app for the rig that later hosts the Creator product under its own domain. The repo has Procfile + scripts/serve.mjs; Heroku builds dist/ and serves it with the AASA at the root."
-step "Already done: the app kodable-creator-rig exists in the Heroku team kodable and serves the AASA at https://kodable-creator-rig-03d05ef5fa9b.herokuapp.com/.well-known/apple-app-site-association. Deploy updates with: git push heroku main"
-note "Alternative: add the rig's entry to the AASA that game.kodable.com already serves (KodableWebGame/static/.well-known/apple-app-site-association)."
-note "The JSON to publish is public/.well-known/apple-app-site-association (appID ${TEAM_ID}.${BUNDLE_ID}, paths /creator-rig and /creator-rig/*)."
-ask UL_HOST "Host that serves the AASA at its root (Enter for kodable-creator-rig-03d05ef5fa9b.herokuapp.com):"
-UL_HOST="${UL_HOST:-kodable-creator-rig-03d05ef5fa9b.herokuapp.com}"
+stage "Universal Link: the Heroku host is live; check it and switch on developer mode"
+say "The rig runs on Heroku (team kodable, app kodable-creator-rig). Its AASA file is at the domain root, and the host is already in ios/App/App/App.entitlements."
+UL_HOST="kodable-creator-rig-03d05ef5fa9b.herokuapp.com"
 write_env UL_HOST "$UL_HOST"
-if [[ -n "$UL_HOST" ]]; then
-  sed -i '' "s|applinks:[^<]*|applinks:${UL_HOST}?mode=developer|" ios/App/App/App.entitlements
-  printf '  %s✓ wrote%s applinks:%s?mode=developer → ios/App/App/App.entitlements\n' "$GREEN" "$RESET" "$UL_HOST"
-  step "Check the file is live: curl -sI https://${UL_HOST}/.well-known/apple-app-site-association   (200, JSON, no redirect)"
-fi
+step "Check it is live: curl -sI https://${UL_HOST}/.well-known/apple-app-site-association   (200, application/json, no redirect)"
 step "On the iPad: Settings > Developer > Associated Domains Development: on (developer mode skips Apple's CDN cache)."
+note "Deploy rig updates to Heroku with: git push heroku main"
 pause "AASA reachable and the switch on? Press Enter."
 
 # ---- stage 6 ------------------------------------------------------------
@@ -288,7 +280,8 @@ pause "Reports sent? Press Enter."
 # ---- stage 8 ------------------------------------------------------------
 stage "Same on the iPhone, then the bundled build"
 step "Repeat stages 2, 4 (sign in the tester), 6 and 7 on the iPhone."
-step "Bundled build (no dev server): npm run build && npx cap sync ios   (CAP_SERVER_URL unset), then Run. Set the Collector field on the index page to http://${MAC_IP}:5173 so Send works from the app's own origin."
+step "Remote mode (no Mac needed): CAP_SERVER_URL=https://kodable-creator-rig-03d05ef5fa9b.herokuapp.com npx cap sync ios, then Run: the shell loads the Heroku site. Set the Collector field on the index page to http://${MAC_IP}:5173 so Send still reaches the Mac."
+step "Bundled build (offline): npm run build && npx cap sync ios   (CAP_SERVER_URL unset), then Run."
 step "In the rig folder: npm run results   prints the tables with the capacitor-ipad and capacitor-iphone rows."
 pause "Done? Press Enter."
 

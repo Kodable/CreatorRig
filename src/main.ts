@@ -142,6 +142,8 @@ function renderIndex(): void {
 async function runScenario(p: RigParams): Promise<void> {
   const stage = document.getElementById('stage');
   if (stage) stage.style.display = 'block';
+  const back = document.getElementById('back');
+  if (back) back.style.display = 'inline-block';
   const hud = document.getElementById('hud');
   const hashBox = document.getElementById('hash');
   const device = p.device !== '' ? p.device : guessDevice(navigator.userAgent, navigator.maxTouchPoints, NATIVE);
