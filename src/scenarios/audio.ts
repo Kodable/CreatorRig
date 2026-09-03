@@ -187,12 +187,14 @@ const audio: Scenario = {
       return false;
     };
 
-    // The only cure seen on the iPad: a reload. This is the pattern a runtime would offer.
+    // The only cure seen on the iPad is a reload. In the product a reload is never forced: work
+    // stays saved, the game keeps running without sound, and restoring sound is the child's
+    // choice after the save is confirmed. The rig button carries that wording.
     let reloadButton: Phaser.GameObjects.Text | null = null;
     const showReloadButton = (): void => {
       if (reloadButton) return;
       reloadButton = scene.add
-        .text(512, 620, 'Sound is stuck. Tap here to reload and fix it', { fontSize: '26px', color: '#1a2142', backgroundColor: '#ffb40f', padding: { x: 18, y: 12 } })
+        .text(512, 620, 'Sound is off. Your work is saved. Tap to restore sound (reloads the page)', { fontSize: '24px', color: '#1a2142', backgroundColor: '#ffb40f', padding: { x: 18, y: 12 } })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
       reloadButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
