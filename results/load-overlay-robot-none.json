@@ -1,0 +1,32 @@
+{
+  "label": "overlay-robot",
+  "profile": "none",
+  "base": "https://kodable.github.io/CreatorRig/",
+  "url": "https://kodable.github.io/CreatorRig/?scenario=overlay&count=60&robot=1&duration=1&warmup=0&device=load-test",
+  "firstFrameMs": 360,
+  "warmFirstFrameMs": 194,
+  "warmServedByWorker": true,
+  "responseStartMs": 25,
+  "domContentLoadedMs": 80,
+  "requests": 16,
+  "transferredKB": 1130,
+  "biggest": [
+    {
+      "url": "atlas/creator-items.png",
+      "kb": 693
+    },
+    {
+      "url": "assets/index-Dpm8SOVG.js",
+      "kb": 359
+    },
+    {
+      "url": "assets/overlay-apuDXDt2.js",
+      "kb": 69
+    },
+    {
+      "url": "?scenario=overlay&count=60&robot=1&duration=1&warmup=0&device=load-test&sw=0",
+      "kb": 2
+    }
+  ],
+  "wallMs": 2569
+}

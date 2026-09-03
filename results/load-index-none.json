@@ -1,0 +1,32 @@
+{
+  "label": "index",
+  "profile": "none",
+  "base": "https://kodable.github.io/CreatorRig/",
+  "url": "https://kodable.github.io/CreatorRig/?duration=1&warmup=0&device=load-test",
+  "firstFrameMs": 274,
+  "warmFirstFrameMs": 101,
+  "warmServedByWorker": true,
+  "responseStartMs": 33,
+  "domContentLoadedMs": 99,
+  "requests": 4,
+  "transferredKB": 361,
+  "biggest": [
+    {
+      "url": "assets/index-Dpm8SOVG.js",
+      "kb": 359
+    },
+    {
+      "url": "?duration=1&warmup=0&device=load-test&sw=0",
+      "kb": 2
+    },
+    {
+      "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAABAQMAAADD8p2OAAAAA1BMVEX/AP804Oa6AAAACklEQVQI12NgAAAAAgAB4iG8MwAAAABJRU5ErkJggg==",
+      "kb": 0
+    },
+    {
+      "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAABAQMAAADD8p2OAAAAA1BMVEX//wCKxvRFAAAACklEQVQI12NgAAAAAgAB4iG8MwAAAABJRU5ErkJggg==",
+      "kb": 0
+    }
+  ],
+  "wallMs": 2121
+}

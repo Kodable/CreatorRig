@@ -1,0 +1,32 @@
+{
+  "label": "spine-10",
+  "profile": "none",
+  "base": "https://kodable.github.io/CreatorRig/",
+  "url": "https://kodable.github.io/CreatorRig/?scenario=spine&count=10&duration=1&warmup=0&device=load-test",
+  "firstFrameMs": 968,
+  "warmFirstFrameMs": 249,
+  "warmServedByWorker": true,
+  "responseStartMs": 24,
+  "domContentLoadedMs": 75,
+  "requests": 23,
+  "transferredKB": 1266,
+  "biggest": [
+    {
+      "url": "spine/floofs/FloofFamily01.png",
+      "kb": 695
+    },
+    {
+      "url": "assets/index-Dpm8SOVG.js",
+      "kb": 359
+    },
+    {
+      "url": "spine/floofs/FloofFamily01_2.png",
+      "kb": 128
+    },
+    {
+      "url": "assets/dist-qr77WyuY.js",
+      "kb": 54
+    }
+  ],
+  "wallMs": 3297
+}

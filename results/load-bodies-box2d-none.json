@@ -1,0 +1,32 @@
+{
+  "label": "bodies-box2d",
+  "profile": "none",
+  "base": "https://kodable.github.io/CreatorRig/",
+  "url": "https://kodable.github.io/CreatorRig/?scenario=bodies&adapter=box2d&count=200&duration=1&warmup=0&device=load-test",
+  "firstFrameMs": 603,
+  "warmFirstFrameMs": 158,
+  "warmServedByWorker": true,
+  "responseStartMs": 25,
+  "domContentLoadedMs": 83,
+  "requests": 13,
+  "transferredKB": 415,
+  "biggest": [
+    {
+      "url": "assets/index-Dpm8SOVG.js",
+      "kb": 359
+    },
+    {
+      "url": "assets/box2d-MFkMt4Pn.js",
+      "kb": 49
+    },
+    {
+      "url": "?scenario=bodies&adapter=box2d&count=200&duration=1&warmup=0&device=load-test&sw=0",
+      "kb": 2
+    },
+    {
+      "url": "assets/physicsCommon-I407HZ1P.js",
+      "kb": 1
+    }
+  ],
+  "wallMs": 2780
+}

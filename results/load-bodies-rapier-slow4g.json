@@ -1,0 +1,32 @@
+{
+  "label": "bodies-rapier",
+  "profile": "slow4g",
+  "base": "https://kodable.github.io/CreatorRig/",
+  "url": "https://kodable.github.io/CreatorRig/?scenario=bodies&adapter=rapier&count=200&duration=1&warmup=0&device=load-test",
+  "firstFrameMs": 6503,
+  "warmFirstFrameMs": 251,
+  "warmServedByWorker": true,
+  "responseStartMs": 24,
+  "domContentLoadedMs": 169,
+  "requests": 13,
+  "transferredKB": 1162,
+  "biggest": [
+    {
+      "url": "assets/rapier-IyqeEuWT.js",
+      "kb": 796
+    },
+    {
+      "url": "assets/index-Dpm8SOVG.js",
+      "kb": 359
+    },
+    {
+      "url": "?scenario=bodies&adapter=rapier&count=200&duration=1&warmup=0&device=load-test&sw=0",
+      "kb": 2
+    },
+    {
+      "url": "assets/physics-BZRiMasE.js",
+      "kb": 1
+    }
+  ],
+  "wallMs": 10855
+}

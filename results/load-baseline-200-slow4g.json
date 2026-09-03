@@ -1,0 +1,32 @@
+{
+  "label": "baseline-200",
+  "profile": "slow4g",
+  "base": "https://kodable.github.io/CreatorRig/",
+  "url": "https://kodable.github.io/CreatorRig/?scenario=baseline&count=200&duration=1&warmup=0&device=load-test",
+  "firstFrameMs": 2572,
+  "warmFirstFrameMs": 134,
+  "warmServedByWorker": true,
+  "responseStartMs": 31,
+  "domContentLoadedMs": 94,
+  "requests": 9,
+  "transferredKB": 362,
+  "biggest": [
+    {
+      "url": "assets/index-Dpm8SOVG.js",
+      "kb": 359
+    },
+    {
+      "url": "?scenario=baseline&count=200&duration=1&warmup=0&device=load-test&sw=0",
+      "kb": 2
+    },
+    {
+      "url": "assets/baseline-DwFD3tKA.js",
+      "kb": 1
+    },
+    {
+      "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAABAQMAAADD8p2OAAAAA1BMVEX/AP804Oa6AAAACklEQVQI12NgAAAAAgAB4iG8MwAAAABJRU5ErkJggg==",
+      "kb": 0
+    }
+  ],
+  "wallMs": 6805
+}

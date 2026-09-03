@@ -1,0 +1,32 @@
+{
+  "label": "sprites-500",
+  "profile": "none",
+  "base": "https://kodable.github.io/CreatorRig/",
+  "url": "https://kodable.github.io/CreatorRig/?scenario=sprites&count=500&duration=1&warmup=0&device=load-test",
+  "firstFrameMs": 377,
+  "warmFirstFrameMs": 319,
+  "warmServedByWorker": true,
+  "responseStartMs": 24,
+  "domContentLoadedMs": 78,
+  "requests": 15,
+  "transferredKB": 1061,
+  "biggest": [
+    {
+      "url": "atlas/creator-items.png",
+      "kb": 693
+    },
+    {
+      "url": "assets/index-Dpm8SOVG.js",
+      "kb": 359
+    },
+    {
+      "url": "?scenario=sprites&count=500&duration=1&warmup=0&device=load-test&sw=0",
+      "kb": 2
+    },
+    {
+      "url": "atlas/creator-items.json",
+      "kb": 2
+    }
+  ],
+  "wallMs": 2942
+}
