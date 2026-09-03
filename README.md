@@ -17,6 +17,17 @@ The index page lists every scenario and variant. Set the **device tag** first (`
 
 Devices on the same network open `http://<your-mac-ip>:5173/`. For Safari on iOS some scenarios (PWA install, Universal Links) need HTTPS: use the deployed URL.
 
+## Collecting device reports
+
+The dev server and the preview server accept reports at `POST /report` and write them to `results/` (`scripts/collector.ts`).
+
+```bash
+npm run rig                      # serves on http://<mac-ip>:5173 (the terminal prints the network URL)
+ipconfig getifaddr en0           # the Mac's LAN address, if you need it
+```
+
+On the device, open `http://<mac-ip>:5173/`, set the device tag, and leave **Send reports to this server** ticked (the box appears only when a collector answers). Every finished run then posts itself; the report view also has a **Send to rig server** button for a manual send. The file lands as `results/scenario-count-adapter-device.json` and the terminal prints the name. `GET /report` lists the saved files. The deployed HTTPS page cannot post to a LAN server, so use the Mac's URL for collection and the deployed URL only when a scenario needs HTTPS.
+
 ## URL parameters
 
 | Param | Default | Meaning |
@@ -28,6 +39,7 @@ Devices on the same network open `http://<your-mac-ip>:5173/`. For Safari on iOS
 | `warmup` | `3` | Seconds ignored at the start |
 | `device` | UA guess | Device tag written into the report |
 | `seed` | `1` | Seed for every random choice |
+| `send` | (off) | `1` posts the finished report to `/report` on the page's own server |
 
 Unknown parameters pass through to the scenario and into the report.
 

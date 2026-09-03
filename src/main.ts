@@ -31,12 +31,15 @@ function renderIndex(): void {
     <label>Device tag <input id="device" value="${device}" size="18"></label>
     <label>Duration <input id="duration" type="number" value="20" min="3" max="600" size="5"> s</label>
     <label>Adapter <select id="adapter"><option value="none">none</option></select></label>
+    <label id="send-label" hidden><input id="send" type="checkbox" checked> Send reports to this server (results/)</label>
   `;
   root.appendChild(header);
 
   const deviceInput = header.querySelector<HTMLInputElement>('#device');
   const durationInput = header.querySelector<HTMLInputElement>('#duration');
   const adapterSelect = header.querySelector<HTMLSelectElement>('#adapter');
+  const sendLabel = header.querySelector<HTMLLabelElement>('#send-label');
+  const sendInput = header.querySelector<HTMLInputElement>('#send');
 
   const list = document.createElement('div');
   root.appendChild(list);
@@ -64,6 +67,7 @@ function renderIndex(): void {
             device: deviceInput?.value ?? '',
             duration: durationInput?.value ?? '20',
             ...v.params,
+            ...(sendInput?.checked && !sendLabel?.hidden ? { send: 1 } : {}),
           });
           a.textContent = adapters.length > 1 ? `${v.label} · ${adapter}` : v.label;
           variants.appendChild(a);
@@ -87,7 +91,18 @@ function renderIndex(): void {
   deviceInput?.addEventListener('input', render);
   durationInput?.addEventListener('input', render);
   adapterSelect?.addEventListener('change', render);
+  sendInput?.addEventListener('change', render);
   render();
+
+  // Offer auto-send only where a collector answers (the Vite dev or preview server, not Pages).
+  void fetch(new URL('report', window.location.href), { method: 'HEAD' })
+    .then((res) => {
+      if (res.ok && sendLabel) {
+        sendLabel.hidden = false;
+        render();
+      }
+    })
+    .catch(() => undefined);
 }
 
 async function runScenario(p: RigParams): Promise<void> {

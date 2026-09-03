@@ -250,6 +250,24 @@ function addReportActions(report: Report): void {
   });
   bar.appendChild(copy);
 
+  // The Vite dev and preview servers accept POST /report (scripts/collector.ts). On GitHub Pages
+  // there is no collector, so the button reports the failure and the copy path remains.
+  const send = document.createElement('button');
+  send.textContent = 'Send to rig server';
+  const post = async (): Promise<void> => {
+    send.disabled = true;
+    try {
+      const res = await fetch(new URL('report', window.location.href), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json });
+      const data = (await res.json().catch(() => ({}))) as { saved?: string; error?: string };
+      send.textContent = res.ok ? `Saved results/${data.saved ?? name}` : `Rejected: ${data.error ?? res.status}`;
+    } catch {
+      send.textContent = 'No rig server here: open the rig from the Mac (http://<mac-ip>:5173)';
+    }
+  };
+  send.addEventListener('click', () => void post());
+  bar.appendChild(send);
+  if (report.params['send'] === '1') void post();
+
   const file = new File([json], name, { type: 'application/json' });
   const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
   if (typeof nav.share === 'function') {
