@@ -1,0 +1,80 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "overlay",
+  "adapter": "none",
+  "device": "ipad-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Safari/605.1.15",
+  "viewport": {
+    "width": 1180,
+    "height": 688,
+    "dpr": 2
+  },
+  "params": {
+    "count": 60,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "robot": "1",
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T19:24:49.032Z",
+  "durationMs": 20015,
+  "frames": 1201,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 23,
+  "dropped": 0,
+  "slow": 799,
+  "heapMB": null,
+  "pass": false,
+  "notes": [
+    "gizmo drift max 120.03 px (p95 is the pass value; a max of one screen is a one-frame flash on a camera jump)"
+  ],
+  "extra": {
+    "objects": 60,
+    "mode": "robot",
+    "gizmo": "react",
+    "flushSync": true,
+    "dragFrames": {
+      "p50": 16.7,
+      "p95": 16.7,
+      "max": 17.2,
+      "n": 953
+    },
+    "latencyMs": {
+      "p50": 2,
+      "p95": 3,
+      "max": 8,
+      "n": 947
+    },
+    "typingLatencyMs": {
+      "p50": 5,
+      "p95": 5,
+      "max": 6,
+      "n": 39
+    },
+    "driftPx": {
+      "p50": 4,
+      "p95": 4.06,
+      "max": 120.03,
+      "n": 1381
+    },
+    "driftMaxAt": "drag t=30 frame=2 selected=16",
+    "driftOutliers": 1,
+    "pointerMoves": 947,
+    "reactCommits": 1355,
+    "reactCommitMs": {
+      "p50": 0,
+      "p95": 1,
+      "max": 6,
+      "n": 1355
+    },
+    "storeNotifies": 1358,
+    "longTasks": 0,
+    "longTaskMaxMs": 0,
+    "drawCallsP50": 1,
+    "drawCallsP95": 1
+  }
+}

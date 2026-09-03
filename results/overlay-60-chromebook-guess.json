@@ -1,0 +1,77 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "overlay",
+  "adapter": "none",
+  "device": "chromebook-guess",
+  "ua": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 1366,
+    "height": 633,
+    "dpr": 1
+  },
+  "params": {
+    "count": 60,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-03T19:24:11.136Z",
+  "durationMs": 20008,
+  "frames": 1184,
+  "fps": 59.2,
+  "p50": 16.7,
+  "p95": 16.8,
+  "max": 49.1,
+  "dropped": 3,
+  "slow": 38,
+  "heapMB": 88,
+  "pass": false,
+  "notes": [],
+  "extra": {
+    "objects": 60,
+    "mode": "manual",
+    "gizmo": "react",
+    "flushSync": true,
+    "dragFrames": {
+      "p50": 16.67,
+      "p95": 20,
+      "max": 21.67,
+      "n": 186
+    },
+    "latencyMs": {
+      "p50": 19.9,
+      "p95": 30,
+      "max": 53.5,
+      "n": 120
+    },
+    "typingLatencyMs": {
+      "p50": 24.4,
+      "p95": 27.3,
+      "max": 27.3,
+      "n": 4
+    },
+    "driftPx": {
+      "p50": 0.01,
+      "p95": 0.01,
+      "max": 0.01,
+      "n": 945
+    },
+    "driftMaxAt": "drag t=0 frame=0 selected=6",
+    "driftOutliers": 0,
+    "pointerMoves": 120,
+    "reactCommits": 129,
+    "reactCommitMs": {
+      "p50": 4.7,
+      "p95": 11.5,
+      "max": 30.8,
+      "n": 129
+    },
+    "storeNotifies": 129,
+    "longTasks": 4,
+    "longTaskMaxMs": 121,
+    "drawCallsP50": 1,
+    "drawCallsP95": 1
+  }
+}
