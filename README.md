@@ -97,6 +97,7 @@ Both adapters pass the same conformance suite (`src/physics/conformance.test.ts`
 | `sprites` | CW-01.6 | N images from the real Creator item atlas (one 2048 page); draw calls per frame | p95 under 33.4 ms |
 | `spine` | CW-01.6 | N Floof skeletons (Spine 4.2 export) looping idle animations; draw calls per frame | p95 under 33.4 ms; humans check the art |
 | `textures` | CW-01.6 | Backdrop and atlas raw vs KTX (ASTC, ETC2, S3TC); GPU bytes per texture | compressed textures render; `null` until the KTX files exist |
+| `overlay` | CW-01.7 | React rail, 20-input panel, object list and DOM gizmo over 60 sprites; drag, resize, rotate, pan, zoom, pinch | drag frames p95 under 17.5 ms, pointer-to-frame latency p95 under 50 ms, gizmo drift p95 under 2 px |
 | `determinism` | CW-01.4 | Seeded coaster scene: 200 bodies, 30 joints, one motor, 3,000 fixed steps, run twice; hash of every transform | the two runs agree (`stable`); humans compare `hash` across devices |
 
 Every physics scenario reports `physicsMsP50/P95/Max` (simulation time per frame), `subSteps` and, where meaningful, a `hash` taken at a fixed step for cross-device comparison.
@@ -124,6 +125,14 @@ npm run ktx     # ASTC 6x6 via astcenc, ETC2 RGBA8 via EtcTool (both from @gpu-t
 ```
 
 It writes 3 KTX files next to each PNG in `public/textures/` and `public/atlas/` (committed, so the deployed page has them). The `textures` variants `astc`, `etc2` and `s3tc` force one format through `?format=`, so each file can be checked on a device that supports several; `auto` lets Phaser pick. Headless: 28 MB raw becomes 3.3 MB as ASTC 6x6 or 7.3 MB as ETC2 or S3TC. Phaser reads the KTX 1 container. ASTC serves the iPad, ETC2 the Chromebook, S3TC desktop GPUs.
+
+### Editor overlay (CW-01.7)
+
+`overlay` decides whether React and Phaser fight. React 19 owns the editor state in a small external store (`src/scenarios/overlay/store.ts`): 60 objects with 20 properties each, the selection and the camera. The UI (`overlay/ui.tsx`) is a rail, a properties panel with 20 live-bound inputs, an object list, and a DOM gizmo with 8 resize handles and a rotate handle. Phaser draws the 60 atlas sprites and applies store changes synchronously in a store listener. Pointer input lands on one root element over the canvas: drag moves, handles resize and rotate, empty space or shift-drag pans, wheel zooms about the cursor, two pointers pinch and pan.
+
+- `robot` variants drive the same handlers with synthetic pointer, wheel, input and click events on a 12 s cycle: drag along an ellipse, resize from a handle, pan while zooming, type into `x` and `rotation`, select rows from the list. `manual` leaves it to fingers on a device; the report needs 30 drag frames and 10 pointer moves for a verdict.
+- Metrics: `dragFrames` (frame intervals while a pointer is down), `latencyMs` (earliest unrendered pointer event to Phaser's `postrender`), `typingLatencyMs`, `driftPx` (gizmo center through `camera.getWorldPoint` against the sprite, per frame), `reactCommits` and `reactCommitMs` (React's profiling build), `storeNotifies`, `longTasks`.
+- `flushSync` is the finding. Input-driven store changes from native handlers or from Phaser's loop are rendered by React one frame after Phaser applies them: the gizmo lags the sprite by 3 px at 120 Hz and 6 px at 60 Hz, and a camera jump flashes the gizmo a full screen away for one frame. Wrapping those changes in `flushSync` (the default; `flush=0` shows the lag) brings drift to 0.01 px at a commit cost under 0.1 ms. `gizmo=imperative` moves the gizmo element directly during a drag and tells React on release; it is the fallback if flushSync ever costs too much on a device.
 
 ### Determinism (CW-01.4)
 

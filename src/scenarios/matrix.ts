@@ -8,6 +8,8 @@ export interface ScenarioVariant {
   /** Short label used in file names, e.g. "500". */
   label: string;
   params: Record<string, string | number>;
+  /** A human drives this variant on a device; the headless bench skips it. */
+  manual?: boolean;
 }
 
 export interface ScenarioEntry {
@@ -164,6 +166,20 @@ export const MATRIX: ScenarioEntry[] = [
     ],
     adapters: [],
   },
+  {
+    id: 'overlay',
+    title: 'Editor overlay: React panels and DOM gizmo over Phaser',
+    description:
+      'A React rail, a 20-input properties panel, an object list and a DOM gizmo over 60 atlas sprites. Measures frame time while dragging, pointer-to-frame latency, gizmo drift during zoom and pan, React commits and long tasks. robot variants drive it; manual is for fingers on a device.',
+    task: 'CW-01.7',
+    variants: [
+      { label: 'robot', params: { count: 60, robot: 1 } },
+      { label: 'robot-noflush', params: { count: 60, robot: 1, flush: 0 } },
+      { label: 'robot-imperative', params: { count: 60, robot: 1, gizmo: 'imperative' } },
+      { label: 'manual', params: { count: 60 }, manual: true },
+    ],
+    adapters: [],
+  },
 ];
 
 export interface BenchRun {
@@ -179,6 +195,7 @@ export function benchRuns(): BenchRun[] {
   for (const s of MATRIX) {
     const adapters = s.adapters.length > 0 ? s.adapters : ['none'];
     for (const v of s.variants) {
+      if (v.manual) continue;
       for (const adapter of adapters) {
         const suffix = adapter === 'none' ? '' : `-${adapter}`;
         runs.push({

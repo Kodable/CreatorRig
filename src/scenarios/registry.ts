@@ -17,6 +17,7 @@ const LOADERS: Record<string, () => Promise<{ default: Scenario }>> = {
   sprites: () => import('./sprites'),
   spine: () => import('./spine'),
   textures: () => import('./textures'),
+  overlay: () => import('./overlay'),
 };
 
 export async function loadScenario(id: string): Promise<Scenario | null> {

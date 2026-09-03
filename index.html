@@ -76,6 +76,31 @@
         border: 0; border-radius: 999px; background: var(--accent); color: #1a2142; cursor: pointer; text-decoration: none;
       }
       #report-actions { flex-wrap: wrap; justify-content: center; max-width: 90vw; }
+      /* CW-01.7 editor overlay */
+      .ov-root { position: absolute; inset: 0; z-index: 5; touch-action: none; user-select: none; -webkit-user-select: none; }
+      .ov-rail {
+        position: absolute; left: 0; top: 0; bottom: 0; width: 56px; display: flex; flex-direction: column; gap: 8px; padding: 48px 8px 8px;
+        background: rgba(23,30,58,0.94); border-right: 1px solid var(--line); color: #e7e9f4;
+      }
+      .ov-tool { width: 40px; height: 40px; border: 0; border-radius: 8px; background: #2c3560; color: #fff; font: 600 12px/1 -apple-system, sans-serif; }
+      .ov-rail-info { margin-top: auto; font: 11px/1.4 ui-monospace, Menlo, monospace; color: #9aa1c0; }
+      .ov-panel {
+        position: absolute; right: 0; top: 0; bottom: 0; width: 280px; overflow: auto; padding: 48px 12px 12px;
+        background: rgba(23,30,58,0.94); border-left: 1px solid var(--line); color: #e7e9f4; font: 13px/1.4 -apple-system, sans-serif;
+      }
+      .ov-panel h3 { font-size: 13px; margin: 8px 0 6px; color: #9aa1c0; text-transform: uppercase; letter-spacing: 0.04em; }
+      .ov-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+      .ov-fields label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: #9aa1c0; }
+      .ov-fields input { width: 100%; font: 13px ui-monospace, Menlo, monospace; padding: 4px 6px; border: 1px solid #2c3560; border-radius: 6px; background: #0f1428; color: #e7e9f4; }
+      .ov-muted { color: #9aa1c0; }
+      .ov-list { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow: auto; }
+      .ov-row { text-align: left; border: 0; border-radius: 6px; padding: 5px 8px; background: transparent; color: #e7e9f4; font: 12px ui-monospace, Menlo, monospace; }
+      .ov-row-selected { background: var(--accent); color: #1a2142; }
+      .ov-gizmo { position: absolute; left: 0; top: 0; box-sizing: border-box; border: 2px solid var(--accent); pointer-events: none; transform-origin: center; }
+      .ov-handle { position: absolute; width: 14px; height: 14px; margin: -7px; background: #fff; border: 2px solid var(--accent); border-radius: 3px; pointer-events: auto; }
+      .ov-handle-nw { left: 0; top: 0; } .ov-handle-n { left: 50%; top: 0; } .ov-handle-ne { left: 100%; top: 0; } .ov-handle-e { left: 100%; top: 50%; }
+      .ov-handle-se { left: 100%; top: 100%; } .ov-handle-s { left: 50%; top: 100%; } .ov-handle-sw { left: 0; top: 100%; } .ov-handle-w { left: 0; top: 50%; }
+      .ov-handle-rotate { left: 50%; top: -28px; border-radius: 50%; background: var(--accent); }
       #hash {
         position: fixed; top: 8px; right: 8px; z-index: 10; padding: 8px 12px; border-radius: 8px; display: none;
         background: rgba(255,255,255,0.94); color: #1a2142; font: 700 28px/1.1 ui-monospace, Menlo, monospace;
