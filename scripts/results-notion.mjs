@@ -31,6 +31,14 @@ for (const r of rows) (byScenario.get(r.scenario) ?? byScenario.set(r.scenario, 
 
 const out = [];
 out.push('One row per run. Device tags ending in "guess" came from the browser\'s user agent; "shell" rows ran inside the Capacitor app on the iPad. Headless rows (playwright) are harness checks, not device numbers. p50 and p95 are frame intervals in ms; dropped counts frames over 33.4 ms.');
+// Headless rows are harness checks; keep them only for variants no device ran.
+if (!process.env['ALL_ROWS']) {
+  for (const [scenario, list] of byScenario) {
+    const deviceKeys = new Set(list.filter((r) => !r.device.startsWith('playwright-')).map((r) => `${variant(r)}|${r.adapter}`));
+    byScenario.set(scenario, list.filter((r) => !r.device.startsWith('playwright-') || !deviceKeys.has(`${variant(r)}|${r.adapter}`)));
+  }
+}
+out[0] = out[0].replace('Headless rows (playwright) are harness checks, not device numbers.', 'Headless rows (playwright, Mac Chromium and WebKit) appear only for variants no device ran; they are harness checks, not device numbers. ALL_ROWS=1 npm run results:notion prints every row.');
 for (const scenario of [...byScenario.keys()].sort((a, b) => (SCENARIO_ORDER.indexOf(a) + 100) % 200 - (SCENARIO_ORDER.indexOf(b) + 100) % 200)) {
   const list = byScenario.get(scenario).sort((a, b) => variant(a).localeCompare(variant(b), undefined, { numeric: true }) || a.adapter.localeCompare(b.adapter) || devRank(a.device) - devRank(b.device));
   out.push(`## ${scenario}`);
