@@ -1,0 +1,45 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "stack",
+  "adapter": "rapier",
+  "device": "chromebook-guess",
+  "ua": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+  "origin": "http://192.168.86.173:5173",
+  "viewport": {
+    "width": 1366,
+    "height": 633,
+    "dpr": 1
+  },
+  "params": {
+    "count": 30,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-04T01:00:43.935Z",
+  "durationMs": 20008,
+  "frames": 1202,
+  "fps": 60.1,
+  "p50": 16.7,
+  "p95": 16.8,
+  "max": 17,
+  "dropped": 0,
+  "slow": 108,
+  "heapMB": 96.5,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "boxes": 30,
+    "topDrift": 0.31,
+    "maxDrift": 0.31,
+    "toppled": false,
+    "hash": "d21228a2",
+    "subSteps": 4,
+    "physicsMsP50": 0.6,
+    "physicsMsP95": 1.2,
+    "physicsMsMax": 4.5,
+    "stepsTotal": 1382
+  }
+}

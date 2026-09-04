@@ -1,0 +1,47 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "catapult",
+  "adapter": "rapier",
+  "device": "ipad-guess",
+  "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0.1 Safari/605.1.15",
+  "origin": "http://192.168.86.173:5173",
+  "viewport": {
+    "width": 1180,
+    "height": 734,
+    "dpr": 2
+  },
+  "params": {
+    "count": 30,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-04T01:03:27.934Z",
+  "durationMs": 20016,
+  "frames": 1201,
+  "fps": 60,
+  "p50": 17,
+  "p95": 17,
+  "max": 18,
+  "dropped": 0,
+  "slow": 797,
+  "heapMB": null,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "boxes": 30,
+    "boxesMoved": 0,
+    "projectileMaxX": 1.83,
+    "projectileMaxY": 4.25,
+    "armAngle": -0.47,
+    "contacts": 48,
+    "hash": "109e085e",
+    "subSteps": 4,
+    "physicsMsP50": 0,
+    "physicsMsP95": 1,
+    "physicsMsMax": 7,
+    "stepsTotal": 1379
+  }
+}

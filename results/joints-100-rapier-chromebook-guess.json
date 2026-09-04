@@ -1,0 +1,51 @@
+{
+  "rig": "kodable-creator-rig",
+  "version": "0.1.0",
+  "scenario": "joints",
+  "adapter": "rapier",
+  "device": "chromebook-guess",
+  "ua": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+  "origin": "http://192.168.86.173:5173",
+  "viewport": {
+    "width": 1366,
+    "height": 633,
+    "dpr": 1
+  },
+  "params": {
+    "count": 100,
+    "duration": 20,
+    "warmup": 3,
+    "seed": 1,
+    "send": "1"
+  },
+  "startedAt": "2026-09-04T01:02:38.593Z",
+  "durationMs": 20008,
+  "frames": 962,
+  "fps": 48.1,
+  "p50": 16.7,
+  "p95": 33.4,
+  "max": 33.6,
+  "dropped": 35,
+  "slow": 279,
+  "heapMB": 114.8,
+  "pass": true,
+  "notes": [],
+  "extra": {
+    "carts": 100,
+    "stiffJoints": false,
+    "motorJoints": 100,
+    "bridgeJoints": 22,
+    "brokenBridgeJoints": 4,
+    "ballsDropped": 5,
+    "maxWheelGap": 0.01,
+    "maxBridgeGap": 1,
+    "jointsLive": 118,
+    "hashStep": 300,
+    "hash": "bb221930",
+    "subSteps": 4,
+    "physicsMsP50": 10.8,
+    "physicsMsP95": 19.9,
+    "physicsMsMax": 22.9,
+    "stepsTotal": 1374
+  }
+}
