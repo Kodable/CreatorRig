@@ -179,6 +179,7 @@ npx cap open ios                      # Xcode: select the team, run on a device
 ```bash
 npm run bench              # builds, then runs every matrix entry in Chromium and WebKit
 npm run results            # prints results/*.json as a Markdown table
+npm run results:notion     # the same as Notion tables per scenario, for the results page
 ```
 
 Headless numbers are for harness checks and regressions. They are not device numbers. Shorten runs with `RIG_DURATION=3 RIG_WARMUP=1 npm run bench`; a variant with its own `duration` (determinism) keeps it. `npx playwright test -g determinism` runs one scenario.

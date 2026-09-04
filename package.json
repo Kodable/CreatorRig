@@ -22,7 +22,8 @@
     "atlas": "node scripts/pack-atlas.mjs",
     "load": "node scripts/load-time.mjs",
     "start": "node scripts/serve.mjs",
-    "heroku-postbuild": "npm run build"
+    "heroku-postbuild": "npm run build",
+    "results:notion": "node scripts/results-notion.mjs"
   },
   "dependencies": {
     "@capacitor/app": "8.1.1",
