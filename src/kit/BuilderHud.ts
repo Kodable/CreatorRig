@@ -183,8 +183,8 @@ export class BuilderHud<
   private drawerHeaderLabelEl!: HTMLSpanElement;
   private drawerHeaderRightEl!: HTMLDivElement;
   private drawerRemoveBtn!: HTMLButtonElement;
-  /** "🪙 used / total", shown in the drawer header (right side) for shelf courses instead of the
-   * bottom-bar pill (see `budgetPillEl`). */
+  /** "[koin] used / total", shown in the drawer header (right side) for shelf courses instead of
+   * the bottom-bar pill (see `budgetPillEl`). */
   private drawerBudgetPillEl!: HTMLDivElement;
   private drawerBudgetPillTextEl!: HTMLSpanElement;
   private drawerRowsEl!: HTMLDivElement;
@@ -258,10 +258,21 @@ export class BuilderHud<
   private paletteKey: string | null = null;
   private paletteButtons = new Map<K, HTMLButtonElement>();
 
-  /** "🪙 used / total" pill (bottom bar, next to the palette); hidden on courses without a
+  /** "[koin] used / total" pill (bottom bar, next to the palette); hidden on courses without a
    * `Level.budget`. Its text is set per frame without rebuilding the pill itself. */
   private budgetPillEl!: HTMLDivElement;
   private budgetPillTextEl!: HTMLSpanElement;
+
+  /** The spend animation (2026-10-05 round 2): `state.budget.used` from the PREVIOUS `update()`
+   * call, so an increase (a part/option was added or upgraded) can be told apart from a decrease
+   * (Remove/Undo) — null while there is no budget, or right after a level load (no previous frame
+   * to compare against). */
+  private lastBudgetUsed: number | null = null;
+  /** The button the child last tapped to add a part or change an option (a shelf/palette button,
+   * a prop-panel chip, or a drawer option button) — the flying coins' start point. Remembered by
+   * each of those click handlers, not cleared afterwards (a stale element just fails the
+   * `getBoundingClientRect` check in `playSpendAnimation` and the coins are skipped). */
+  private lastSpendButton: HTMLElement | null = null;
 
   private toolGroupEl!: HTMLDivElement;
   private toolButtons = new Map<string, HTMLButtonElement>();
@@ -371,15 +382,31 @@ export class BuilderHud<
     return badge;
   }
 
-  /** A small gold "+N 🪙" badge for an option that costs more than the cheapest option in its row
-   * (`HudState.selected.optionCosts`), same style family as the shelf/palette coin pill. Inline,
-   * next to the chip's label text. */
+  /** The coin picture (`public/ui/koin.png`, a gold "K" coin), replacing every 🪙 glyph in the HUD
+   * (Gao, 2026-10-05 round 2). `heightPx` is a CSS height (14-16px, vertically centred with its
+   * sibling text via the shared `.koin` rule in builder.css); callers that need a different flight
+   * size for the spend animation pass a bigger one. */
+  private makeKoinImg(heightPx = 15): HTMLImageElement {
+    const img = document.createElement('img');
+    img.className = 'koin';
+    img.src = 'ui/koin.png';
+    img.alt = '';
+    img.draggable = false;
+    img.style.height = `${heightPx}px`;
+    return img;
+  }
+
+  /** A small gold "+N" badge (with the koin picture) for an option that costs more than the
+   * cheapest option in its row (`HudState.selected.optionCosts`), same style family as the
+   * shelf/palette coin pill. Inline, next to the chip's label text. */
   private makeCostBadge(extra: number): HTMLSpanElement {
     const badge = document.createElement('span');
     badge.className = 'cost-badge';
-    badge.textContent = `+${extra} 🪙`;
+    const text = document.createElement('span');
+    text.textContent = `+${extra}`;
+    badge.append(text, this.makeKoinImg(11));
     badge.style.cssText =
-      'display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;' +
+      'display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:0 6px;border-radius:999px;' +
       'background:#ffb40f;color:#1a2142;font-size:11px;font-weight:800;line-height:1.5;vertical-align:middle;';
     return badge;
   }
@@ -598,7 +625,7 @@ export class BuilderHud<
     budgetPill.className = 'budget-pill';
     budgetPill.hidden = true;
     const budgetPillText = document.createElement('span');
-    budgetPill.appendChild(budgetPillText);
+    budgetPill.append(this.makeKoinImg(), budgetPillText);
     bottombar.appendChild(budgetPill);
     this.budgetPillEl = budgetPill;
     this.budgetPillTextEl = budgetPillText;
@@ -891,8 +918,12 @@ export class BuilderHud<
     if (this.coachHandImgEl.getAttribute('src') !== frame.src) this.coachHandImgEl.src = frame.src;
     // Fingertip near the button's bottom-right corner, not its middle: the glove hangs below and
     // to the right of the tip, so the button's picture and label stay visible (Gao, 2026-10-05).
-    const fx = rect.x + rect.w * 0.82;
-    const fy = rect.y + rect.h * 0.78;
+    // A 'bar' target (e.g. the centred DRIVE pill) is wide and the label sits in its middle, so the
+    // glove instead hangs off the button's right end: 92%/60% instead of 82%/78% (Gao, 2026-10-05
+    // round 2 — "move the hand on the DRIVE button up and to the right a bit").
+    const isBar = step.target.type === 'bar';
+    const fx = rect.x + rect.w * (isBar ? 0.92 : 0.82);
+    const fy = rect.y + rect.h * (isBar ? 0.6 : 0.78);
     // The glove box is COACH_HAND_W x COACH_HAND_H; this frame's fingertip sits at
     // (frame.fx, frame.fy) as a fraction of that box — place that exact point at the target.
     this.coachHandEl.style.left = `${(fx - frame.fx * COACH_HAND_W).toFixed(1)}px`;
@@ -1148,7 +1179,7 @@ export class BuilderHud<
     budgetPill.className = 'budget-pill drawer-budget-pill';
     budgetPill.hidden = true;
     const budgetPillText = document.createElement('span');
-    budgetPill.appendChild(budgetPillText);
+    budgetPill.append(this.makeKoinImg(), budgetPillText);
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'prop-drawer-remove';
@@ -1227,6 +1258,10 @@ export class BuilderHud<
     this.winShownThisPass = false;
     this.hideCallout();
     this.unlockPlayed = false;
+    // A fresh budget (or none at all) to compare against — the coin spend animation never fires
+    // for the jump from "no previous frame" to this level's starting `used`.
+    this.lastBudgetUsed = null;
+    this.lastSpendButton = null;
 
     this.setText(this.titleEl, level.title);
 
@@ -1325,7 +1360,10 @@ export class BuilderHud<
         if (state.introduced.includes(`${descriptor.code}:${opt.value}`)) chip.appendChild(this.makeNewBadge());
         const extra = sel.optionCosts[descriptor.code]?.[opt.value];
         if (extra !== undefined && extra > 0) chip.appendChild(this.makeCostBadge(extra));
-        chip.addEventListener('click', () => this.cb.setProp(descriptor.code, opt.value));
+        chip.addEventListener('click', () => {
+          this.lastSpendButton = chip;
+          this.cb.setProp(descriptor.code, opt.value);
+        });
         chips.appendChild(chip);
         chipMap.set(opt.value, chip);
       }
@@ -1500,6 +1538,7 @@ export class BuilderHud<
         if (extra !== undefined && extra > 0) btn.appendChild(this.makeOptionCostBadge(extra));
         btn.addEventListener('click', () => {
           this.popOptionButton(btn);
+          this.lastSpendButton = btn;
           // Another option tapped mid-flight (same row or a different one): the pending change
           // lands right now (no pop), then this tap gets its own chance to fly.
           this.finishFlightInstant();
@@ -1576,12 +1615,15 @@ export class BuilderHud<
           if (cost !== undefined) {
             const costEl = document.createElement('span');
             costEl.className = 'cost';
-            costEl.textContent = `🪙 ${cost}`;
+            const costText = document.createElement('span');
+            costText.textContent = `${cost}`;
+            costEl.append(this.makeKoinImg(11), costText);
             wrap.appendChild(costEl);
           }
           if (state.unlocked.includes(kind)) wrap.appendChild(this.makeUnlockBadge(kind));
           btn.addEventListener('click', () => {
             this.popOptionButton(btn);
+            this.lastSpendButton = btn;
             this.cb.addPart(kind);
           });
           grid.appendChild(wrap);
@@ -1809,14 +1851,19 @@ export class BuilderHud<
         if (cost !== undefined) {
           const costEl = document.createElement('span');
           costEl.className = 'cost';
-          costEl.textContent = `🪙 ${cost}`;
+          const costText = document.createElement('span');
+          costText.textContent = `${cost}`;
+          costEl.append(this.makeKoinImg(11), costText);
           btn.appendChild(costEl);
         }
         if (state.unlocked.includes(kind)) {
           btn.classList.add('has-new');
           btn.appendChild(this.makeUnlockBadge(kind));
         }
-        btn.addEventListener('click', () => this.cb.addPart(kind));
+        btn.addEventListener('click', () => {
+          this.lastSpendButton = btn;
+          this.cb.addPart(kind);
+        });
         this.paletteEl.appendChild(btn);
         this.paletteButtons.set(kind, btn);
       }
@@ -1828,6 +1875,67 @@ export class BuilderHud<
       const unaffordable = remaining !== null && cost !== undefined && cost > remaining;
       btn.classList.toggle('unaffordable', unaffordable);
       this.setDisabled(btn, !editMode || state.paletteFull || unaffordable);
+    }
+  }
+
+  /** Scale-bump (1.25 -> 1, 250ms) on the pill's text and a short gold flash on the pill itself —
+   * the landing cue for one flying koin, or (with no flight) the whole feedback for a budget drop
+   * (Remove/Undo). Both are one-shot CSS animations (`restartAnim` replays them even back to back,
+   * which `playSpendAnimation` relies on for the per-coin bump). */
+  private bumpPill(pillEl: HTMLElement, textEl: HTMLElement): void {
+    if (prefersReducedMotion()) return;
+    this.restartAnim(textEl, 'pill-bump');
+    this.restartAnim(pillEl, 'pill-flash');
+  }
+
+  /** "The coins fly to the budget pill" (2026-10-05 round 2, stakeholder direction #3): when
+   * `state.budget.used` jumps up by `diff` (a part/option was just added or upgraded), up to 5
+   * small koin pictures fly from `sourceEl` (the button the child just tapped) to `pillEl` along a
+   * slight arc over ~600ms, staggered 60ms apart, fading out as they land; each landing bumps the
+   * pill (see `bumpPill`). Falls back to a plain bump (no flight) under reduced motion, or when
+   * `sourceEl` is missing/off-screen (a stale reference, or the HUD mid-teardown) — the coin count
+   * is a nice-to-have, the budget pill updating is not. */
+  private playSpendAnimation(diff: number, sourceEl: HTMLElement | null, pillEl: HTMLElement, textEl: HTMLElement): void {
+    if (prefersReducedMotion() || !sourceEl) {
+      this.bumpPill(pillEl, textEl);
+      return;
+    }
+    const rootRect = this.root.getBoundingClientRect();
+    const srcRect = sourceEl.getBoundingClientRect();
+    const dstRect = pillEl.getBoundingClientRect();
+    if (rootRect.width <= 0 || srcRect.width <= 0 || dstRect.width <= 0) {
+      this.bumpPill(pillEl, textEl);
+      return;
+    }
+    const stagePerClientPx = STAGE_W / rootRect.width;
+    const startX = (srcRect.left + srcRect.width / 2 - rootRect.left) * stagePerClientPx;
+    const startY = (srcRect.top + srcRect.height / 2 - rootRect.top) * stagePerClientPx;
+    const endX = (dstRect.left + dstRect.width / 2 - rootRect.left) * stagePerClientPx;
+    const endY = (dstRect.top + dstRect.height / 2 - rootRect.top) * stagePerClientPx;
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const SIZE = 18;
+    const count = Math.min(diff, 5);
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('img');
+      el.className = 'spend-koin';
+      el.src = 'ui/koin.png';
+      el.alt = '';
+      el.style.left = `${startX - SIZE / 2}px`;
+      el.style.top = `${startY - SIZE / 2}px`;
+      this.root.appendChild(el);
+      const anim = el.animate(
+        [
+          { transform: 'translate(0px, 0px) scale(1)', opacity: 1, offset: 0 },
+          { transform: `translate(${dx * 0.55}px, ${dy * 0.55 - 50}px) scale(0.9)`, opacity: 1, offset: 0.6 },
+          { transform: `translate(${dx}px, ${dy}px) scale(0.4)`, opacity: 0, offset: 1 },
+        ],
+        { duration: 600, delay: i * 60, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'forwards' },
+      );
+      anim.onfinish = () => {
+        el.remove();
+        this.bumpPill(pillEl, textEl);
+      };
     }
   }
 
@@ -2009,10 +2117,29 @@ export class BuilderHud<
 
     // ---- budget pill: bottom bar for ordinary courses, the drawer header for shelf courses ----
     this.setHidden(this.budgetPillEl, state.budget === null || shelfOn);
-    if (state.budget) this.setText(this.budgetPillTextEl, `🪙 ${state.budget.used} / ${state.budget.total}`);
+    if (state.budget) this.setText(this.budgetPillTextEl, `${state.budget.used} / ${state.budget.total}`);
     if (this.drawerMode) {
       this.setHidden(this.drawerBudgetPillEl, state.budget === null || !shelfOn);
-      if (state.budget) this.setText(this.drawerBudgetPillTextEl, `🪙 ${state.budget.used} / ${state.budget.total}`);
+      if (state.budget) this.setText(this.drawerBudgetPillTextEl, `${state.budget.used} / ${state.budget.total}`);
+    }
+
+    // ---- coin spend animation (2026-10-05 round 2): a jump in `state.budget.used` since the
+    // previous frame means a part/option was just added or upgraded — fly `diff` koins (capped at
+    // 5) from the last tapped button to whichever pill is visible right now; a DROP (Remove/Undo)
+    // just bumps the pill, no coins fly backwards. No previous frame to compare against (a level
+    // just loaded, or the course has no budget) plays nothing.
+    if (state.budget) {
+      const used = state.budget.used;
+      const activePillEl = shelfOn ? this.drawerBudgetPillEl : this.budgetPillEl;
+      const activePillTextEl = shelfOn ? this.drawerBudgetPillTextEl : this.budgetPillTextEl;
+      if (this.lastBudgetUsed !== null && used !== this.lastBudgetUsed) {
+        const diff = used - this.lastBudgetUsed;
+        if (diff > 0) this.playSpendAnimation(diff, this.lastSpendButton, activePillEl, activePillTextEl);
+        else this.bumpPill(activePillEl, activePillTextEl);
+      }
+      this.lastBudgetUsed = used;
+    } else {
+      this.lastBudgetUsed = null;
     }
 
     // ---- palette ----

@@ -122,7 +122,7 @@
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 .prop-drawer-remove:disabled { background: #2c3560; color: #6b7190; cursor: default; }
-/* "🪙 used / total", moved here (from the bottom bar's .budget-pill) for shelf courses: the
+/* "[koin] used / total", moved here (from the bottom bar's .budget-pill) for shelf courses: the
    bottom bar is busy enough once the shelf frees it up for just Play/Undo/Clear. */
 .drawer-budget-pill { height: 28px; padding: 0 10px; font-size: 12px; }
 
@@ -167,8 +167,11 @@
    buttons; a tap adds that part straight away (callbacks.addPart), no selection needed. ---- */
 .drawer-shelf { display: flex; flex-direction: column; gap: 14px; padding-bottom: 4px; }
 .drawer-shelf-section { display: flex; flex-direction: column; }
-/* Room above the first row: the badges sit on the buttons' top edge, under the group label. */
-.shelf-grid { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+/* Room above the first row: the badges sit above the buttons' top edge, under the group label.
+   8px (was 4px, 2026-10-05 round 2): the NEW/coin badges now sit just OUTSIDE the button's top
+   corners (see .shelf-btn-wrap .unlock-badge / .cost below), so they need a little more headroom
+   to clear the group label without overlapping it. */
+.shelf-grid { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
 /* `.shelf-btn-wrap` is the real positioned box (70x70); badges are its own children, siblings of
    the button (see `BuilderHud.syncShelf`) — kept from the box_curved pass below even though the
    button itself fell back to `border-radius` (see that section's note on why). */
@@ -191,11 +194,18 @@
   font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; color: #c8cde6;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Coin badge: sits just OUTSIDE the button's top-right corner now (top/right -5px, was 2px/3px
+   inside — Gao, 2026-10-05 round 2: "can sit a little further out"). `.shelf-grid`'s padding-top
+   (above) was raised to make room. Flex row so the koin image and the number line up. */
 .shelf-btn-wrap .cost {
-  position: absolute; top: 2px; right: 3px; background: #ffb40f; color: #1a2142;
+  position: absolute; top: -5px; right: -5px; background: #ffb40f; color: #1a2142;
   font-size: 10px; font-weight: 800; line-height: 1.4; border-radius: 999px; padding: 0 5px;
+  display: inline-flex; align-items: center; gap: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, .35); pointer-events: none;
 }
+/* NEW badge (shared `.unlock-badge`, see below): same "a little further out" move, top/left -5px
+   (was 2px/3px inside). Shelf-specific override so the palette-chip's NEW badge is untouched. */
+.shelf-btn-wrap .unlock-badge { top: -5px; left: -5px; }
 .shelf-btn.unaffordable { opacity: 0.5; }
 .shelf-btn.pop { animation: option-pop 120ms ease; }
 
@@ -246,7 +256,39 @@
 .budget-pill {
   flex: 0 0 auto; height: 32px; padding: 0 12px; border-radius: 16px;
   background: #2c3560; color: #ffb40f; font-size: 13px; font-weight: 800; line-height: 1;
-  display: flex; align-items: center; justify-content: center; white-space: nowrap; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; pointer-events: none;
+}
+/* The pill's number bumps (see .pill-bump) independent of the pill's own flash (.pill-flash), so
+   each needs to be a separate animatable target; the pill's text span is already a sibling of the
+   koin image appended in BuilderHud's build(). */
+.budget-pill span { display: inline-block; }
+
+/* ---- Coin picture (public/ui/koin.png), replacing every 🪙 glyph in the HUD (2026-10-05 round 2:
+   "the coin is now a picture"). 14-16px tall and vertically centred with its sibling number/text —
+   `BuilderHud.makeKoinImg` sets the exact height per call site (budget pills: 15px default; the
+   smaller cost badges: 11px). ---- */
+.koin { width: auto; display: inline-block; vertical-align: middle; pointer-events: none; }
+
+/* ---- Coin spend animation (2026-10-05 round 2, stakeholder direction #3): N small koin pictures
+   fly from the tapped button to the budget pill when an add/upgrade actually spends coins (see
+   `BuilderHud.playSpendAnimation`); appended straight to `.root`, animated purely via the Web
+   Animations API (`el.animate`), never by a CSS keyframe (each flight's start/end points differ
+   per call, so the translate distances are computed in JS). ---- */
+.spend-koin {
+  position: absolute; left: 0; top: 0; width: 18px; height: 18px;
+  pointer-events: none; z-index: 55; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35));
+}
+/* The pill's landing cue: its number scale-bumps (see `BuilderHud.bumpPill`, called once per
+   landing coin, or alone for a budget DROP with no coins) and the pill itself flashes gold. */
+.pill-bump { animation: pill-bump 250ms ease; }
+@keyframes pill-bump {
+  0% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.pill-flash { animation: pill-flash 300ms ease; }
+@keyframes pill-flash {
+  0% { box-shadow: 0 0 0 0 rgba(255, 180, 15, 0.75); }
+  100% { box-shadow: 0 0 0 10px rgba(255, 180, 15, 0); }
 }
 
 /* ---- Palette (bottom bar, left side) ---- */
@@ -262,7 +304,10 @@
 }
 .palette-chip .icon { font-size: 16px; line-height: 1; }
 .palette-chip .label { font-size: 11px; line-height: 1; overflow: hidden; text-overflow: ellipsis; }
-.palette-chip .cost { font-size: 10px; line-height: 1; color: #ffb40f; font-weight: 700; }
+.palette-chip .cost {
+  font-size: 10px; line-height: 1; color: #ffb40f; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 2px;
+}
 .palette-chip:hover:not(:disabled) { background: #3a4470; }
 .palette-chip:disabled { color: #6b7190; cursor: default; }
 .palette-chip.unaffordable { color: #6b7190; }
@@ -447,8 +492,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .coach-hand.enter, .win-card.enter, .win-next, .unlock-callout-wrap.enter,
-  .shelf-btn.unlock-pop, .palette-chip.unlock-pop { animation: none !important; }
+  .shelf-btn.unlock-pop, .palette-chip.unlock-pop, .pill-bump, .pill-flash { animation: none !important; }
   .confetti-piece { display: none; }
+  /* `BuilderHud.playSpendAnimation` already skips the flight under reduced motion (no flyers are
+     ever created), so this is belt-and-braces only. */
+  .spend-koin { display: none; }
 }
 
 /* ======== 2026-10-05 playtest review, part 2 (Gao, stakeholder direction):

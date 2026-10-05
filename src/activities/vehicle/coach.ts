@@ -47,7 +47,7 @@ function shelfStep(ctx: RoverCoachContext, id: string, text: string, kind: PartK
 
 /** Every tap of the first build. Two Round wheels spend the whole 4-coin budget, so "out of
  * coins" lands exactly as the child finishes the coached build: the coins step is the DRIVE step
- * for that case (it still points at DRIVE), shown while the drawer is open because the 🪙 counter
+ * for that case (it still points at DRIVE), shown while the drawer is open because the coin counter
  * sits in the drawer header on shelf courses (BuilderHud hides the bottom-bar pill). */
 function wheelsCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   if (ctx.passed) return step('next', 'You did it! Tap Next level.', { type: 'bar', button: 'next' });
@@ -64,7 +64,7 @@ function wheelsCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   if (!sel) return step('drive', 'Tap DRIVE and watch it go!', DRIVE_TARGET);
   const budget = ctx.level.budget;
   if (budget !== undefined && buildCost(ctx.parts) >= budget) {
-    return step('coins', 'Out of coins! Each part costs coins — see the 🪙 counter. Now tap DRIVE!', DRIVE_TARGET);
+    return step('coins', 'Out of coins! Each part costs coins — see the coin counter. Now tap DRIVE!', DRIVE_TARGET);
   }
   return step('drive2', 'Now tap DRIVE!', DRIVE_TARGET);
 }

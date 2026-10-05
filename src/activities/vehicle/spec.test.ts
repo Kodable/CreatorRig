@@ -455,7 +455,7 @@ describe('vehicleSpec.partTargets and resultCard', () => {
     expect(card.outcome).toContain('4.2');
     expect(card.rows).toContainEqual({ label: `${CATALOG.wheelCircle.icon} Round`, value: '× 2' });
     expect(card.rows).toContainEqual({ label: 'On springs', value: '× 1' });
-    expect(card.rows).toContainEqual({ label: '🪙 Coins', value: `5 of ${LEVEL.budget}` });
+    expect(card.rows).toContainEqual({ label: 'Coins', value: `5 of ${LEVEL.budget}` });
     const stuck = vehicleSpec.resultCard!(LEVEL.parts, LEVEL, { ...m, reachedFinish: 0, distance: 0.3 }, 'stuck', false)!;
     expect(stuck.tone).toBe('fail');
     expect(stuck.rows[0]).toEqual({ label: 'Parts', value: 'none yet' });

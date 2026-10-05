@@ -293,7 +293,7 @@ function buildRows(parts: PlacedPart<PartKind>[], level: VehicleLevel): { label:
   if (springs > 0) rows.push({ label: 'On springs', value: `× ${springs}` });
   if (rows.length === 0) rows.push({ label: 'Parts', value: 'none yet' });
   const coins = buildCost(parts);
-  rows.push({ label: '🪙 Coins', value: level.budget !== undefined ? `${coins} of ${level.budget}` : `${coins}` });
+  rows.push({ label: 'Coins', value: level.budget !== undefined ? `${coins} of ${level.budget}` : `${coins}` });
   return rows;
 }
 

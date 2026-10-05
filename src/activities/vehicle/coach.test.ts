@@ -90,12 +90,12 @@ describe('roverCoach: level 1 (wheels) walks every tap', () => {
     expect(coach('wheels', ROUND2)?.id).toBe('drive');
   });
 
-  it('coins: two Round wheels spend the whole budget; with the drawer (and its 🪙 counter) open the step says so and still points at DRIVE', () => {
+  it('coins: two Round wheels spend the whole budget; with the drawer (and its coin counter) open the step says so and still points at DRIVE', () => {
     const level = findLevel('wheels')!;
     expect(buildCost(partsOn(level, ROUND2))).toBe(level.budget);
     const s = coach('wheels', ROUND2, { selected: 1 })!;
     expect(s.id).toBe('coins');
-    expect(s.text).toContain('Out of coins! Each part costs coins — see the 🪙 counter.');
+    expect(s.text).toContain('Out of coins! Each part costs coins — see the coin counter.');
     expect(s.target).toEqual({ type: 'bar', button: 'play' });
     // Four square wheels spend it too.
     const four: Stick[] = [['wheelSquare', -45], ['wheelSquare', -135], ['wheelSquare', -90], ['wheelSquare', -20]];
