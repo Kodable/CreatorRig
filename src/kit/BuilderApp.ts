@@ -94,6 +94,9 @@ export class BuilderApp<
   /** Cached `spec.resultCard()` output, keyed on outcome+passed so it is not recomputed every
    * frame while sitting in done mode. */
   private resultCardCache: { key: string; card: ResultCard | null } = { key: '', card: null };
+  /** Bumped on every `play()`, so the result card is recomputed per run (the same outcome on
+   * a later run carries different metrics: the time, the distance). */
+  private runCounter = 0;
   /** Id of the dial mid-live-drag (its first live commit pushed the drag's one undo entry), or
    * null when no live drag is in progress. Lets the release commit that follows tell it already
    * applied this exact value and skip re-doing the work. */
@@ -689,6 +692,7 @@ export class BuilderApp<
     this.scene.setEditable(false);
     this.stepper.reset();
     this.prevSnap = null;
+    this.runCounter++;
     this.sim.play();
   }
 
@@ -967,7 +971,7 @@ export class BuilderApp<
 
     let result: ResultCard | null = null;
     if (this.mode === 'done' && this.spec.resultCard) {
-      const key = `${this.outcome}:${this.passed}`;
+      const key = `${this.runCounter}:${this.level.id}:${this.outcome}:${this.passed}`;
       if (key !== this.resultCardCache.key) {
         this.resultCardCache = {
           key,
