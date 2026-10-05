@@ -495,7 +495,13 @@ function layoutPull(w: PullWidget, toPx: (v: Vec2) => Vec2, pxScale: number): Pu
  * centre, a dial's handle, a rack's middle cell, a lever's knob, a pull's rest handle. */
 export function widgetAnchor(geom: WidgetGeom): Vec2 {
   switch (geom.kind) {
-    case 'tap':
+    case 'tap': {
+      // Near the button's bottom-right corner, not its middle: the glove hangs below-right of the
+      // fingertip, so the icon and label stay visible (Gao, 2026-10-05).
+      const w = geom.pill?.w ?? geom.size;
+      const h = geom.pill?.h ?? geom.size;
+      return { x: geom.center.x + w * 0.32, y: geom.center.y + h * 0.28 };
+    }
     case 'cycle':
       return geom.center;
     case 'dial': {

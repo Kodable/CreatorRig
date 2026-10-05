@@ -359,7 +359,7 @@ describe("tap widget style 'big' (the one obvious start button)", () => {
 });
 
 describe('widgetAnchor (where the coach hand points)', () => {
-  it("is a tap's centre, a dial's handle, a rack's middle cell and a lever's knob", () => {
+  it("is a tap's lower-right, a dial's handle, a rack's middle cell and a lever's knob", () => {
     const tap: TapWidget = { id: 't', kind: 'tap', at: { x: 2, y: 3 }, icon: '?' };
     const dial: DialWidget = {
       id: 'd', kind: 'dial', pivot: { x: 5, y: 5 }, radiusPx: 100, arcFrom: 0, arcTo: Math.PI / 2,
@@ -374,7 +374,13 @@ describe('widgetAnchor (where the coach hand points)', () => {
       options: [{ value: 'lo', label: 'Lo' }, { value: 'hi', label: 'Hi' }],
     };
     const [tg, dg, rg, lg] = layoutWidgets([tap, dial, rack, lever], toPx, 1);
-    expect(widgetAnchor(tg!)).toEqual(toPx({ x: 2, y: 3 }));
+    // A tap's anchor sits toward its bottom-right corner so the glove does not cover the label.
+    const tc = toPx({ x: 2, y: 3 });
+    const ta = widgetAnchor(tg!);
+    expect(ta.x).toBeGreaterThan(tc.x);
+    expect(ta.y).toBeGreaterThan(tc.y);
+    expect(ta.x - tc.x).toBeLessThan((tg as TapGeom).size / 2);
+    expect(ta.y - tc.y).toBeLessThan((tg as TapGeom).size / 2);
     const pivot = toPx({ x: 5, y: 5 });
     const handle = widgetAnchor(dg!);
     expect(handle.x).toBeCloseTo(pivot.x, 6); // value 'b' sits at 90 degrees: straight up

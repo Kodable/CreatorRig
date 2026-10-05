@@ -889,8 +889,10 @@ export class BuilderHud<
       : COACH_FRAME_SEQUENCE[Math.floor(performance.now() / COACH_FRAME_MS) % COACH_FRAME_SEQUENCE.length]!;
     const frame = COACH_HAND_FRAMES[frameIdx]!;
     if (this.coachHandImgEl.getAttribute('src') !== frame.src) this.coachHandImgEl.src = frame.src;
-    const fx = rect.x + rect.w / 2;
-    const fy = rect.y + rect.h * 0.45;
+    // Fingertip near the button's bottom-right corner, not its middle: the glove hangs below and
+    // to the right of the tip, so the button's picture and label stay visible (Gao, 2026-10-05).
+    const fx = rect.x + rect.w * 0.82;
+    const fy = rect.y + rect.h * 0.78;
     // The glove box is COACH_HAND_W x COACH_HAND_H; this frame's fingertip sits at
     // (frame.fx, frame.fy) as a fraction of that box — place that exact point at the target.
     this.coachHandEl.style.left = `${(fx - frame.fx * COACH_HAND_W).toFixed(1)}px`;
