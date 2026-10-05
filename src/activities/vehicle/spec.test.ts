@@ -187,13 +187,17 @@ describe('vehicleSpec: wiring', () => {
     expect(planet.x + planet.w / 2).toBeLessThan(VIEW_W);
   });
 
-  it('2026-10-05 playtest: DRIVE in the scene is the only start control, a win banner, the coach, a rim-snap preview', () => {
-    expect(vehicleSpec.hud.playInBar).toBe(false);
+  it('2026-10-05 playtest, part 2: DRIVE is back in the (centred) bottom bar, a win banner, the coach, a rim-snap preview', () => {
+    // No course override any more: the kit's own bar Play button is DRIVE (its label comes from
+    // hud.lines.launch/playAgain below).
+    expect(vehicleSpec.hud.playInBar).toBeUndefined();
     expect(vehicleSpec.hud.winBanner).toBe(true);
     expect(vehicleSpec.coach).toBe(roverCoach);
     expect(vehicleSpec.idleWidgets).toBeTypeOf('function');
     expect(vehicleSpec.dragSnap).toBeTypeOf('function');
     expect(vehicleSpec.hud.lines.refused).toBe('Not enough coins for that part!');
+    expect(vehicleSpec.hud.lines.launch).toBe('▶ DRIVE');
+    expect(vehicleSpec.hud.lines.playAgain).toBe('▶ DRIVE again');
   });
 
   it('every palette kind has its blurb (shelf title and unlock callout); the level-placed kinds have none', () => {
@@ -309,29 +313,26 @@ describe('vehicleSpec.focusFrame', () => {
   }
 });
 
-describe('vehicleSpec.widgets: the selected part\'s DRIVE pill', () => {
-  it('the dome and every part on it show one smaller DRIVE pill (id "drive", a play tap, green); scenery none', () => {
+describe('vehicleSpec.widgets: no in-scene DRIVE any more (2026-10-05 playtest, part 2: the bar handles it)', () => {
+  it('every part (and the scenery) gets no widgets; driveButtonAt stays as tested geometry for the fit arithmetic below', () => {
     const parts = buildOn(LEVEL, [['wheelCircle', -45], ['fan', 180]]);
-    for (const part of parts.filter((p) => p.kind === 'rover' || ATTACHMENT_KINDS.includes(p.kind as AttachmentKind))) {
-      const widgets = vehicleSpec.widgets!(part, parts, LEVEL);
-      expect(widgets, part.kind).toHaveLength(1);
-      expect(widgets[0]).toMatchObject({ kind: 'tap', id: 'drive', style: 'big', action: 'play', size: DRIVE_SIZE, icon: '▶', label: 'DRIVE', color: DRIVE_GREEN });
-      expect((widgets[0] as TapWidget).at).toEqual(driveButtonAt(parts, LEVEL));
-    }
-    const finish = parts.find((p) => p.kind === 'finish')!;
-    expect(vehicleSpec.widgets!(finish, parts, LEVEL)).toEqual([]);
+    for (const part of parts) expect(vehicleSpec.widgets!(part, parts, LEVEL), part.kind).toEqual([]);
     expect(DRIVE_SIZE).toBeLessThan(IDLE_DRIVE_SIZE);
     expect(DRIVE_SIZE).toBeGreaterThanOrEqual(64); // the kit's finger floor
+    expect(driveButtonAt(parts, LEVEL)).not.toBeNull();
   });
 
-  it('no rocket: the DRIVE pills use ▶', () => {
+  it('no rocket: the idle BUILD pill uses 🔧, not a rocket', () => {
     const parts = buildOn(LEVEL, BUILDS.plain!);
-    const all = [...vehicleSpec.idleWidgets!(parts, LEVEL), ...vehicleSpec.widgets!(domeOf(LEVEL), parts, LEVEL)] as TapWidget[];
+    const all = vehicleSpec.idleWidgets!(parts, LEVEL) as TapWidget[];
     for (const w of all) expect(w.icon).not.toContain('🚀');
   });
 
+  // `driveButtonAt`'s geometry (where the bar's DRIVE *would* sit over the build) is kept exactly
+  // as tuned, even though nothing renders it now, since catapult/future courses may still want an
+  // in-scene fallback and the fit arithmetic comment above depends on these numbers.
   for (const level of LEVELS) {
-    it(`${level.id}: the pill is inside the strip left of the drawer and clear of every build`, () => {
+    it(`${level.id}: driveButtonAt stays inside the strip left of the drawer and clear of every build`, () => {
       const view = uncoveredView(buildFrame(level)!);
       for (const [name, sticks] of Object.entries(BUILDS)) {
         const parts = buildOn(level, sticks);
@@ -343,20 +344,19 @@ describe('vehicleSpec.widgets: the selected part\'s DRIVE pill', () => {
   }
 });
 
-describe('vehicleSpec.idleWidgets: BUILD over the rover, DRIVE beside it (nothing selected)', () => {
-  it('two big pills: BUILD (select the dome, blue) and DRIVE (play, green, the bigger one)', () => {
+describe('vehicleSpec.idleWidgets: just the BUILD pill now (nothing selected)', () => {
+  it('one big pill: BUILD (select the dome, blue); idleButtonsAt still computes a drive slot, unused', () => {
     const parts = buildOn(LEVEL, BUILDS.plain!);
     const widgets = vehicleSpec.idleWidgets!(parts, LEVEL) as TapWidget[];
-    expect(widgets.map((w) => w.id)).toEqual(['build', 'drive']);
-    const [build, drive] = widgets as [TapWidget, TapWidget];
+    expect(widgets.map((w) => w.id)).toEqual(['build']);
+    const [build] = widgets as [TapWidget];
     expect(build).toMatchObject({ kind: 'tap', style: 'big', action: 'select', partId: domeOf(LEVEL).id, size: BUILD_SIZE, icon: '🔧', label: 'BUILD', color: BUILD_BLUE });
-    expect(drive).toMatchObject({ kind: 'tap', style: 'big', action: 'play', size: IDLE_DRIVE_SIZE, icon: '▶', label: 'DRIVE', color: DRIVE_GREEN });
     expect(BUILD_BLUE).toBe(0x05aeed);
     expect(DRIVE_GREEN).toBe(0x61bb46);
     expect(IDLE_DRIVE_SIZE).toBeGreaterThan(BUILD_SIZE);
     const at = idleButtonsAt(parts, LEVEL)!;
     expect(build.at).toEqual(at.build);
-    expect(drive.at).toEqual(at.drive);
+    expect(at.drive).toBeDefined(); // kept as geometry only, see idleWidgets' doc comment
     expect(vehicleSpec.idleWidgets!(parts.filter((p) => p.kind !== 'rover'), LEVEL)).toEqual([]);
   });
 

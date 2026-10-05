@@ -421,6 +421,14 @@ export class BuilderScene extends Phaser.Scene {
   private widgetGfx!: Phaser.GameObjects.Graphics;
   private readonly widgetTextCache = new Map<string, Phaser.GameObjects.Text>();
   private readonly widgetImageCache = new Map<string, Phaser.GameObjects.Image>();
+  /** 'big' tap widget pill bodies, drawn as a tinted NineSlice of 'ui-box2' (box_curved_2.png)
+   * instead of Graphics fillRoundedRect (2026-10-05 box_curved skin) — see `drawBigTap`. */
+  private readonly widgetNineSliceCache = new Map<string, Phaser.GameObjects.NineSlice>();
+  /** Null = not tried yet; true/false once `drawBigTap` has tried creating one NineSlice. Phaser
+   * 4's NineSlice is WebGL-only and fairly new; if it throws or the game isn't on WebGL, every
+   * 'big' pill falls back to the old all-Graphics body instead of trying (and warning) every
+   * frame. */
+  private nineSliceOk: boolean | null = null;
   private widgetTap: WidgetTap | null = null;
   private widgetDrag: WidgetDrag | null = null;
   private widgetDragAngle = 0;
@@ -486,6 +494,9 @@ export class BuilderScene extends Phaser.Scene {
     // working without Bruno.
     this.load.spineAtlas('floofs', 'spine/FloofFamily01.atlas', true);
     this.load.spineJson('engineer', 'spine/Engineer_skeleton.json');
+    // 2026-10-05 box_curved skin: the 'big' tap widget's pill body (`drawBigTap`), a kit-level
+    // asset (every course's BUILD/DRIVE-style pill uses it), not a per-course texture.
+    this.load.image('ui-box2', 'ui/box_curved_2.png');
     for (const role of Object.values(this.roles)) {
       if (role.texture) this.load.image(role.texture.key, role.texture.url);
     }
@@ -1162,6 +1173,7 @@ export class BuilderScene extends Phaser.Scene {
       this.widgetGeoms = [];
       for (const text of this.widgetTextCache.values()) text.setVisible(false);
       for (const img of this.widgetImageCache.values()) img.setVisible(false);
+      for (const ns of this.widgetNineSliceCache.values()) ns.setVisible(false);
     }
 
     this.drawCoachHand();
@@ -1602,11 +1614,12 @@ export class BuilderScene extends Phaser.Scene {
     this.widgetGeoms = layoutWidgets(this.widgetSpecs, toPx, this.pxScale, this.measureBig);
     const seenText = new Set<string>();
     const seenImg = new Set<string>();
+    const seenNineSlice = new Set<string>();
 
     for (const geom of this.widgetGeoms) {
       switch (geom.kind) {
         case 'tap':
-          this.drawTapWidget(geom, seenText, seenImg);
+          this.drawTapWidget(geom, seenText, seenImg, seenNineSlice);
           break;
         case 'dial':
           this.drawDialWidget(geom, seenText);
@@ -1631,6 +1644,7 @@ export class BuilderScene extends Phaser.Scene {
 
     for (const [key, text] of this.widgetTextCache) if (!seenText.has(key)) text.setVisible(false);
     for (const [key, img] of this.widgetImageCache) if (!seenImg.has(key)) img.setVisible(false);
+    for (const [key, ns] of this.widgetNineSliceCache) if (!seenNineSlice.has(key)) ns.setVisible(false);
   }
 
   private widgetText(
@@ -1732,7 +1746,32 @@ export class BuilderScene extends Phaser.Scene {
    * the icon + label (BIG_FONT_PX bold, white) inside. Pulses 1.0 -> 1.04 every BIG_PULSE_MS
    * unless locked; pops on tap like the card. Its label is always drawn (it IS the control), at
    * any zoom. */
-  private drawBigTap(geom: TapGeom, pill: NonNullable<TapGeom['pill']>, seenText: Set<string>): void {
+  /** `.ui-box2`-backed NineSlice for this pill's id, creating it (and recording whether NineSlice
+   * works at all in this build) on first use. Returns null once NineSlice has failed/thrown once
+   * (`nineSliceOk === false`), so `drawBigTap` falls back to the old drawn fill permanently rather
+   * than retrying (and re-warning) every frame. */
+  private bigTapNineSlice(id: string): Phaser.GameObjects.NineSlice | null {
+    if (this.nineSliceOk === false) return null;
+    const key = `tap:${id}:bigbody`;
+    let ns = this.widgetNineSliceCache.get(key);
+    if (ns) return ns;
+    try {
+      ns = this.add.nineslice(0, 0, 'ui-box2', undefined, 100, 100, 32, 32, 32, 32);
+      this.onWorld(ns);
+      ns.setDepth(DEPTH_WIDGETS);
+      this.widgetNineSliceCache.set(key, ns);
+      this.nineSliceOk = true;
+      return ns;
+    } catch (err) {
+      // The guard above already returns early once `nineSliceOk` is false, so this only ever
+      // runs (and warns) on the very first failed attempt.
+      console.warn("BuilderScene: Phaser NineSlice isn't available; the 'big' tap pill falls back to its drawn fill.", err);
+      this.nineSliceOk = false;
+      return null;
+    }
+  }
+
+  private drawBigTap(geom: TapGeom, pill: NonNullable<TapGeom['pill']>, seenText: Set<string>, seenNineSlice: Set<string>): void {
     const g = this.widgetGfx;
     const s = this.pxScale;
     const locked = geom.locked;
@@ -1746,13 +1785,33 @@ export class BuilderScene extends Phaser.Scene {
     const x0 = geom.center.x - w / 2;
     const y0 = geom.center.y - h / 2;
 
+    // The drop shadow and the darker 3D "lip" stay plain Graphics (rounded rects slightly under
+    // the body): box_curved_2's own corners are close enough to a rounded rect at this size that
+    // the approximation reads the same as the old all-Graphics pill.
     g.fillStyle(SHADOW_COLOR, 0.5 * alpha);
     g.fillRoundedRect(x0 + 1 * s, y0 + 9 * s, w, h, r);
     g.fillStyle(darken(fill, 0.32), alpha);
     g.fillRoundedRect(x0, y0 + 5 * s, w, h, r);
-    g.fillStyle(fill, alpha);
-    g.fillRoundedRect(x0, y0, w, h, r);
-    // A soft highlight across the top half (glossy, "press me").
+
+    // The main body: a tinted NineSlice of box_curved_2.png (2026-10-05 box_curved skin) when
+    // Phaser's NineSlice is available in this build, else the old drawn fill.
+    const ns = this.bigTapNineSlice(geom.id);
+    if (ns) {
+      const key = `tap:${geom.id}:bigbody`;
+      seenNineSlice.add(key);
+      ns.setPosition(geom.center.x, geom.center.y);
+      ns.setSize(Math.max(64, w), Math.max(64, h));
+      // MULTIPLY (the default tint mode) against the texture's plain WHITE pixels reproduces the
+      // tint colour exactly (white * c = c) while keeping box_curved_2's alpha-feathered shape.
+      ns.setTint(fill);
+      ns.setAlpha(alpha);
+      ns.setVisible(true);
+    } else {
+      g.fillStyle(fill, alpha);
+      g.fillRoundedRect(x0, y0, w, h, r);
+    }
+    // A soft highlight across the top half (glossy, "press me") and a white rim, layered on top of
+    // the NineSlice/fallback fill either way — same as before.
     const hr = Math.max(1, Math.min(r * 0.8, (h * 0.4) / 2));
     g.fillStyle(0xffffff, 0.2 * alpha);
     g.fillRoundedRect(x0 + 10 * s, y0 + 5 * s, w - 20 * s, h * 0.4, hr);
@@ -1779,9 +1838,9 @@ export class BuilderScene extends Phaser.Scene {
     }
   }
 
-  private drawTapWidget(geom: TapGeom, seenText: Set<string>, seenImg: Set<string>): void {
+  private drawTapWidget(geom: TapGeom, seenText: Set<string>, seenImg: Set<string>, seenNineSlice: Set<string>): void {
     if (geom.style === 'big' && geom.pill) {
-      this.drawBigTap(geom, geom.pill, seenText);
+      this.drawBigTap(geom, geom.pill, seenText, seenNineSlice);
       return;
     }
     const g = this.widgetGfx;

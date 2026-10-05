@@ -670,12 +670,22 @@ export class BuilderHud<
   }
 
   /** The shelf unlock callout: the new part's picture, its label and `partInfo[kind].blurb`, in a
-   * card beside its shelf button. Hidden until a level that unlocks a kind opens its shelf. */
+   * card beside its shelf button. Hidden until a level that unlocks a kind opens its shelf.
+   *
+   * The speech-bubble arrow (`.unlock-callout-arrow`) is a real sibling element of the card, not
+   * the card's own `::after` (it sits at e.g. `right: -11px`, outside the card's own box) — both
+   * live in `.unlock-callout-wrap`, which `calloutEl` refers to (position/hide/animate the pair
+   * together), the same box the card alone used to occupy (so `placeCallout`'s math is
+   * unchanged). This split was written for a CSS mask-border skin that was later reverted (see
+   * builder.css's 2026-10-05 "box_curved skin" note) but is harmless and kept as-is. */
   private buildCallout(): void {
-    const el = document.createElement('div');
-    el.className = 'unlock-callout';
-    el.hidden = true;
-    this.boolCache.set(el, true);
+    const wrap = document.createElement('div');
+    wrap.className = 'unlock-callout-wrap';
+    wrap.hidden = true;
+    this.boolCache.set(wrap, true);
+
+    const card = document.createElement('div');
+    card.className = 'unlock-callout';
     const img = document.createElement('img');
     img.className = 'unlock-callout-img';
     img.alt = '';
@@ -692,9 +702,14 @@ export class BuilderHud<
     const text = document.createElement('div');
     text.className = 'unlock-callout-text';
     body.append(kicker, title, text);
-    el.append(img, icon, body);
-    this.root.appendChild(el);
-    this.calloutEl = el;
+    card.append(img, icon, body);
+
+    const arrow = document.createElement('div');
+    arrow.className = 'unlock-callout-arrow';
+
+    wrap.append(card, arrow);
+    this.root.appendChild(wrap);
+    this.calloutEl = wrap;
     this.calloutImgEl = img;
     this.calloutIconEl = icon;
     this.calloutTitleEl = title;
@@ -1427,6 +1442,11 @@ export class BuilderHud<
       options.className = locked ? 'drawer-options locked' : 'drawer-options';
       const btnMap = new Map<string, HTMLButtonElement>();
       for (const opt of descriptor.options) {
+        // The cost badge sits fully INSIDE the button (top/right 2px) and stays a child of `btn`;
+        // the NEW badge sits just OUTSIDE it (top/left -6px, see builder.css's `.option-btn-wrap`)
+        // so it goes on a `.option-btn-wrap` sibling instead, positioned relative to that wrap.
+        const wrap = document.createElement('div');
+        wrap.className = 'option-btn-wrap';
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'option-btn';
@@ -1444,7 +1464,8 @@ export class BuilderHud<
           caption.textContent = this.chipDisplayLabel(opt);
           btn.appendChild(caption);
         }
-        if (introduced.includes(`${descriptor.code}:${opt.value}`)) btn.appendChild(this.makeOptionNewBadge());
+        wrap.appendChild(btn);
+        if (introduced.includes(`${descriptor.code}:${opt.value}`)) wrap.appendChild(this.makeOptionNewBadge());
         const extra = sel.optionCosts[descriptor.code]?.[opt.value];
         if (extra !== undefined && extra > 0) btn.appendChild(this.makeOptionCostBadge(extra));
         btn.addEventListener('click', () => {
@@ -1461,7 +1482,7 @@ export class BuilderHud<
           }
           this.startFlight(descriptor.code, opt.value, sel.part.id, img, btnMap, targets);
         });
-        options.appendChild(btn);
+        options.appendChild(wrap);
         btnMap.set(opt.value, btn);
       }
       section.append(label, options);
@@ -1503,6 +1524,11 @@ export class BuilderHud<
         grid.className = 'shelf-grid';
         for (const kind of group.kinds) {
           const info = this.hud.partInfo[kind];
+          // The cost/NEW badges sit just OUTSIDE the button's own box on purpose (top/right -6px,
+          // top/left -8px — a coin peeking over the corner), so they go on a `.shelf-btn-wrap`
+          // sibling instead of on the button, positioned relative to that wrap.
+          const wrap = document.createElement('div');
+          wrap.className = 'shelf-btn-wrap';
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'shelf-btn';
@@ -1515,19 +1541,20 @@ export class BuilderHud<
           caption.className = 'label';
           caption.textContent = info.label;
           btn.append(img, caption);
+          wrap.appendChild(btn);
           const cost = state.paletteCosts[kind];
           if (cost !== undefined) {
             const costEl = document.createElement('span');
             costEl.className = 'cost';
             costEl.textContent = `🪙 ${cost}`;
-            btn.appendChild(costEl);
+            wrap.appendChild(costEl);
           }
-          if (state.unlocked.includes(kind)) btn.appendChild(this.makeUnlockBadge(kind));
+          if (state.unlocked.includes(kind)) wrap.appendChild(this.makeUnlockBadge(kind));
           btn.addEventListener('click', () => {
             this.popOptionButton(btn);
             this.cb.addPart(kind);
           });
-          grid.appendChild(btn);
+          grid.appendChild(wrap);
           this.shelfButtons.set(kind, btn);
         }
         section.append(label, grid);

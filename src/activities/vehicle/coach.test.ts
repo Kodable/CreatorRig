@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILD_WIDGET, DRIVE_WIDGET, roverCoach } from './coach';
+import { BUILD_WIDGET, roverCoach } from './coach';
 import type { RoverCoachContext, RoverCoachStep } from './coach';
 import { vehicleSpec } from './spec';
 import { buildCost } from './core/catalog';
@@ -84,8 +84,8 @@ describe('roverCoach: level 1 (wheels) walks every tap', () => {
   });
 
   it('two wheels, before the first run: DRIVE (the idle one, or the selected part\'s "Now tap DRIVE!")', () => {
-    expect(coach('wheels', SQUARE2)).toEqual({ id: 'drive', text: 'Tap DRIVE and watch it go!', target: { type: 'widget', id: DRIVE_WIDGET } });
-    expect(coach('wheels', SQUARE2, { selected: 1 })).toEqual({ id: 'drive2', text: 'Now tap DRIVE!', target: { type: 'widget', id: DRIVE_WIDGET } });
+    expect(coach('wheels', SQUARE2)).toEqual({ id: 'drive', text: 'Tap DRIVE and watch it go!', target: { type: 'bar', button: 'play' } });
+    expect(coach('wheels', SQUARE2, { selected: 1 })).toEqual({ id: 'drive2', text: 'Now tap DRIVE!', target: { type: 'bar', button: 'play' } });
     expect(coach('wheels', SQUARE2, { selected: 'rover' })?.id).toBe('drive2');
     expect(coach('wheels', ROUND2)?.id).toBe('drive');
   });
@@ -96,7 +96,7 @@ describe('roverCoach: level 1 (wheels) walks every tap', () => {
     const s = coach('wheels', ROUND2, { selected: 1 })!;
     expect(s.id).toBe('coins');
     expect(s.text).toContain('Out of coins! Each part costs coins — see the 🪙 counter.');
-    expect(s.target).toEqual({ type: 'widget', id: DRIVE_WIDGET });
+    expect(s.target).toEqual({ type: 'bar', button: 'play' });
     // Four square wheels spend it too.
     const four: Stick[] = [['wheelSquare', -45], ['wheelSquare', -135], ['wheelSquare', -90], ['wheelSquare', -20]];
     expect(coach('wheels', four, { selected: 'rover' })?.id).toBe('coins');

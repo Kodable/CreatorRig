@@ -13,13 +13,21 @@
 // play mode, a scrollbar in edit mode), and a level whose beacon is out of the first view opens
 // with a pan from the beacon back to the start (`intro`).
 //
-// 2026-10-05 playtest review (Jon; Gao agrees): one obvious start control, the DRIVE button on
-// the rover (no bottom-bar Play, `hud.playInBar`), and a BUILD button over the rover (tapping the
-// dome was not apparent): both float over the rover while nothing is selected (`idleWidgets`);
-// tap tutorials on the first levels (`coach`, coach.ts); a win banner with a clear Next button
-// (`hud.winBanner`); what each part does and an unlock moment for the parts a level introduces
-// (`hud.partInfo.blurb`, levels.ts `part:<kind>` entries); a live rim-snap preview while dragging
-// (`dragSnap`); the spring says what it does (catalog.ts MOUNT_DESCRIPTOR).
+// 2026-10-05 playtest review (Jon; Gao agrees): one obvious start control, originally the DRIVE
+// button floating over the rover (no bottom-bar Play, `hud.playInBar: false`), and a BUILD button
+// over the rover (tapping the dome was not apparent, `idleWidgets`); tap tutorials on the first
+// levels (`coach`, coach.ts); a win banner with a clear Next button (`hud.winBanner`); what each
+// part does and an unlock moment for the parts a level introduces (`hud.partInfo.blurb`,
+// levels.ts `part:<kind>` entries); a live rim-snap preview while dragging (`dragSnap`); the
+// spring says what it does (catalog.ts MOUNT_DESCRIPTOR).
+//
+// 2026-10-05 playtest review, part 2 (Jon via Gao): "Move the DRIVE button back to the bottom,
+// but center it" — DRIVE is the kit's own bar Play button again (`hud.lines.launch`/`playAgain`,
+// no `hud.playInBar` override), centred and the biggest button in the bar (kit/builder.css); the
+// BUILD pill stays the only in-scene idle widget, and the selected-part DRIVE pill is gone (the
+// bar handles it everywhere). Every bottom-bar/win/shelf/dash/card surface is reskinned with the
+// carnival's plain white box_curved art (kit/builder.css), tinted via CSS mask-border instead of
+// solid fills/borders.
 import type { CameraFrame, CourseSpec, PlacedPart, RenderItem, Vec2, Widget } from '../../kit/types';
 import type { AttachmentKind, Metrics, Outcome, PartKind, VehicleLevel } from './core/types';
 import {
@@ -41,7 +49,7 @@ import { ROVER_R, SPAWN, layoutRover, normalizeRoverParts, rotate, roverTextures
 import { VIEW_W, WORLD_W, heightAt } from './core/terrain';
 import { createVehicleSim } from './core/sim';
 import { LEVELS } from './core/levels';
-import { BUILD_WIDGET, DRIVE_WIDGET, roverCoach } from './coach';
+import { BUILD_WIDGET, roverCoach } from './coach';
 
 /** Building zooms in on the dome (`focusFrame`, the same frame for the dome and every attachment)
  * with the drawer open over the panel's right 340 px (src/kit/builder.css; BuilderHud opens it
@@ -400,25 +408,22 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
     outcome === 'running' ? { roles: ['rover'], zoom: 1.6, lerp: 0.1, offset: { x: 1.5, y: 0.5 } } : null,
 
   // Nothing selected: BUILD over the dome (selects it, which opens the drawer and its parts
-  // shelf) and the big green DRIVE beside it, the one start control (Jon, 2026-10-05).
+  // shelf) is the only in-scene widget now (2026-10-05 playtest review, part 2: "Move the DRIVE
+  // button back to the bottom, but center it" — the bar's own Play button is DRIVE, see
+  // `hud.lines.launch`/`playInBar` below). `idleButtonsAt` still computes a `drive` slot (its
+  // geometry math and tests are untouched), it is just no longer turned into a widget here.
   idleWidgets: (parts, level): Widget[] => {
     const rover = parts.find((p) => p.kind === 'rover');
     const at = idleButtonsAt(parts, level);
     if (!rover || !at) return [];
     return [
       { kind: 'tap', id: BUILD_WIDGET, style: 'big', action: 'select', partId: rover.id, at: at.build, size: BUILD_SIZE, icon: '🔧', label: 'BUILD', color: BUILD_BLUE },
-      { kind: 'tap', id: DRIVE_WIDGET, style: 'big', action: 'play', at: at.drive, size: IDLE_DRIVE_SIZE, icon: '▶', label: 'DRIVE', color: DRIVE_GREEN },
     ];
   },
 
-  // The dome or any part on it selected (the drawer open): a smaller DRIVE over the build, so the
-  // child can drive straight from the drawer. Same id as the idle one (the coach points at it).
-  widgets: (part, parts, level): Widget[] => {
-    if (part.kind !== 'rover' && !isAttachment(part.kind)) return [];
-    const at = driveButtonAt(parts, level);
-    if (!at) return [];
-    return [{ kind: 'tap', id: DRIVE_WIDGET, style: 'big', action: 'play', at, size: DRIVE_SIZE, icon: '▶', label: 'DRIVE', color: DRIVE_GREEN }];
-  },
+  // The dome or any part on it selected: no in-scene DRIVE any more (the bar's Play button, now
+  // centred, handles it — `driveButtonAt` stays as dead-but-tested geometry for now).
+  widgets: (): Widget[] => [],
 
   // Tap tutorials on the five intro levels (coach.ts).
   coach: roverCoach,
@@ -496,15 +501,15 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
       doneNotPassed: 'The rover stopped. Check the goals, then change your build.',
       freePlay: 'Build any rover you like and roam Marstopia!',
       launch: '▶ DRIVE',
-      playAgain: '▶ Drive again',
+      playAgain: '▶ DRIVE again',
       reset: '↺ Reset',
       refused: 'Not enough coins for that part!',
       locked: "Kevin's dome stays put. Build onto it!",
     },
     failOutcomes: ['fell', 'stuck', 'timeout'],
-    // The DRIVE pill in the scene is the only start control (Jon, 2026-10-05); Reset, Undo and
-    // Clear stay in the bar.
-    playInBar: false,
+    // 2026-10-05 playtest review, part 2 (Jon via Gao): "Move the DRIVE button back to the
+    // bottom, but center it" — back to the kit's own bar Play button (now centred, see
+    // kit/builder.css), no course-level override.
     winBanner: true,
   },
 };

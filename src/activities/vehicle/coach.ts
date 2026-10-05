@@ -15,9 +15,11 @@ import type { PartKind, RoverPart, VehicleLevel } from './core/types';
 
 /** The idle BUILD button's widget id (spec.ts `idleWidgets`). */
 export const BUILD_WIDGET = 'build';
-/** The DRIVE button's widget id: the same for the idle button and the selected part's one, so a
- * step can point at "DRIVE" whichever is on screen. */
-export const DRIVE_WIDGET = 'drive';
+/** DRIVE lives in the bottom bar now (2026-10-05 playtest review, part 2: "Move the DRIVE button
+ * back to the bottom, but center it"), not an in-scene widget; a coach step points at it via
+ * `{ type: 'bar', button: 'play' }` (kit types.ts CoachTarget), same target whatever mode the
+ * bar's Play button is showing ("▶ DRIVE" in edit mode, "▶ DRIVE again" in done mode). */
+const DRIVE_TARGET: CoachTarget<PartKind> = { type: 'bar', button: 'play' };
 
 export type RoverCoachContext = CoachContext<PartKind, VehicleLevel>;
 export type RoverCoachStep = CoachStep<PartKind>;
@@ -59,12 +61,12 @@ function wheelsCoach(ctx: RoverCoachContext): RoverCoachStep | null {
       : step('wheel2', 'One more wheel! Tap it again.', { type: 'shelf', kind: 'wheelCircle' });
   }
   if (ctx.runs > 0) return null;
-  if (!sel) return step('drive', 'Tap DRIVE and watch it go!', { type: 'widget', id: DRIVE_WIDGET });
+  if (!sel) return step('drive', 'Tap DRIVE and watch it go!', DRIVE_TARGET);
   const budget = ctx.level.budget;
   if (budget !== undefined && buildCost(ctx.parts) >= budget) {
-    return step('coins', 'Out of coins! Each part costs coins — see the 🪙 counter. Now tap DRIVE!', { type: 'widget', id: DRIVE_WIDGET });
+    return step('coins', 'Out of coins! Each part costs coins — see the 🪙 counter. Now tap DRIVE!', DRIVE_TARGET);
   }
-  return step('drive2', 'Now tap DRIVE!', { type: 'widget', id: DRIVE_WIDGET });
+  return step('drive2', 'Now tap DRIVE!', DRIVE_TARGET);
 }
 
 // ---- levels 2-5: after the first run --------------------------------------------------------

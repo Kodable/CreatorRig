@@ -168,34 +168,42 @@
 .drawer-shelf { display: flex; flex-direction: column; gap: 14px; padding-bottom: 4px; }
 .drawer-shelf-section { display: flex; flex-direction: column; }
 .shelf-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+/* `.shelf-btn-wrap` is the real positioned box (70x70); badges are its own children, siblings of
+   the button (see `BuilderHud.syncShelf`) — kept from the box_curved pass below even though the
+   button itself fell back to `border-radius` (see that section's note on why). */
+.shelf-btn-wrap { position: relative; flex: 0 0 auto; width: 70px; min-height: 70px; }
 .shelf-btn {
-  /* No `overflow: hidden` (unlike .option-btn): the cost badge is pinned just outside the
-     button's own box (top/right -6px) and must not be clipped. */
-  position: relative; flex: 0 0 auto; width: 70px; min-height: 70px; border-radius: 12px;
-  background: #2c3560; border: 3px solid #3d4a80; cursor: pointer; box-sizing: border-box;
+  position: absolute; inset: 0;
+  background: #2c3560; border: 3px solid #3d4a80; border-radius: 16px; cursor: pointer; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   padding: 6px 4px 5px; color: #fff;
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color 120ms ease, filter 120ms ease, transform 120ms ease;
 }
-.shelf-btn:hover:not(:disabled) { border-color: #4a5690; }
+.shelf-btn:hover:not(:disabled) { border-color: #4a5690; filter: brightness(1.2); }
+.shelf-btn:active:not(:disabled) { filter: brightness(0.82); }
 .shelf-btn:disabled { cursor: default; }
 .shelf-btn img { width: 40px; height: 40px; object-fit: contain; pointer-events: none; }
 .shelf-btn .label {
   font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; color: #c8cde6;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.shelf-btn .cost {
+.shelf-btn-wrap .cost {
   position: absolute; top: -6px; right: -6px; background: #ffb40f; color: #1a2142;
   font-size: 10px; font-weight: 800; line-height: 1.4; border-radius: 999px; padding: 0 5px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35); pointer-events: none;
 }
 .shelf-btn.unaffordable { opacity: 0.5; }
 .shelf-btn.pop { animation: option-pop 120ms ease; }
 
+/* `.option-btn-wrap` holds the button and its NEW badge (top/left -6px, outside the button's own
+   box — see `BuilderHud.rebuildDrawerPanel`); the cost badge sits fully inside the box (top/right
+   2px) and stays a child of the button itself. Kept from the box_curved pass below even though
+   the button fell back to `border-radius` (see that section's note on why). */
+.option-btn-wrap { position: relative; flex: 0 0 auto; width: 54px; height: 54px; }
 .option-btn {
-  position: relative; flex: 0 0 auto; width: 54px; height: 54px; border-radius: 12px;
-  background: #2c3560; border: 3px solid #3d4a80; cursor: pointer; box-sizing: border-box;
+  position: absolute; inset: 0;
+  background: #2c3560; border: 3px solid #3d4a80; border-radius: 14px; cursor: pointer; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   padding: 2px; color: #fff; overflow: hidden;
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
@@ -378,22 +386,28 @@
   60% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(5, 174, 237, 0.35); }
   100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(5, 174, 237, 0); }
 }
+/* `.unlock-callout-wrap` holds the card and its arrow together (position/hide/animate as one —
+   see `BuilderHud.buildCallout`'s doc comment); it is exactly the box `.unlock-callout` alone
+   used to occupy, so `placeCallout`'s math (left/top, --arrow-x/--arrow-y) is unchanged. */
+.unlock-callout-wrap { position: absolute; left: 0; top: 0; width: 260px; z-index: 42; pointer-events: auto; }
+.unlock-callout-wrap.enter { animation: callout-in 260ms cubic-bezier(.2, .9, .3, 1.2) both; }
+@keyframes callout-in { from { opacity: 0; transform: translateX(12px) scale(0.9); } to { opacity: 1; transform: none; } }
 .unlock-callout {
-  position: absolute; left: 0; top: 0; width: 260px; z-index: 42; box-sizing: border-box;
+  box-sizing: border-box;
   display: flex; align-items: center; gap: 12px; padding: 12px 14px;
   background: #ffffff; color: #1a2142; border: 3px solid #05aeed; border-radius: 16px;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45); pointer-events: auto;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
 }
-.unlock-callout.enter { animation: callout-in 260ms cubic-bezier(.2, .9, .3, 1.2) both; }
-@keyframes callout-in { from { opacity: 0; transform: translateX(12px) scale(0.9); } to { opacity: 1; transform: none; } }
-/* The arrow: right edge by default (the card sits left of a shelf button), bottom edge with
-   .above (over a palette chip). --arrow-y / --arrow-x are set from JS to point at the button. */
-.unlock-callout::after {
-  content: ''; position: absolute; right: -11px; top: var(--arrow-y, 50%); width: 16px; height: 16px;
+/* The speech-bubble arrow: a real sibling element (not `.unlock-callout`'s own `::after`) — see
+   the doc comment on `BuilderHud.buildCallout`. Right edge by default (the card sits left of a
+   shelf button), bottom edge with `.above` (over a palette chip); --arrow-y / --arrow-x are set
+   from JS (on the wrap, which this inherits them from) to point at the button. */
+.unlock-callout-arrow {
+  position: absolute; right: -11px; top: var(--arrow-y, 50%); width: 16px; height: 16px;
   margin-top: -9px; background: #ffffff; border-top: 3px solid #05aeed; border-right: 3px solid #05aeed;
-  transform: rotate(45deg);
+  transform: rotate(45deg); pointer-events: none;
 }
-.unlock-callout.above::after {
+.unlock-callout-wrap.above .unlock-callout-arrow {
   right: auto; top: auto; bottom: -11px; left: var(--arrow-x, 50%); margin: 0 0 0 -9px;
   border-top: none; border-bottom: 3px solid #05aeed;
 }
@@ -419,7 +433,48 @@
 @keyframes coach-in { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .coach-hand-glyph, .coach-hand.enter, .win-card.enter, .win-next, .unlock-callout.enter,
+  .coach-hand-glyph, .coach-hand.enter, .win-card.enter, .win-next, .unlock-callout-wrap.enter,
   .shelf-btn.unlock-pop, .palette-chip.unlock-pop { animation: none !important; }
   .confetti-piece { display: none; }
 }
+
+/* ======== 2026-10-05 playtest review, part 2 (Gao, stakeholder direction):
+   1) "Move the DRIVE button back to the bottom, but center it" — every course's Play/Stop/Next
+      (and the catapult's "Start experiment") now sit centred in the bottom bar, the biggest
+      buttons there; the vehicle course dropped its own `hud.playInBar: false` and in-scene DRIVE
+      pill (spec.ts/coach.ts) so the kit's own bar Play button is DRIVE again.
+   2) "Use UI assets from the game... box_curved (or make something similar)" — tried, then
+      reverted (2026-10-05, round 2 playtest notes): the carnival's plain white box_curved_N.png
+      art was wired in via a CSS mask-border (`-webkit-mask-box-image`/`mask-border-*`, `background`
+      still giving the colour over the art's plain white). It rendered with persistent seam lines
+      at every 9-slice boundary — visible on every masked element (bar buttons, shelf/option
+      buttons) in this Chrome build, regardless of the slice value used (tried 20/24/30/40px),
+      the source image (box_curved_3 vs box_curved_2), an explicit destination width in the
+      `-webkit-mask-box-image` shorthand, `image-rendering: pixelated`, or a 2x render resolution —
+      none of it closed the seam (`CSS.supports` also confirmed this Chrome only implements the
+      `-webkit-` prefixed form; the unprefixed `mask-border-*` longhands are parsed but inert here,
+      so they were never double-applying). Since Pillow's own pixel dump of the three PNGs showed
+      flat, fully-opaque white everywhere except a few px of antialiasing right at the rounded
+      corners — i.e. the art IS a plain rounded rectangle, nothing a mask captures that
+      `border-radius` does not — the mask-border approach was dropped project-wide in favour of
+      `border-radius` (+ `border`/`box-shadow` restored where a mask had forced them off), which
+      renders cleanly. The box_curved PNGs stay in `public/ui/` and the one place they render
+      seam-free: the Phaser `NineSlice` 'big' tap-widget pill (`BuilderScene.drawBigTap`) — a
+      different rendering path (GPU quad-based, not a CSS mask), confirmed with no seams at any
+      size tried and no console warnings.
+   Not touched: `.palette-chip` (not named in the brief) and `.prop-drawer` itself — its flat,
+   square-edged-on-the-right card look stays as today regardless (docked flush to the panel's
+   right edge, so a rounded shape there would have read wrong anyway). ======== */
+
+/* ---- Bottom bar: Play/Stop/Next centred (absolute, over the flex row) and the biggest buttons
+   in the bar; Undo/Clear stay in normal flex flow, pushed to the right edge by the palette's own
+   flex-grow exactly as before. #bottombar is itself `position: absolute` (src/style.css), so it
+   is already the containing block these three need. 56px tall (not 64px): #bottombar itself is
+   only 62px tall (src/style.css), so 56px centres with a few px to spare top/bottom instead of
+   overflowing the bar. */
+#bottombar #play, #bottombar #stop, #bottombar #next {
+  position: absolute; left: 50%; top: 50%; margin: 0; transform: translate(-50%, -50%);
+  min-width: 220px; height: 56px; padding: 0 32px; border-radius: 28px;
+  font-size: 24px; font-weight: 800;
+}
+#bottombar #undo, #bottombar #clear { border-radius: 23px; }
