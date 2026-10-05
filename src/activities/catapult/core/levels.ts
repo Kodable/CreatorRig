@@ -17,7 +17,7 @@
 // isn't known yet (the union of every earlier level's `introduces`) and keeps that prop at its
 // default. Order: power, angle, weight (unlocks the fuzz row: Flower, Fur, Helmet, Metal), arm, move
 // (no new code - the mechanic is dragging the catapult itself), donut (unlocks the Donut option,
-// `fuzz:Donut`) - then the challenge run: both, cans, tower, line, chain, pyramid, towers, wall,
+// `fuzz:Donut`) - then the challenge run: both, tower, line, chain, pyramid, towers, wall,
 // dominoes, free, none of which introduce anything new.
 //
 // Stakeholder direction 2026-10-01: the old weight row (Light/Medium/Heavy) and fuzz row (Blue/
@@ -621,68 +621,6 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 8. cans ----------------------------------------------------------------------------------
-  // Nothing locked: the child must retune the catapult between shots. At x = 11 no single
-  // power sweeps all three shelves (x 13.5, 18.5, 23.5 at three heights); Low power at 60 degrees
-  // takes the near, low can, then High power at 15 and 30 degrees takes the far two.
-  {
-    id: 'cans',
-    title: 'Three cans',
-    bruno: 'Three fuzzes, three cans! Retune the catapult before every shot and knock all three down.',
-    goals: [{ metric: 'knockedDown', op: '>=', value: 3, label: 'Cans knocked down' }],
-    palette: [],
-    shots: 3,
-    parts: [
-      {
-        id: 1,
-        kind: 'catapult',
-        x: 11,
-        y: 0,
-        props: { ...defaultProps('catapult'), power: 'Low', angle: '45' },
-        locked: true,
-        lockPosition: true,
-      },
-      { id: 2, kind: 'shelf', x: 13.5, y: 1, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
-      { id: 3, kind: 'can', x: 13.5, y: 1.5, props: { ...defaultProps('can') }, locked: true, lockPosition: true },
-      { id: 4, kind: 'shelf', x: 18.5, y: 3, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
-      { id: 5, kind: 'can', x: 18.5, y: 3.5, props: { ...defaultProps('can') }, locked: true, lockPosition: true },
-      { id: 6, kind: 'shelf', x: 23.5, y: 2, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
-      { id: 7, kind: 'can', x: 23.5, y: 2.5, props: { ...defaultProps('can') }, locked: true, lockPosition: true },
-    ],
-    hints: [
-      'One tuning will not hit all three cans, they sit at different heights and distances.',
-      'Nothing is locked. Retune both the rubber bands and the angle lever before each launch.',
-      'Fire Low power at 60 first, then switch to High power at 15, then High power at 30.',
-    ],
-    failHints: { outOfShots: 'Out of fuzzes! Retune the catapult for each can, they are not all the same shot.' },
-    markers: [
-      { kind: 'icon', p: { x: 13.5, y: 1.5 }, text: TARGET_ICON },
-      { kind: 'icon', p: { x: 18.5, y: 3.5 }, text: TARGET_ICON },
-      { kind: 'icon', p: { x: 23.5, y: 2.5 }, text: TARGET_ICON },
-    ],
-    solution: [
-      {
-        id: 1,
-        kind: 'catapult',
-        x: 11,
-        y: 0,
-        props: { ...defaultProps('catapult'), power: 'Low', angle: '60' },
-        locked: true,
-        lockPosition: true,
-      },
-      { id: 2, kind: 'shelf', x: 13.5, y: 1, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
-      { id: 3, kind: 'can', x: 13.5, y: 1.5, props: { ...defaultProps('can') }, locked: true, lockPosition: true },
-      { id: 4, kind: 'shelf', x: 18.5, y: 3, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
-      { id: 5, kind: 'can', x: 18.5, y: 3.5, props: { ...defaultProps('can') }, locked: true, lockPosition: true },
-      { id: 6, kind: 'shelf', x: 23.5, y: 2, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
-      { id: 7, kind: 'can', x: 23.5, y: 2.5, props: { ...defaultProps('can') }, locked: true, lockPosition: true },
-    ],
-    solutionShots: [
-      { power: 'Low', angle: '60' },
-      { power: 'High', angle: '15' },
-      { power: 'High', angle: '30' },
-    ],
-  },
 
   // 9. tower -----------------------------------------------------------------------------------
   // Blocks are not glued, so a solid hit drops the whole column. High power at 45 degrees (robust

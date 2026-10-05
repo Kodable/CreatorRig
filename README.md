@@ -12,7 +12,7 @@ Tap empty space on the track to insert a point. Tap the sky to append at the end
 
 Two tools in the bottom bar: **Point** and **Loop**. A loop is a fixed piece (a point of kind `loop` expanded into a 4 m radius circle by `expandTrackPoints` before the spline is built). Locked points (placed by a level) show a padlock and cannot move or delete; Clear keeps them.
 
-### 8 Levels
+### 12 Levels
 
 - `drop`: Vertical drop — at least 15 m drop.
 - `complete`: Complete the track — pre-placed locked points; bring the rail to the finish flag.
@@ -21,6 +21,10 @@ Two tools in the bottom bar: **Point** and **Loop**. A loop is a fixed piece (a 
 - `hang`: Hang time — 1 second with seat g under 0.3.
 - `loop`: Loops — build and complete a loop.
 - `intense`: Intense-o-meter — 15 m/s under 4 g.
+- `double`: Double loop — two loops, reach the flag (challenge).
+- `thrill`: Thrill ride — 1 s of hang time under 4 g from a locked 26 m station (challenge).
+- `express`: Fuzz express — 20 m/s on 100 m of track, reach the end (challenge).
+- `grand`: Grand finale — a loop under 7 g from a locked 28 m station (challenge).
 - `free`: Free play — all meters on.
 
 ### Meters
@@ -83,7 +87,7 @@ A dial widget can set `radiusM` (world-meter radius to ride a machine part at an
 
 Rail-locked sim in pure TypeScript (`src/core`), no physics engine. Fixed step 1/60 s with 4 sub-steps. Cart state is (s, v) along a centripetal Catmull-Rom curve resampled every 0.1 m. Seat g = side × (v² kappa / g + tangent.x). Outcomes: reachedEnd, rolledBack, stuck, fell (fell = seat g below -STICK, default -0.5 g, while inverted). Goals are data in `src/core/levels.ts`.
 
-File layout: `src/core` (pure math and data, unit-tested with Vitest), `src/game` (Phaser scene and view constants), `src/ui` (HTML HUD), `src/app.ts` (controller). Tests: run `npx vitest run` (887 tests in 42 files).
+File layout: `src/core` (pure math and data, unit-tested with Vitest), `src/game` (Phaser scene and view constants), `src/ui` (HTML HUD), `src/app.ts` (controller). Tests: run `npx vitest run` (910 tests in 43 files).
 
 ## How the Goldberg course works
 
@@ -109,7 +113,7 @@ Stack blocks and beams (wood, brick, steel), put the fuzz on top, press Play: a 
 
 Tap the catapult to zoom in for tuning. The drawer shows Power (1–4 rubber bands), Angle (15–75°), Fuzz (Flower, Donut, Fur, Helmet, Metal in weight order), and Arm (short/long). The Donut fuzz splits into three at the top of its arc (same speed, turned ±14 degrees); the other four never split. Angle is set by dragging the wood angle arm's blue pad (1.5 m) on the machine itself: drag the knob, it snaps to 15/30/45/60/75°, and the stop bar and bands move with it (one undo per drag, live commit). The red tie-down string ties the arm's underside (near the cup) to a ground peg. The in-scene controls are the lever knob and the green **FIRE** button next to the string, positioned between the string and the base; tap FIRE to snip it and launch the run. Power is shown as 1–4 red strength bands with hooks on the machine. The fuzz sits in the arm's cup, drawn under the cup cover. The machine shows 1.5 m of ground and focuses at zoom 3.6 with the catapult mid-screen left of the drawer. A level may set a `line` (world y); the metric "Above the line" counts cans/blocks still above it, and a goal `aboveLine == 0` passes however the tower comes down. During flight, the camera follows the first target hit (an invisible 'impact' item) and then the fuzz, with a live distance readout. The payoff: a dust puff where a block lands (> 2 m/s, once per block per shot), and a CRASH! burst when one shot knocks down 3 targets. Blocks have a `domino` size (0.4 x 2 m). The result card lists the controls set and the outcome, showing only the property codes known at that level. Each level has a shot budget; the world persists between shots. After a shot with shots remaining, the arm reloads and the string re-ties. A bullseye-only level (nothing to knock down) never ends as "cleared"; a miss leaves the remaining shots. Targets: cans, block towers, a bullseye. Metrics: knocked down, hits, shots used, max range. No preview arc.
 
-### 16 Levels
+### 15 Levels
 
 Six intro levels (one new mechanic each: power, angle, weight, arm, moving the catapult, fuzz choice) unlock the mechanics, then a challenge run followed by four lenient stack levels where top pieces sit half off an edge and the line asks only for those to come down, passing many settings.
 
@@ -120,7 +124,6 @@ Six intro levels (one new mechanic each: power, angle, weight, arm, moving the c
 - `move`: Roll closer — power locked, 3 shots. (Dragging the catapult; no new code.)
 - `donut`: Three at once — Donut locked, knock down 2 of 3 cans on shelves, 1 shot. Introduces fuzz choice (Donut).
 - `both`: Bullseye — 3 shots.
-- `cans`: Three cans — 3 shots.
 - `tower`: Timber! — 2 shots.
 - `line`: Bring it down — 3 wood blocks + a 2×1 plank, line 1.5, 3 shots.
 - `chain`: Chain reaction — five dominoes, line 1.2, 2 shots.

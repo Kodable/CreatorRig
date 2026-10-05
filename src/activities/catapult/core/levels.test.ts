@@ -34,11 +34,11 @@ async function fireAllShots(parts: CatapultLevel['parts'], level: CatapultLevel,
 
 describe('catapult levels: structure', () => {
   it('has 16 entries with unique ids, free play last', () => {
-    expect(LEVELS).toHaveLength(16);
+    expect(LEVELS).toHaveLength(15);
     // Stakeholder direction 2026-09-22: intro levels (one new mechanic each) up front, then a run
     // of challenge levels that mix everything.
     expect(LEVELS.map((level) => level.id)).toEqual([
-      'power', 'angle', 'weight', 'arm', 'move', 'donut', 'both', 'cans', 'tower', 'line', 'chain',
+      'power', 'angle', 'weight', 'arm', 'move', 'donut', 'both', 'tower', 'line', 'chain',
       // Stakeholder request 2026-09-22: stack levels with a lenient line, before free play.
       'pyramid', 'towers', 'wall', 'dominoes',
       'free',

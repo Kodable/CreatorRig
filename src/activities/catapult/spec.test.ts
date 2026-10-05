@@ -343,7 +343,7 @@ describe('catapultSpec: the fuzzes, the real art, the collapse payoff and the li
     expect(cardFor('move').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
     expect(cardFor('donut').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
     // Every challenge level comes after all four mechanics are known, so all four rows show.
-    for (const id of ['both', 'cans', 'tower', 'line', 'chain', 'free']) {
+    for (const id of ['both', 'tower', 'line', 'chain', 'free']) {
       expect(cardFor(id).rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
     }
   });
