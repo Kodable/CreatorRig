@@ -1,0 +1,305 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { DRIVE_SIZE, FOCUS_ZOOM, INTRO_MS, buildExtent, buildFrame, driveButtonAt, introPan, vehicleSpec, viewFrameAt } from './spec';
+import { PICS, ROVER_R } from './core/art';
+import { GROUND_DEPTH, WORLD_H } from './core/build';
+import { VIEW_W, WORLD_W } from './core/terrain';
+import { ATTACHMENT_KINDS, CATALOG, partCost } from './core/catalog';
+import { SPAWN, normalizeRoverParts, rimPoint } from './core/geometry';
+import { LEVELS, findLevel } from './core/levels';
+import type { AttachmentKind, Metrics, PartKind, RoverPart, VehicleLevel } from './core/types';
+import type { CameraFrame, TapWidget } from '../../kit/types';
+
+const PUBLIC = resolve(__dirname, '../../../public');
+const DEG = Math.PI / 180;
+const LEVEL = findLevel('wheels')!;
+
+function domeOf(level: VehicleLevel): RoverPart {
+  return level.parts.find((p) => p.kind === 'rover')!;
+}
+
+/** The level's parts plus `sticks`, normalized as the app does before every build. */
+function buildOn(level: VehicleLevel, sticks: [AttachmentKind, number, string?][]): RoverPart[] {
+  const dome = domeOf(level);
+  const parts: RoverPart[] = [
+    ...level.parts,
+    ...sticks.map(([kind, deg, mount], i) => {
+      const p = rimPoint(deg * DEG);
+      return { id: 20 + i, kind, x: dome.x + p.x, y: dome.y + p.y, props: { mount: mount ?? 'cup' } };
+    }),
+  ];
+  return normalizeRoverParts(parts, level.terrain);
+}
+
+/** The kit's camera clamp per the frozen contract (WorldSpec.worldW): the view is 960 / ppm m wide
+ * at zoom 1 (30 m here, even though the world is 90 m) and stays inside x 0..worldW and the
+ * panel's band y -groundDepth..worldH - groundDepth. Written out here so these tests do not
+ * depend on the kit's camera code while it learns wide worlds. */
+function clampToWorld(f: CameraFrame): CameraFrame {
+  const w = vehicleSpec.world;
+  const halfW = 960 / w.ppm / f.zoom / 2;
+  const halfH = w.worldH / f.zoom / 2;
+  const d = w.groundDepth ?? 0;
+  return {
+    cx: Math.max(halfW, Math.min(w.worldW - halfW, f.cx)),
+    cy: Math.max(-d + halfH, Math.min(w.worldH - d - halfH, f.cy)),
+    zoom: f.zoom,
+  };
+}
+
+/** The world rectangle the camera shows at a frame, left of the open drawer (340 of 960 px). */
+function uncoveredView(frame: { cx: number; cy: number; zoom: number }): { x0: number; x1: number; y0: number; y1: number } {
+  const f = clampToWorld(frame);
+  const viewW = 960 / (32 * f.zoom);
+  const viewH = 490 / (32 * f.zoom);
+  const x0 = f.cx - viewW / 2;
+  return { x0, x1: x0 + (viewW * 620) / 960, y0: f.cy - viewH / 2, y1: f.cy + viewH / 2 };
+}
+
+const BIG_BUILD: [AttachmentKind, number, string?][] = [
+  ['wheelCircle', -45, 'spring'],
+  ['wheelCircle', -135, 'spring'],
+  ['wheelSquare', -90, 'spring'],
+  ['jet', 180, 'spring'],
+  ['jet', 0, 'spring'],
+  ['watermelon', 90, 'spring'],
+  ['stove', 135, 'spring'],
+];
+
+describe('vehicleSpec: wiring', () => {
+  it('free building: drawer on, a part spawns at SPAWN, normalizeParts snaps it, no overlap resolve, no write-back', () => {
+    expect(vehicleSpec.drawer).toBe(true);
+    expect(vehicleSpec.spawn).toEqual(SPAWN);
+    expect(vehicleSpec.resolveOverlaps).toBe(false);
+    expect(vehicleSpec.writeBackSettled).toBe(false);
+    expect(vehicleSpec.partCost).toBe(partCost);
+    const parts = [...LEVEL.parts, { id: 9, kind: 'fan' as PartKind, x: 9, y: 1, props: { mount: 'cup' } }];
+    expect(vehicleSpec.normalizeParts!(parts, LEVEL)).toEqual(normalizeRoverParts(parts, LEVEL.terrain));
+    expect(vehicleSpec.levels).toBe(LEVELS);
+    expect(vehicleSpec.catalog).toBe(CATALOG);
+  });
+
+  it('palette chips show each part with its cost (kit reads partCost on default props)', () => {
+    for (const kind of ATTACHMENT_KINDS) {
+      expect(vehicleSpec.partCost!({ id: 0, kind, x: 0, y: 0, props: vehicleSpec.defaultProps(kind) })).toBeGreaterThan(0);
+    }
+  });
+
+  it('textures: every real rover picture plus the boulder, all on disk', () => {
+    const textures = vehicleSpec.textures!;
+    for (const p of Object.values(PICS)) expect(textures[p.key]?.url).toBe(`parts/rover/real/${p.file}`);
+    expect(textures['rv-boulder']).toBeDefined();
+    for (const t of Object.values(textures)) expect(existsSync(resolve(PUBLIC, t.url)), t.url).toBe(true);
+  });
+
+  it('the world keeps the 2026-09-22 ground: 1.5 m of course-drawn ground, the Mars sky extended under it', () => {
+    expect(vehicleSpec.world.groundDepth).toBe(GROUND_DEPTH);
+    expect(vehicleSpec.world.groundBand).toBe(false);
+    const sky = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('mars-sky'))!;
+    expect(sky.y - sky.h / 2).toBeCloseTo(-GROUND_DEPTH, 9);
+    expect(sky.y + sky.h / 2).toBeCloseTo(15, 9);
+  });
+
+  it('a wide world (2026-10-05): 90 m at ppm 32, so the panel shows a 30 m window and scrolls', () => {
+    expect(vehicleSpec.world.worldW).toBe(WORLD_W);
+    expect(WORLD_W).toBe(90);
+    expect(vehicleSpec.world.ppm).toBe(32);
+    expect(960 / vehicleSpec.world.ppm).toBe(VIEW_W);
+    expect(vehicleSpec.world.worldH).toBe(WORLD_H);
+  });
+
+  it('the Mars sky covers the whole world, unstretched (the wide picture has the rectangle\'s aspect); the planet hangs over the start', () => {
+    const sky = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('mars-sky'))!;
+    expect(sky.url).toBe('bg/mars-sky-wide.jpg');
+    expect(sky.x - sky.w / 2).toBeCloseTo(0, 9);
+    expect(sky.x + sky.w / 2).toBeCloseTo(WORLD_W, 9);
+    expect(existsSync(resolve(PUBLIC, sky.url))).toBe(true);
+    const aspect = 7200 / 1300; // public/bg/mars-sky-wide.jpg
+    expect(Math.abs(sky.w / sky.h / aspect - 1)).toBeLessThan(0.03);
+    const planet = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('planet'))!;
+    expect(planet.x + planet.w / 2).toBeLessThan(VIEW_W);
+  });
+
+  it('hud: a label and an emoji icon for every kind; DRIVE launch; the refused line is about coins', () => {
+    for (const kind of Object.keys(CATALOG) as PartKind[]) {
+      expect(vehicleSpec.hud.partInfo[kind].label.length).toBeGreaterThan(0);
+      expect(vehicleSpec.hud.partInfo[kind].icon.length).toBeGreaterThan(0);
+    }
+    expect(vehicleSpec.hud.lines.launch).toContain('DRIVE');
+    expect(vehicleSpec.hud.lines.refused).toMatch(/coins/i);
+    // Upside down is not a failure since 2026-10-05: a rover on its roof drives on, or ends stuck.
+    expect(vehicleSpec.hud.failOutcomes).toEqual(['fell', 'stuck', 'timeout']);
+    expect(vehicleSpec.hud.meters.map((m) => m.metric)).toContain('upsideDown');
+    for (const level of LEVELS) expect(Object.keys(level.failHints)).not.toContain('flipped');
+  });
+
+  it('every palette kind (every attachment) has a parts-shelf picture and a group; the other kinds have neither', () => {
+    const GROUPS = ['Wheels', 'Power', 'Weights'];
+    for (const kind of ATTACHMENT_KINDS) {
+      const info = vehicleSpec.hud.partInfo[kind];
+      expect(info.image, kind).toBeTruthy();
+      expect(GROUPS, kind).toContain(info.group);
+      expect(existsSync(resolve(PUBLIC, info.image!)), info.image).toBe(true);
+    }
+    // Every level's palette is drawn only from the attachments, so this is every kind a child can
+    // ever add; `rover`, `block` and `finish` are level-placed only and show nowhere.
+    for (const level of LEVELS) for (const kind of level.palette) expect(ATTACHMENT_KINDS).toContain(kind);
+    for (const kind of ['rover', 'block', 'finish'] as PartKind[]) {
+      expect(vehicleSpec.hud.partInfo[kind].image).toBeUndefined();
+      expect(vehicleSpec.hud.partInfo[kind].group).toBeUndefined();
+    }
+    // The three wheel and three power pictures are already near-square; only the two very
+    // non-square weight pictures (feather 586x193, watermelon 627x398) get a padded icon.
+    expect(vehicleSpec.hud.partInfo.feather.image).toContain('icon-feather.png');
+    expect(vehicleSpec.hud.partInfo.watermelon.image).toContain('icon-watermelon.png');
+    expect(vehicleSpec.hud.partInfo.beans.image).toContain('weight-beans.png');
+  });
+
+  it('play mode follows the dome', () => {
+    expect(vehicleSpec.follow!(LEVEL, 'running', 0)?.roles).toEqual(['rover']);
+    expect(vehicleSpec.follow!(LEVEL, 'finished', 3)).toBeNull();
+  });
+});
+
+describe('vehicleSpec.focusFrame', () => {
+  it('one frame for the dome and every attachment (stable while the child builds), zoom 2.8', () => {
+    const parts = buildOn(LEVEL, [['wheelCircle', -45], ['fan', 180]]);
+    const frames = parts.filter((p) => p.kind !== 'finish').map((p) => vehicleSpec.focusFrame!(p, LEVEL));
+    for (const f of frames) expect(f).toEqual(frames[0]);
+    expect(frames[0]!.zoom).toBe(FOCUS_ZOOM);
+    expect(FOCUS_ZOOM).toBe(2.8);
+    expect(buildFrame(LEVEL)).toEqual(frames[0]);
+  });
+
+  it('kept near 2.8, not below the 2.4 tactile-size floor (the fit arithmetic comment\'s numbers)', () => {
+    expect(FOCUS_ZOOM).toBeGreaterThanOrEqual(2.4);
+    expect(FOCUS_ZOOM).toBeCloseTo(2.8, 9);
+    // Every level places the dome at x 3 (levels.ts ROVER_X): the kit's left clamp always wins,
+    // so the uncovered strip's left edge sits on the world wall (x0 = 0) and cx lands on the
+    // clamp (15 / zoom), not on the "dome mid-way across the strip" raw formula.
+    const frame = buildFrame(LEVEL)!;
+    expect(frame.cx).toBeLessThan(15 / FOCUS_ZOOM); // the raw "dome mid-strip" cx, before the kit clamps it
+    expect(clampToWorld(frame).cx).toBeCloseTo(15 / FOCUS_ZOOM, 9);
+    const view = uncoveredView(frame);
+    expect(view.x0).toBeCloseTo(0, 9);
+    expect(view.x1).toBeCloseTo((960 / (32 * FOCUS_ZOOM)) * (620 / 960), 9);
+  });
+
+  for (const level of LEVELS) {
+    it(`${level.id}: a big build and its DRIVE button fit in the view left of the drawer`, () => {
+      const parts = buildOn(level, BIG_BUILD);
+      const ext = buildExtent(parts, level)!;
+      const view = uncoveredView(buildFrame(level)!);
+      expect(ext.x0).toBeGreaterThan(view.x0);
+      expect(ext.x1).toBeLessThan(view.x1);
+      expect(ext.y1).toBeLessThan(view.y1);
+      expect(view.y0).toBeLessThan(ext.y0); // the wheels and the ground under them show
+      const drive = driveButtonAt(parts, level)!;
+      const radius = DRIVE_SIZE / (2 * 32 * FOCUS_ZOOM);
+      expect(drive.x + radius).toBeLessThan(view.x1);
+      expect(drive.y + radius).toBeLessThan(view.y1);
+    });
+  }
+});
+
+describe('vehicleSpec.widgets: the green DRIVE button', () => {
+  it('only the dome has it: a play tap, 96 px, green', () => {
+    const parts = buildOn(LEVEL, [['wheelCircle', -45]]);
+    const dome = parts.find((p) => p.kind === 'rover')!;
+    const widgets = vehicleSpec.widgets!(dome, parts, LEVEL);
+    expect(widgets).toHaveLength(1);
+    const drive = widgets[0] as TapWidget;
+    expect(drive).toMatchObject({ kind: 'tap', id: 'drive', action: 'play', size: 96, label: 'DRIVE', color: 0x61bb46 });
+    const wheel = parts.find((p) => p.kind === 'wheelCircle')!;
+    expect(vehicleSpec.widgets!(wheel, parts, LEVEL)).toEqual([]);
+  });
+
+  it('sits above the dome on a plain build, clear of a part on top', () => {
+    const plain = buildOn(LEVEL, [['wheelCircle', -45], ['wheelCircle', -135]]);
+    const dome = plain.find((p) => p.kind === 'rover')!;
+    const at = driveButtonAt(plain, LEVEL)!;
+    expect(at.x).toBeCloseTo(dome.x, 9);
+    expect(at.y).toBeGreaterThan(dome.y + ROVER_R);
+    const withTop = buildOn(LEVEL, [['wheelCircle', -45], ['wheelCircle', -135], ['beans', 90]]);
+    const top = buildExtent(withTop, LEVEL)!.y1;
+    const at2 = driveButtonAt(withTop, LEVEL)!;
+    expect(at2.y - DRIVE_SIZE / (2 * 32 * FOCUS_ZOOM)).toBeGreaterThan(top);
+  });
+
+  it('moves beside the build (toward the drive direction) when a tall build leaves no room above', () => {
+    const tall = buildOn(LEVEL, BIG_BUILD);
+    const ext = buildExtent(tall, LEVEL)!;
+    const at = driveButtonAt(tall, LEVEL)!;
+    expect(at.x).toBeGreaterThan(ext.x1);
+  });
+});
+
+describe('vehicleSpec.partTargets and resultCard', () => {
+  it('a new mount flies to the rim point the part is stuck on', () => {
+    const parts = buildOn(LEVEL, [['wheelCircle', -45]]);
+    const wheel = parts.find((p) => p.kind === 'wheelCircle')!;
+    expect(vehicleSpec.partTargets!(wheel, 'mount', 'spring', LEVEL)).toEqual([{ at: { x: wheel.x, y: wheel.y }, size: 0.35 }]);
+    expect(vehicleSpec.partTargets!(domeOf(LEVEL), 'mount', 'spring', LEVEL)).toEqual([]);
+  });
+
+  it('the result card lists the build (counts per kind, springs) and the coins against the budget', () => {
+    const parts = buildOn(LEVEL, [['wheelCircle', -45, 'spring'], ['wheelCircle', -135]]);
+    const m: Metrics = { reachedFinish: 1, time: 4.2, flips: 0, distance: 22, upsideDown: 0, topSpeed: 6 };
+    const card = vehicleSpec.resultCard!(parts, LEVEL, m, 'finished', true)!;
+    expect(card.tone).toBe('pass');
+    expect(card.outcome).toContain('4.2');
+    expect(card.rows).toContainEqual({ label: `${CATALOG.wheelCircle.icon} Round`, value: '× 2' });
+    expect(card.rows).toContainEqual({ label: 'On springs', value: '× 1' });
+    expect(card.rows).toContainEqual({ label: '🪙 Coins', value: `5 of ${LEVEL.budget}` });
+    const stuck = vehicleSpec.resultCard!(LEVEL.parts, LEVEL, { ...m, reachedFinish: 0, distance: 0.3 }, 'stuck', false)!;
+    expect(stuck.tone).toBe('fail');
+    expect(stuck.rows[0]).toEqual({ label: 'Parts', value: 'none yet' });
+  });
+
+  it('canPlay with the dome', () => {
+    expect(vehicleSpec.canPlay(LEVEL.parts, LEVEL, null)).toBe(true);
+  });
+
+  it('edit metrics start at zero, upside-down meters included', () => {
+    expect(vehicleSpec.editMetrics(LEVEL.parts, LEVEL, null)).toEqual({ reachedFinish: 0, time: 0, flips: 0, distance: 0, upsideDown: 0, topSpeed: 0 });
+  });
+});
+
+describe('vehicleSpec.intro: the pan from the beacon back to the start', () => {
+  it('viewFrameAt: a zoom-1 frame on x, kept inside the world like the kit keeps it', () => {
+    expect(viewFrameAt(3)).toEqual({ cx: VIEW_W / 2, cy: WORLD_H / 2 - GROUND_DEPTH, zoom: 1 });
+    expect(viewFrameAt(50).cx).toBe(50);
+    expect(viewFrameAt(88).cx).toBe(WORLD_W - VIEW_W / 2);
+    for (const x of [3, 50, 88]) expect(clampToWorld(viewFrameAt(x))).toEqual(viewFrameAt(x));
+  });
+
+  for (const level of LEVELS) {
+    const finish = level.parts.find((p) => p.kind === 'finish')!;
+    const dome = level.parts.find((p) => p.kind === 'rover')!;
+    if (finish.x < VIEW_W) {
+      it(`${level.id}: the beacon is in the first view, so no pan`, () => {
+        expect(introPan(level)).toBeNull();
+        expect(vehicleSpec.intro!(level)).toBeNull();
+      });
+    } else {
+      it(`${level.id}: pans ~2.8 s from a zoom-1 frame on the beacon (x ${finish.x}) to one on the start`, () => {
+        const pan = vehicleSpec.intro!(level)!;
+        expect(pan).toEqual(introPan(level));
+        expect(pan.ms).toBe(INTRO_MS);
+        expect(INTRO_MS).toBe(2800);
+        expect(pan.from.zoom).toBe(1);
+        expect(pan.to.zoom).toBe(1);
+        expect(pan.from).toEqual(viewFrameAt(finish.x));
+        expect(Math.abs(pan.from.cx - finish.x)).toBeLessThan(VIEW_W / 2 - 1); // the beacon in view
+        expect(pan.to).toEqual(viewFrameAt(dome.x));
+        expect(pan.to.cx - VIEW_W / 2).toBeLessThanOrEqual(dome.x - 1); // the dome in view
+        expect(pan.from.cx).toBeGreaterThan(pan.to.cx);
+      });
+    }
+  }
+
+  it('the five long challenges pan, the first nine levels do not', () => {
+    expect(LEVELS.filter((l) => vehicleSpec.intro!(l)).map((l) => l.id)).toEqual(['flip', 'canyon', 'ridge', 'hops', 'marathon']);
+  });
+});

@@ -1,0 +1,173 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #192661; overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#game { position: absolute; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
+#game canvas { display: block; }
+/* #ui is laid out in 1024x768 stage pixels and scaled onto the canvas by src/ui/hud.ts */
+#ui { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; transform-origin: 0 0; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #fff; }
+#ui [hidden] { display: none !important; }
+
+/* ================= Top bar: y 0..72, x 32..992 ================= */
+
+/* Open cell over the Phaser canvas — Bruno (Spine) is drawn through here. */
+.bruno-slot {
+  position: absolute; left: 32px; top: 0; width: 76px; height: 72px;
+  border: 1px solid #2c3560; border-radius: 10px;
+  background: transparent; pointer-events: none; box-sizing: border-box;
+}
+
+/* Bruno's speech bubble */
+#topbar {
+  position: absolute; left: 116px; top: 0; width: 876px; height: 72px;
+  background: rgba(23, 30, 58, 0.94); border: 1px solid #2c3560; border-radius: 12px;
+  pointer-events: auto; box-sizing: border-box;
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+}
+#topbar::before {
+  content: ''; position: absolute; left: -6px; top: 50%; width: 12px; height: 12px;
+  background: rgba(23, 30, 58, 0.94); border: 1px solid #2c3560; border-radius: 2px;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.topbar-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.topbar-main .title {
+  font-weight: 700; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.topbar-main .bruno-text {
+  font-size: 15px; line-height: 1.25; color: #fff;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.topbar-main .bruno-text.pass { color: #61bb46; }
+.topbar-main .bruno-text.fail { color: #c32f96; }
+
+.level-picker { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.level-picker .picker-label { font-size: 13px; color: #9aa1c0; white-space: nowrap; }
+.picker-btn {
+  flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;
+  background: #2c3560; color: #fff; border: none; font-size: 16px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.picker-btn:disabled { color: #6b7190; cursor: default; }
+
+.park-btn {
+  flex: 0 0 auto; height: 36px; padding: 0 18px; border-radius: 18px;
+  background: #2c3560; color: #fff; border: none; font-size: 14px; font-weight: 700; line-height: 1;
+  display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; white-space: nowrap;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.park-btn:disabled { color: #6b7190; cursor: default; }
+
+/* ================= Dashboard: y 78..204, x 32..992 ================= */
+
+#dash {
+  position: absolute; left: 32px; top: 78px; width: 960px; height: 126px;
+  background: rgba(23, 30, 58, 0.94); border: 1px solid #2c3560; border-radius: 12px;
+  pointer-events: auto; box-sizing: border-box;
+  display: flex;
+}
+
+.goals-col {
+  flex: 0 0 340px; padding: 10px 14px; box-sizing: border-box;
+  border-right: 1px solid #2c3560; overflow: hidden;
+}
+#goalList {
+  list-style: none; margin: 0; padding: 0; height: 100%;
+  display: flex; flex-direction: column; justify-content: center; gap: 8px; overflow-y: auto;
+}
+.goals-empty { font-size: 15px; color: #c8cde6; }
+
+li.goal { display: flex; flex-direction: column; gap: 3px; }
+.goal-top { display: flex; align-items: center; gap: 8px; }
+.goal-top .mark {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
+  background: #3a4470; display: flex; align-items: center; justify-content: center; position: relative;
+}
+.goal-top .mark .dot { width: 6px; height: 6px; border-radius: 50%; background: #1a2142; }
+.goal-top .mark.met { background: #61bb46; }
+.goal-top .mark.met .dot { display: none; }
+.goal-top .mark.met::after {
+  content: '\2713'; color: #fff; font-size: 13px; font-weight: 700; line-height: 1;
+}
+.goal-top .label {
+  flex: 1 1 auto; min-width: 0; font-size: 15px; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.goal-top .value {
+  flex: 0 0 auto; font-size: 14px; color: #c8cde6; font-variant-numeric: tabular-nums;
+}
+.goal-bar { height: 6px; border-radius: 3px; background: #2c3560; overflow: hidden; }
+.goal-bar .fill { height: 100%; width: 0; border-radius: 3px; }
+.goal-bar .fill.fill-green { background: #61bb46; }
+.goal-bar .fill.fill-orange { background: #ffb40f; }
+.goal-bar .fill.fill-pink { background: #c32f96; }
+
+.meters-col {
+  flex: 1 1 auto; padding: 9px 14px; box-sizing: border-box;
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: 44px 56px; gap: 6px;
+}
+.meter { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; overflow: hidden; }
+.meter-label { font-size: 13px; color: #9aa1c0; line-height: 1.1; }
+.meter-value { font-size: 16px; font-weight: 700; color: #9aa1c0; white-space: nowrap; line-height: 1.1; }
+.meter-value .km { font-size: 12px; font-weight: 400; color: #9aa1c0; margin-left: 4px; }
+
+.meter.focused .meter-label { font-size: 13px; color: #ffb40f; }
+.meter.focused .meter-value { font-size: 22px; color: #fff; }
+.meter.dim .meter-label { font-size: 12px; color: #6b7190; }
+.meter.dim .meter-value { font-size: 16px; color: #9aa1c0; }
+.meter.free .meter-label { font-size: 13px; color: #c8cde6; }
+.meter.free .meter-value { font-size: 22px; color: #fff; }
+
+/* The gauge needs the label/value/bar/ticks to all fit inside one ~56px grid
+   row, so the intense-o-meter keeps a fixed compact scale regardless of
+   focus state; only the color follows focused/dim/free like the others. */
+.meter-intense .meter-label { font-size: 12px; line-height: 1; }
+.meter-intense .meter-value { font-size: 16px; line-height: 1; }
+.meter-intense.focused .meter-label { color: #ffb40f; }
+.meter-intense.focused .meter-value { color: #fff; }
+.meter-intense.dim .meter-label { color: #6b7190; }
+.meter-intense.dim .meter-value { color: #9aa1c0; }
+.meter-intense.free .meter-label { color: #c8cde6; }
+.meter-intense.free .meter-value { color: #fff; }
+.meter-intense { gap: 1px; }
+
+.gauge-bar { position: relative; height: 12px; border-radius: 6px; overflow: hidden; background: #1a2142; }
+.gauge-bands, .gauge-fill {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, #61bb46 0 33.34%, #ffb40f 33.34% 66.67%, #c32f96 66.67% 100%);
+}
+.gauge-bands { opacity: 0.45; }
+.gauge-fill { clip-path: inset(0 100% 0 0); }
+.gauge-needle {
+  position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px;
+  background: #fff; border-radius: 2px; left: 0;
+}
+.gauge-labels { display: flex; justify-content: space-between; line-height: 1; }
+.gauge-labels span { font-size: 10px; color: #9aa1c0; }
+
+/* ================= Bottom bar: y 706..768, x 32..992 ================= */
+
+#bottombar {
+  position: absolute; left: 32px; top: 706px; width: 960px; height: 62px;
+  display: flex; align-items: center; gap: 10px; pointer-events: none;
+}
+#bottombar button {
+  pointer-events: auto;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  white-space: nowrap; min-width: 120px; height: 46px; padding: 0 18px;
+  border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+#bottombar button.primary { background: #ffb40f; color: #1a2142; }
+#bottombar button.stop { background: #c32f96; color: #fff; }
+#bottombar button.secondary { background: #2c3560; color: #fff; min-width: 100px; }
+#bottombar button:disabled { background: #2c3560; color: #6b7190; opacity: 1; cursor: default; }
+#next { margin-left: auto; }
+
+.tool-group { flex: 0 0 auto; display: flex; gap: 1px; }
+#bottombar button.tool {
+  min-width: 100px; padding: 0 12px; border-radius: 0;
+  background: #2c3560; color: #fff;
+}
+.tool-group button:first-child { border-radius: 12px 0 0 12px; }
+.tool-group button:last-child { border-radius: 0 12px 12px 0; }
+#bottombar button.tool.active { background: #05aeed; color: #1a2142; }

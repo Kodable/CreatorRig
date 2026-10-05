@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+<circle cx="128.0" cy="128.0" r="120.0" fill="#fbf7ee" stroke="#3b2a1a" stroke-width="5" />
+<circle cx="128.0" cy="128.0" r="108.0" fill="#8fd3ff"  />
+<circle cx="128.0" cy="128.0" r="94.0" fill="#fbf7ee"  />
+<ellipse cx="128.0" cy="104.0" rx="78.0" ry="26.0" fill="#e6ddc8" stroke="#3b2a1a" stroke-width="4" />
+<circle cx="128.0" cy="128.0" r="30.0" fill="#ff7ab8" stroke="#3b2a1a" stroke-width="4" />
+<circle cx="158.0" cy="128.0" r="8.0" fill="#ffa8d0"  />
+<circle cx="152.3" cy="145.6" r="8.0" fill="#ffa8d0"  />
+<circle cx="137.3" cy="156.5" r="8.0" fill="#ffa8d0"  />
+<circle cx="118.7" cy="156.5" r="8.0" fill="#ffa8d0"  />
+<circle cx="103.7" cy="145.6" r="8.0" fill="#ffa8d0"  />
+<circle cx="98.0" cy="128.0" r="8.0" fill="#ffa8d0"  />
+<circle cx="103.7" cy="110.4" r="8.0" fill="#ffa8d0"  />
+<circle cx="118.7" cy="99.5" r="8.0" fill="#ffa8d0"  />
+<circle cx="137.3" cy="99.5" r="8.0" fill="#ffa8d0"  />
+<circle cx="152.3" cy="110.4" r="8.0" fill="#ffa8d0"  />
+<circle cx="128.0" cy="128.0" r="30.0" fill="#ff7ab8" stroke="#3b2a1a" stroke-width="4" />
+<circle cx="156.5" cy="137.3" r="6.0" fill="#ffc4e0"  />
+<circle cx="145.6" cy="152.3" r="6.0" fill="#ffc4e0"  />
+<circle cx="128.0" cy="158.0" r="6.0" fill="#ffc4e0"  />
+<circle cx="110.4" cy="152.3" r="6.0" fill="#ffc4e0"  />
+<circle cx="99.5" cy="137.3" r="6.0" fill="#ffc4e0"  />
+<circle cx="99.5" cy="118.7" r="6.0" fill="#ffc4e0"  />
+<circle cx="110.4" cy="103.7" r="6.0" fill="#ffc4e0"  />
+<circle cx="128.0" cy="98.0" r="6.0" fill="#ffc4e0"  />
+<circle cx="145.6" cy="103.7" r="6.0" fill="#ffc4e0"  />
+<circle cx="156.5" cy="118.7" r="6.0" fill="#ffc4e0"  />
+</svg>

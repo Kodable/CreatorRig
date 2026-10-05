@@ -1,0 +1,324 @@
+{
+  "cockpit.png": {
+    "file": "cockpit.png",
+    "width": 654,
+    "height": 609,
+    "anchors": {
+      "center": {
+        "x": 326.2,
+        "y": 312.1
+      },
+      "radius": 323.5,
+      "baseBottom": 608,
+      "baseHalfWidth": 38.5
+    }
+  },
+  "kevin.png": {
+    "file": "kevin.png",
+    "width": 426,
+    "height": 481,
+    "anchors": {
+      "center": {
+        "x": 212.5,
+        "y": 154.5
+      },
+      "bodyBbox": {
+        "x0": 31,
+        "y0": 310,
+        "x1": 399,
+        "y1": 480
+      }
+    }
+  },
+  "shadow.png": {
+    "file": "shadow.png",
+    "width": 539,
+    "height": 111,
+    "anchors": {
+      "center": {
+        "x": 269.5,
+        "y": 55.5
+      }
+    }
+  },
+  "wheel-circle.png": {
+    "file": "wheel-circle.png",
+    "width": 399,
+    "height": 394,
+    "anchors": {
+      "center": {
+        "x": 199.0,
+        "y": 196.5
+      },
+      "radius": 200.6,
+      "hubRadius": 68.4
+    }
+  },
+  "wheel-square.png": {
+    "file": "wheel-square.png",
+    "width": 398,
+    "height": 380,
+    "anchors": {
+      "center": {
+        "x": 198.5,
+        "y": 189.5
+      },
+      "radius": 239.0,
+      "hubRadius": 84.0,
+      "halfSide": 198.5
+    }
+  },
+  "wheel-star1.png": {
+    "file": "wheel-star1.png",
+    "width": 443,
+    "height": 411,
+    "anchors": {
+      "center": {
+        "x": 221.0,
+        "y": 205.0
+      },
+      "radius": 243.8,
+      "hubRadius": 99.4
+    }
+  },
+  "wheel-star2.png": {
+    "file": "wheel-star2.png",
+    "width": 451,
+    "height": 432,
+    "anchors": {
+      "center": {
+        "x": 225.0,
+        "y": 215.5
+      },
+      "radius": 245.7,
+      "hubRadius": 97.8
+    }
+  },
+  "power-fan.png": {
+    "file": "power-fan.png",
+    "width": 235,
+    "height": 249,
+    "anchors": {
+      "mount": {
+        "x": 234.0,
+        "y": 127.8
+      },
+      "axis": {
+        "x": -1.0,
+        "y": -0.031
+      }
+    }
+  },
+  "power-stove.png": {
+    "file": "power-stove.png",
+    "width": 384,
+    "height": 490,
+    "anchors": {
+      "mount": {
+        "x": 383.0,
+        "y": 303.8
+      },
+      "axis": {
+        "x": -0.976,
+        "y": -0.219
+      },
+      "chimney": {
+        "x": 46.0,
+        "y": 70.5
+      }
+    }
+  },
+  "power-jet.png": {
+    "file": "power-jet.png",
+    "width": 455,
+    "height": 476,
+    "anchors": {
+      "mount": {
+        "x": 454.0,
+        "y": 249.2
+      },
+      "axis": {
+        "x": -1.0,
+        "y": -0.031
+      },
+      "thrustOrigin": {
+        "x": 0.0,
+        "y": 249.6
+      }
+    }
+  },
+  "fx-thrust.png": {
+    "file": "fx-thrust.png",
+    "width": 324,
+    "height": 233,
+    "anchors": {
+      "base": {
+        "x": 323.0,
+        "y": 111.9
+      }
+    }
+  },
+  "fx-poof.png": {
+    "file": "fx-poof.png",
+    "width": 95,
+    "height": 100,
+    "anchors": {
+      "attach": {
+        "x": 36.9,
+        "y": 99.0
+      }
+    }
+  },
+  "weight-feather.png": {
+    "file": "weight-feather.png",
+    "width": 586,
+    "height": 193,
+    "anchors": {
+      "bottom": {
+        "x": 222.2,
+        "y": 192.0
+      },
+      "bbox": {
+        "x0": 0,
+        "y0": 0,
+        "x1": 585,
+        "y1": 192
+      }
+    }
+  },
+  "weight-beans.png": {
+    "file": "weight-beans.png",
+    "width": 267,
+    "height": 324,
+    "anchors": {
+      "bottom": {
+        "x": 133.1,
+        "y": 323.0
+      },
+      "bbox": {
+        "x0": 0,
+        "y0": 0,
+        "x1": 266,
+        "y1": 323
+      }
+    }
+  },
+  "weight-watermelon.png": {
+    "file": "weight-watermelon.png",
+    "width": 627,
+    "height": 398,
+    "anchors": {
+      "bottom": {
+        "x": 390.8,
+        "y": 397.0
+      },
+      "bbox": {
+        "x0": 0,
+        "y0": 0,
+        "x1": 626,
+        "y1": 397
+      }
+    }
+  },
+  "plate.png": {
+    "file": "plate.png",
+    "width": 429,
+    "height": 100,
+    "anchors": {
+      "top": {
+        "x": 214.5,
+        "y": 0.0
+      },
+      "bottom": {
+        "x": 215.0,
+        "y": 99.0
+      }
+    }
+  },
+  "spring.png": {
+    "file": "spring.png",
+    "width": 106,
+    "height": 121,
+    "anchors": {
+      "top": {
+        "x": 65.4,
+        "y": 0.0
+      },
+      "bottom": {
+        "x": 44.1,
+        "y": 120.0
+      }
+    }
+  },
+  "suctioncup.png": {
+    "file": "suctioncup.png",
+    "width": 292,
+    "height": 92,
+    "anchors": {
+      "top": {
+        "x": 147.0,
+        "y": 0.0
+      },
+      "bottom": {
+        "x": 144.5,
+        "y": 91.0
+      }
+    }
+  },
+  "power-fan-flip.png": {
+    "file": "power-fan-flip.png",
+    "width": 235,
+    "height": 249,
+    "anchors": {
+      "mount": {
+        "x": 234.0,
+        "y": 121.2
+      },
+      "axis": {
+        "x": -1.0,
+        "y": 0.031
+      }
+    },
+    "note": "vertical mirror of power-fan.png (anchors y -> height - y, axis y negated)"
+  },
+  "power-stove-flip.png": {
+    "file": "power-stove-flip.png",
+    "width": 384,
+    "height": 490,
+    "anchors": {
+      "mount": {
+        "x": 383.0,
+        "y": 186.2
+      },
+      "axis": {
+        "x": -0.976,
+        "y": 0.219
+      },
+      "chimney": {
+        "x": 46.0,
+        "y": 419.5
+      }
+    },
+    "note": "vertical mirror of power-stove.png (anchors y -> height - y, axis y negated)"
+  },
+  "power-jet-flip.png": {
+    "file": "power-jet-flip.png",
+    "width": 455,
+    "height": 476,
+    "anchors": {
+      "mount": {
+        "x": 454.0,
+        "y": 226.8
+      },
+      "axis": {
+        "x": -1.0,
+        "y": 0.031
+      },
+      "thrustOrigin": {
+        "x": 0.0,
+        "y": 226.4
+      }
+    },
+    "note": "vertical mirror of power-jet.png (anchors y -> height - y, axis y negated)"
+  }
+}

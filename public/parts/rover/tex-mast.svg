@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 256" width="44" height="256">
+<rect x="8.0" y="60.0" width="28.0" height="190.0" rx="10" fill="#f2c230" stroke="#3b2a1a" stroke-width="5" stroke-linejoin="round" />
+<line x1="11.0" y1="98.0" x2="21.0" y2="88.0" stroke="#fbf7ee" stroke-width="6" stroke-linecap="round" />
+<line x1="11.0" y1="128.0" x2="21.0" y2="118.0" stroke="#fbf7ee" stroke-width="6" stroke-linecap="round" />
+<line x1="11.0" y1="158.0" x2="21.0" y2="148.0" stroke="#fbf7ee" stroke-width="6" stroke-linecap="round" />
+<line x1="11.0" y1="188.0" x2="21.0" y2="178.0" stroke="#fbf7ee" stroke-width="6" stroke-linecap="round" />
+<line x1="11.0" y1="218.0" x2="21.0" y2="208.0" stroke="#fbf7ee" stroke-width="6" stroke-linecap="round" />
+<line x1="11.0" y1="248.0" x2="21.0" y2="238.0" stroke="#fbf7ee" stroke-width="6" stroke-linecap="round" />
+<rect x="6.0" y="28.0" width="32.0" height="42.0" rx="14" fill="#f2c230" stroke="#3b2a1a" stroke-width="5" stroke-linejoin="round" />
+<line x1="7.0" y1="32.0" x2="37.0" y2="32.0" stroke="#3b2a1a" stroke-width="1.6" stroke-linecap="round" />
+<line x1="7.0" y1="37.0" x2="37.0" y2="37.0" stroke="#3b2a1a" stroke-width="1.6" stroke-linecap="round" />
+<line x1="7.0" y1="42.0" x2="37.0" y2="42.0" stroke="#3b2a1a" stroke-width="1.6" stroke-linecap="round" />
+<line x1="7.0" y1="47.0" x2="37.0" y2="47.0" stroke="#3b2a1a" stroke-width="1.6" stroke-linecap="round" />
+<line x1="7.0" y1="52.0" x2="37.0" y2="52.0" stroke="#3b2a1a" stroke-width="1.6" stroke-linecap="round" />
+<line x1="7.0" y1="57.0" x2="37.0" y2="57.0" stroke="#3b2a1a" stroke-width="1.6" stroke-linecap="round" />
+<line x1="7.0" y1="62.0" x2="37.0" y2="62.0" stroke="#3b2a1a" stroke-width="1.6" stroke-linecap="round" />
+<rect x="2" y="2" width="28" height="30" rx="10" fill="#f2c230" stroke="#3b2a1a" stroke-width="5" stroke-linejoin="round" transform="rotate(-24 16 32)"/>
+</svg>

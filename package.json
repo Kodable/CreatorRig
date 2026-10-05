@@ -1,0 +1,29 @@
+{
+  "name": "rollercoaster-poc",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host --port 4173",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "node server.mjs",
+    "heroku-postbuild": "vite build"
+  },
+  "dependencies": {
+    "@dimforge/rapier2d-deterministic-compat": "^0.20.0",
+    "@esotericsoftware/spine-phaser-v4": "^4.2.120",
+    "phaser": "4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.0"
+  }
+}

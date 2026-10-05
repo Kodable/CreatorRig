@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 256" width="320" height="256">
+<rect x="16.0" y="190.0" width="288.0" height="34.0" rx="8" fill="#e9c48a" stroke="#3b2a1a" stroke-width="5" stroke-linejoin="round" />
+<line x1="24.0" y1="207.0" x2="296.0" y2="207.0" stroke="#c99a5b" stroke-width="2" stroke-linecap="round" />
+<rect x="66.0" y="60.0" width="46.0" height="128.0" rx="10.12" fill="#3b3b3b" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" />
+<rect x="74.3" y="49.2" width="29.4" height="17.9" rx="8.28" fill="#c9ced9" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round" />
+<rect x="66.0" y="134.2" width="46.0" height="20.5" rx="2" fill="#e0892f"  />
+<rect x="66.0" y="134.2" width="46.0" height="20.5" fill="none" stroke="#3b2a1a" stroke-width="3"/>
+<rect x="52" y="150" width="76" height="20" rx="4" fill="#f3e3b3" stroke="#3b2a1a" stroke-width="3" transform="rotate(-6 90 160)"/>
+<rect x="226.6" y="118.0" width="75.4" height="60.0" rx="10.799999999999999" fill="#c9ced9" stroke="#3b2a1a" stroke-width="5" stroke-linejoin="round" />
+<circle cx="226.6" cy="148.0" r="33.0" fill="#9aa1c0" stroke="#3b2a1a" stroke-width="4" />
+<rect x="210.0" y="139.6" width="20.2" height="16.8" rx="3" fill="#6b7399" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round" />
+<circle cx="297.4" cy="134.8" r="4.2" fill="#e0392f" stroke="#3b2a1a" stroke-width="2" />
+<circle cx="297.4" cy="161.2" r="4.2" fill="#222222" stroke="#3b2a1a" stroke-width="2" />
+<line x1="210.0" y1="132.0" x2="116.0" y2="78.0" stroke="#e0392f" stroke-width="5" stroke-linecap="round" />
+<line x1="210.0" y1="160.0" x2="128.0" y2="170.0" stroke="#222222" stroke-width="5" stroke-linecap="round" />
+</svg>

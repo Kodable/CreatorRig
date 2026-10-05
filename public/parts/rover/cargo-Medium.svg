@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 164 256" width="164" height="256">
+<rect x="32.0" y="78.0" width="100.0" height="142.0" rx="6" fill="#61bb46" stroke="#3b2a1a" stroke-width="5" stroke-linejoin="round" />
+<polygon points="32.0,78.0 132.0,78.0 122.0,56.0 42.0,56.0" fill="#4ea23a" stroke="#3b2a1a" stroke-width="5" stroke-linejoin="round" />
+<rect x="42.0" y="118.0" width="80.0" height="68.0" rx="4" fill="#fbf7ee" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" />
+<circle cx="82.0" cy="150.0" r="15.0" fill="#f2a230" stroke="#3b2a1a" stroke-width="3" />
+<polygon points="82.0,132.0 76.0,122.0 88.0,124.0" fill="#3aa35a" stroke="#3b2a1a" stroke-width="2" stroke-linejoin="round" />
+<ellipse cx="70.0" cy="58.0" rx="9.0" ry="4.0" fill="#2a7a42" stroke="#3b2a1a" stroke-width="2" />
+<rect x="63.0" y="22.0" width="13.0" height="40.0" rx="5" fill="#f2c230" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" />
+<line x1="63.0" y1="28.0" x2="76.0" y2="28.0" stroke="#3b2a1a" stroke-width="1.4" stroke-linecap="round" />
+<line x1="63.0" y1="34.0" x2="76.0" y2="34.0" stroke="#3b2a1a" stroke-width="1.4" stroke-linecap="round" />
+<line x1="63.0" y1="40.0" x2="76.0" y2="40.0" stroke="#3b2a1a" stroke-width="1.4" stroke-linecap="round" />
+<line x1="63.0" y1="46.0" x2="76.0" y2="46.0" stroke="#3b2a1a" stroke-width="1.4" stroke-linecap="round" />
+<rect x="60.0" y="6.0" width="19.0" height="22.0" rx="8" fill="#f2c230" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" transform="rotate(-18 69 17)"/>
+<line x1="60.0" y1="9.0" x2="79.0" y2="9.0" stroke="#3b2a1a" stroke-width="1.2" stroke-linecap="round" />
+<line x1="60.0" y1="14.0" x2="79.0" y2="14.0" stroke="#3b2a1a" stroke-width="1.2" stroke-linecap="round" />
+<line x1="60.0" y1="19.0" x2="79.0" y2="19.0" stroke="#3b2a1a" stroke-width="1.2" stroke-linecap="round" />
+<line x1="60.0" y1="24.0" x2="79.0" y2="24.0" stroke="#3b2a1a" stroke-width="1.2" stroke-linecap="round" />
+<rect x="38.0" y="-6.0" width="30.0" height="16.0" rx="7" fill="#f2c230" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" transform="rotate(-55 53 2)"/>
+</svg>

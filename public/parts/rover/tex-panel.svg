@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 64" width="400" height="64">
+<g transform="rotate(-3 40 32)">
+<rect x="4.0" y="4.0" width="72.0" height="56.0" rx="4" fill="#8fd3ff" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" />
+<polygon points="76.0,4.0 76.0,20.0 60.0,4.0" fill="#fbf7ee" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round" />
+</g>
+<g transform="rotate(3 120 32)">
+<rect x="84.0" y="4.0" width="72.0" height="56.0" rx="4" fill="#63b3e0" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" />
+<polygon points="156.0,4.0 156.0,20.0 140.0,4.0" fill="#fbf7ee" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round" />
+</g>
+<g transform="rotate(-3 200 32)">
+<rect x="164.0" y="4.0" width="72.0" height="56.0" rx="4" fill="#8fd3ff" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" />
+<polygon points="236.0,4.0 236.0,20.0 220.0,4.0" fill="#fbf7ee" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round" />
+</g>
+<g transform="rotate(3 280 32)">
+<rect x="244.0" y="4.0" width="72.0" height="56.0" rx="4" fill="#63b3e0" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" />
+<polygon points="316.0,4.0 316.0,20.0 300.0,4.0" fill="#fbf7ee" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round" />
+</g>
+<g transform="rotate(-3 360 32)">
+<rect x="324.0" y="4.0" width="72.0" height="56.0" rx="4" fill="#8fd3ff" stroke="#3b2a1a" stroke-width="4" stroke-linejoin="round" />
+<polygon points="396.0,4.0 396.0,20.0 380.0,4.0" fill="#fbf7ee" stroke="#3b2a1a" stroke-width="3" stroke-linejoin="round" />
+</g>
+</svg>
