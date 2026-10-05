@@ -259,7 +259,7 @@ describe('LEVELS', () => {
     expect(dropLevel).toBeDefined();
     expect(dropLevel!.id).toBe('drop');
     expect(dropLevel!.title).toBe('Vertical drop');
-    expect(dropLevel!.goals).toHaveLength(1);
+    expect(dropLevel!.goals).toHaveLength(3);
     expect(dropLevel!.goals[0]!.metric).toBe('maxDrop');
     expect(dropLevel!.goals[0]!.op).toBe('>=');
     expect(dropLevel!.goals[0]!.value).toBe(15);
@@ -287,11 +287,12 @@ describe('LEVELS', () => {
     const lengthLevel = LEVELS[3];
     expect(lengthLevel).toBeDefined();
     expect(lengthLevel!.id).toBe('length');
-    expect(lengthLevel!.goals).toHaveLength(2);
+    expect(lengthLevel!.goals).toHaveLength(3);
     expect(lengthLevel!.goals[0]!.metric).toBe('length');
     expect(lengthLevel!.goals[0]!.op).toBe('>=');
-    expect(lengthLevel!.goals[1]!.metric).toBe('reachedEnd');
-    expect(lengthLevel!.goals[1]!.op).toBe('==');
+    expect(lengthLevel!.goals[1]!.metric).toBe('atFinish');
+    expect(lengthLevel!.goals[2]!.metric).toBe('reachedEnd');
+    expect(lengthLevel!.goals[2]!.op).toBe('==');
   });
 
   it('free level is last and has no goals', () => {

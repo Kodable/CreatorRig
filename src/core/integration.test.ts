@@ -6,9 +6,9 @@ import { evaluateGoals, allPass } from './goals';
 import { findLevel } from './levels';
 import { FIXED_DT } from './stepper';
 import { expandTrackPoints } from './trackPoints';
-import type { TrackPoint } from './types';
+import type { FinishZone, TrackPoint } from './types';
 
-function ride(points: TrackPoint[], c?: Partial<typeof DEFAULTS>) {
+function ride(points: TrackPoint[], c?: Partial<typeof DEFAULTS>, finish?: FinishZone) {
   const track = buildTrack(expandTrackPoints(points).pts);
   if (!track) throw new Error('no track');
   const sim = new CartSim(track, c);
@@ -18,7 +18,7 @@ function ride(points: TrackPoint[], c?: Partial<typeof DEFAULTS>) {
     sim.step();
     meters.observe(sim.snapshot(), FIXED_DT);
   }
-  return { track, sim, metrics: meters.toMetrics(track) };
+  return { track, sim, metrics: meters.toMetrics(track, finish) };
 }
 
 describe('track + sim integration', () => {
@@ -35,7 +35,7 @@ describe('track + sim integration', () => {
 
   it('passes level 1 when the station is high enough', () => {
     const level = findLevel('drop')!;
-    const { metrics } = ride([{ x: 8, y: 20, kind: 'curve' }, { x: 52, y: 4, kind: 'curve' }]);
+    const { metrics } = ride([{ x: 8, y: 20, kind: 'curve' }, { x: 52, y: 4, kind: 'curve' }], undefined, level.finish);
     expect(allPass(evaluateGoals(level.goals, metrics))).toBe(true);
   });
 

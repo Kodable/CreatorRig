@@ -14,15 +14,17 @@ Two tools in the bottom bar: **Point** and **Loop**. A loop is a fixed piece (a 
 
 ### 12 Levels
 
-- `drop`: Vertical drop — at least 15 m drop.
+Most levels lock the station (and, where the start matters, a second lead-in point) and end at a locked finish flag with a "Track reaches the flag" goal; a level with a flag passes only when the fuzz actually reaches the end (`src/app.ts`). Each level's solution track is proven in `src/core/levels.test.ts` (it still passes when any one point moves 1 m).
+
+- `drop`: Vertical drop — drag the station up: at least 15 m down to the flag.
 - `complete`: Complete the track — pre-placed locked points; bring the rail to the finish flag.
-- `speed`: Speed — reach 18 m/s.
-- `length`: Length — 80 m track, cart reaches end.
-- `hang`: Hang time — 1 second with seat g under 0.3.
-- `loop`: Loops — build and complete a loop.
-- `intense`: Intense-o-meter — 15 m/s under 4 g.
+- `speed`: Speed — reach 18 m/s and the high flag (a straight slope is too slow).
+- `length`: Length — 80 m of track to the flag.
+- `hang`: Hang time — a locked gentle lead-in; a hump gives 1 s of airtime.
+- `loop`: Loops — ride through a loop to the flag (a loop left high falls off).
+- `intense`: Intense-o-meter — 15 m/s under 4 g to a high flag (one round dip).
 - `double`: Double loop — two loops, reach the flag (challenge).
-- `thrill`: Thrill ride — 1 s of hang time under 4 g from a locked 26 m station (challenge).
+- `thrill`: Thrill ride — locked lead-in, 1 s of hang time from a hump, under 4 g, reach the flag (challenge).
 - `express`: Fuzz express — 20 m/s on 100 m of track, reach the end (challenge).
 - `grand`: Grand finale — a loop under 7 g from a locked 28 m station (challenge).
 - `free`: Free play — all meters on.
@@ -87,7 +89,7 @@ A dial widget can set `radiusM` (world-meter radius to ride a machine part at an
 
 Rail-locked sim in pure TypeScript (`src/core`), no physics engine. Fixed step 1/60 s with 4 sub-steps. Cart state is (s, v) along a centripetal Catmull-Rom curve resampled every 0.1 m. Seat g = side × (v² kappa / g + tangent.x). Outcomes: reachedEnd, rolledBack, stuck, fell (fell = seat g below -STICK, default -0.5 g, while inverted). Goals are data in `src/core/levels.ts`.
 
-File layout: `src/core` (pure math and data, unit-tested with Vitest), `src/game` (Phaser scene and view constants), `src/ui` (HTML HUD), `src/app.ts` (controller). Tests: run `npx vitest run` (910 tests in 43 files).
+File layout: `src/core` (pure math and data, unit-tested with Vitest), `src/game` (Phaser scene and view constants), `src/ui` (HTML HUD), `src/app.ts` (controller). Tests: run `npx vitest run` (957 tests in 43 files).
 
 ## How the Goldberg course works
 

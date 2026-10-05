@@ -168,7 +168,10 @@ export class App {
         this.mode = 'done';
         this.outcome = sim.outcome;
         const metrics = this.currentMetrics();
-        this.passed = this.outcome !== 'fell' && allPass(evaluateGoals(this.level.goals, metrics));
+        // A level with a finish flag passes only when the fuzz actually gets there: the HUD fits
+        // three goals, so some flag levels have no room for a "reaches the end" goal of their own.
+        const reached = !this.level.finish || this.outcome === 'reachedEnd';
+        this.passed = this.outcome !== 'fell' && reached && allPass(evaluateGoals(this.level.goals, metrics));
         if (this.passed) this.scene.brunoWave();
       }
     }
