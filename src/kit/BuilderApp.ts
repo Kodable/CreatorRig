@@ -4,6 +4,7 @@
 import type {
   Bounds,
   CameraFrame,
+  CoachStep,
   CourseSim,
   CourseSpec,
   HudState,
@@ -97,6 +98,13 @@ export class BuilderApp<
   /** Bumped on every `play()`, so the result card is recomputed per run (the same outcome on
    * a later run carries different metrics: the time, the distance). */
   private runCounter = 0;
+  /** Runs started since the level loaded (`CoachContext.runs`). */
+  private runsThisLevel = 0;
+  /** The coach's step this frame (`spec.coach`), or null; sent in `HudState.coach`. */
+  private coach: CoachStep<K> | null = null;
+  /** `HudState.unlocked`: this level's `part:<kind>` introduces entries that are in its palette.
+   * Recomputed on `loadLevel` only. */
+  private unlocked: K[] = [];
   /** Id of the dial mid-live-drag (its first live commit pushed the drag's one undo entry), or
    * null when no live drag is in progress. Lets the release commit that follows tell it already
    * applied this exact value and skip re-doing the work. */
@@ -160,6 +168,7 @@ export class BuilderApp<
     this.scene.onWidgetDrag = (): void => {
       // The scene owns the widget's visual while dragging; the controller has nothing to do.
     };
+    if (spec.dragSnap) this.scene.dragSnap = (id: number, at: Vec2): Vec2 | null => this.dragSnapDelta(id, at);
     this.scene.setTool(this.toolKind());
     this.scene.setGrid(spec.grid ?? null);
 
@@ -209,6 +218,12 @@ export class BuilderApp<
     this.hintIndex = -1;
     this.undoStack = [];
     this.liveDragId = null;
+    this.runsThisLevel = 0;
+    this.coach = null;
+    this.unlocked = (level.introduces ?? [])
+      .filter((e) => e.startsWith('part:'))
+      .map((e) => e.slice('part:'.length) as K)
+      .filter((k, i, all) => level.palette.includes(k) && all.indexOf(k) === i);
     this.parts = clone(level.parts);
     this.nextId = this.parts.reduce((max, p) => Math.max(max, p.id), 0) + 1;
     this.tool = this.spec.tools?.[0]?.id ?? null;
@@ -605,6 +620,19 @@ export class BuilderApp<
     this.applyTuneUpdate(part);
   }
 
+  /** `spec.dragSnap` for the scene's drag ghost: the world-meter delta from part `id`'s stored
+   * anchor to the point the course snaps the pointer position `at` to. The scene shows the ghost
+   * there and the drop hands exactly this delta to `onPartMoved`, so the part lands where its
+   * ghost was. null (today's offset drag) without `dragSnap`, for an unknown part, or outside
+   * tune mode. */
+  private dragSnapDelta(id: number, at: Vec2): Vec2 | null {
+    if (!this.spec.dragSnap || !this.canTune()) return null;
+    const part = this.parts.find((p) => p.id === id);
+    if (!part || part.lockPosition) return null;
+    const snapped = this.spec.dragSnap(part, at, this.parts, this.level);
+    return { x: snapped.x - part.x, y: snapped.y - part.y };
+  }
+
   private onPartTapped(id: number): void {
     if (!this.canTune()) return;
     const part = this.parts.find((p) => p.id === id);
@@ -612,6 +640,14 @@ export class BuilderApp<
       const hasWidgets = (this.spec.widgets?.(part, this.parts, this.level).length ?? 0) > 0;
       if (!hasWidgets) return;
     }
+    this.selectPart(id);
+  }
+
+  /** Selects part `id` (focus frame, drawer, its widgets). The tail of a tap on a part, and what
+   * a 'select' widget (a BUILD button) does: that one selects even a part with no rows and no
+   * widgets, since opening the drawer's shelf on it is the point. */
+  private selectPart(id: number): void {
+    if (!this.canTune() || !this.parts.some((p) => p.id === id)) return;
     // A new selection means any earlier live drag is over (and its id may be reused by a widget
     // on this other part), so the next live drag must push its own undo entry.
     this.liveDragId = null;
@@ -693,6 +729,7 @@ export class BuilderApp<
     this.stepper.reset();
     this.prevSnap = null;
     this.runCounter++;
+    this.runsThisLevel++;
     this.sim.play();
   }
 
@@ -720,6 +757,11 @@ export class BuilderApp<
     const nextLevel = this.spec.levels[this.levelIndex + 1];
     if (!nextLevel) return;
     this.loadLevel(nextLevel);
+  }
+
+  /** Hides the HUD's win banner (its close button routes here). The done-mode dash stays. */
+  dismissWin(): void {
+    this.hud.dismissWin();
   }
 
   selectLevel(id: string): void {
@@ -771,10 +813,25 @@ export class BuilderApp<
   private onWidgetAction(id: string, value?: string, live?: boolean): void {
     const widget = this.widgets.find((w) => w.id === id);
     if (!widget) return;
-    const part = this.selectedId != null ? this.parts.find((p) => p.id === this.selectedId) : undefined;
-    if (!part) return;
     const action: WidgetAction = widget.action ?? (widget.code ? 'setProp' : 'none');
+    // 'select' and 'play' need no selected part: both work from an idle widget (a BUILD button
+    // over the machine, a big DRIVE button) as well as from a selected part's widgets.
+    if (action === 'select') {
+      const target = widget.kind === 'tap' ? widget.partId : undefined;
+      if (target != null) this.selectPart(target);
+      return;
+    }
+    if (action === 'play') {
+      this.play();
+      return;
+    }
+    const selected = this.selectedId != null ? this.parts.find((p) => p.id === this.selectedId) : undefined;
+    // An idle widget (nothing selected) acts on its own `partId` part, when it names one.
+    const ownId = widget.kind === 'tap' ? widget.partId : undefined;
+    const part = selected ?? (ownId != null ? this.parts.find((p) => p.id === ownId) : undefined);
+    if (!part) return;
     if (action === 'setProp') {
+      if (!selected) return; // setProp always targets the selection
       if (!widget.code) return;
       const values = widget.kind === 'tap' ? widget.values : undefined;
       const next = value ?? nextWidgetValue(values, part.props[widget.code]);
@@ -793,8 +850,6 @@ export class BuilderApp<
         if (wasLive && part.props[widget.code] === next) return;
         this.setProp(widget.code, next);
       }
-    } else if (action === 'play') {
-      this.play();
     } else {
       const result = this.spec.onWidget?.(id, part, this.parts, this.level);
       if (result) {
@@ -836,9 +891,14 @@ export class BuilderApp<
   private updateWidgets(): void {
     const part = this.selectedId != null ? this.parts.find((p) => p.id === this.selectedId) : undefined;
     const canTune = this.canTune();
+    // Idle widgets (nothing selected) depend on the whole build, so their key folds in every
+    // part's id, kind, anchor and props (a handful of parts: cheap enough per frame).
+    const idle = canTune && !part && !!this.spec.idleWidgets;
     const key = part
       ? `${this.mode}:${this.selectedId}:${JSON.stringify(part.props)}:${part.x},${part.y}:${canTune}`
-      : `${this.mode}:${this.selectedId}:${canTune}`;
+      : idle
+        ? `${this.mode}:idle:${this.level.id}:${this.parts.map((p) => `${p.id}:${p.kind}:${p.x},${p.y}:${JSON.stringify(p.props)}`).join(';')}`
+        : `${this.mode}:${this.selectedId}:${canTune}`;
     if (key === this.widgetKey) return;
     this.widgetKey = key;
     if (canTune && part && this.spec.widgets) {
@@ -850,6 +910,17 @@ export class BuilderApp<
           ...w,
           locked: !!(w.code && part.lockedProps?.includes(w.code)),
         }));
+      this.widgets = list;
+      this.scene.setWidgets(list);
+    } else if (idle && this.spec.idleWidgets) {
+      // Same concept gate; a widget is locked by the `lockedProps` of the part it names, if any.
+      const list: Widget[] = this.spec.idleWidgets(this.parts, this.level)
+        .filter((w) => !w.code || isKnown(this.known, w.code))
+        .map((w) => {
+          const ownId = w.kind === 'tap' ? w.partId : undefined;
+          const own = ownId != null ? this.parts.find((p) => p.id === ownId) : undefined;
+          return this.filterWidgetOptions({ ...w, locked: !!(w.code && own?.lockedProps?.includes(w.code)) });
+        });
       this.widgets = list;
       this.scene.setWidgets(list);
     } else {
@@ -927,10 +998,31 @@ export class BuilderApp<
     }
 
     this.updateWidgets();
+    this.updateCoach();
     this.hud.update(this.hudState(), {
       refused: Date.now() < this.refusedUntil,
       locked: Date.now() < this.lockedUntil,
     });
+  }
+
+  /** Asks `spec.coach` for this frame's step (edit/tune mode, and done mode for the win step;
+   * never while a run plays) and points the scene's hand at an in-scene target. The HUD draws
+   * the hand for shelf/drawer/bar targets and puts the text in Bruno's bubble. */
+  private updateCoach(): void {
+    if (!this.spec.coach) return;
+    const ask = this.canTune() || this.mode === 'done';
+    this.coach = ask
+      ? this.spec.coach({
+          level: this.level,
+          parts: this.parts,
+          selectedId: this.selectedId,
+          mode: this.mode,
+          passed: this.passed,
+          runs: this.runsThisLevel,
+        }) ?? null
+      : null;
+    const t = this.coach?.target;
+    this.scene.setCoachTarget(t && (t.type === 'widget' || t.type === 'part') ? t : null, this.coach?.id ?? '');
   }
 
   private hudState(): HudState<K, M, O, L> {
@@ -1004,6 +1096,8 @@ export class BuilderApp<
       budget,
       paletteCosts,
       scroll: this.scrollState(),
+      coach: this.coach,
+      unlocked: this.unlocked,
     };
   }
 
@@ -1018,6 +1112,7 @@ export class BuilderApp<
     this.scene.onWidgetAction = undefined;
     this.scene.onWidgetBlocked = undefined;
     this.scene.onWidgetDrag = undefined;
+    this.scene.dragSnap = undefined;
     this.sim?.destroy();
   }
 }

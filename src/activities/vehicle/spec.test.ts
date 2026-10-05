@@ -1,15 +1,34 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DRIVE_SIZE, FOCUS_ZOOM, INTRO_MS, buildExtent, buildFrame, driveButtonAt, introPan, vehicleSpec, viewFrameAt } from './spec';
+import {
+  BUILD_BLUE,
+  BUILD_SIZE,
+  DRIVE_GREEN,
+  DRIVE_SIZE,
+  FOCUS_ZOOM,
+  IDLE_DRIVE_SIZE,
+  INTRO_MS,
+  bigPillPx,
+  buildExtent,
+  buildFrame,
+  driveButtonAt,
+  frameView,
+  idleButtonsAt,
+  introPan,
+  rimSnap,
+  vehicleSpec,
+  viewFrameAt,
+} from './spec';
+import { roverCoach } from './coach';
 import { PICS, ROVER_R } from './core/art';
 import { GROUND_DEPTH, WORLD_H } from './core/build';
-import { VIEW_W, WORLD_W } from './core/terrain';
-import { ATTACHMENT_KINDS, CATALOG, partCost } from './core/catalog';
-import { SPAWN, normalizeRoverParts, rimPoint } from './core/geometry';
+import { VIEW_W, WORLD_W, heightAt } from './core/terrain';
+import { ATTACHMENT_KINDS, BLURBS, CATALOG, MOUNT_DESCRIPTOR, partCost } from './core/catalog';
+import { SPAWN, THETA_STEP, normalizeRoverParts, rimPoint } from './core/geometry';
 import { LEVELS, findLevel } from './core/levels';
 import type { AttachmentKind, Metrics, PartKind, RoverPart, VehicleLevel } from './core/types';
-import type { CameraFrame, TapWidget } from '../../kit/types';
+import type { CameraFrame, TapWidget, Vec2 } from '../../kit/types';
 
 const PUBLIC = resolve(__dirname, '../../../public');
 const DEG = Math.PI / 180;
@@ -48,11 +67,14 @@ function clampToWorld(f: CameraFrame): CameraFrame {
   };
 }
 
-/** The world rectangle the camera shows at a frame, left of the open drawer (340 of 960 px). */
-function uncoveredView(frame: { cx: number; cy: number; zoom: number }): { x0: number; x1: number; y0: number; y1: number } {
+interface Box { x0: number; x1: number; y0: number; y1: number }
+
+/** The world rectangle the camera shows at a frame, left of the open drawer (340 of 960 px). The
+ * world panel is 960 x 480 stage px (kit camera.ts STAGE_PANEL_H). */
+function uncoveredView(frame: { cx: number; cy: number; zoom: number }): Box {
   const f = clampToWorld(frame);
   const viewW = 960 / (32 * f.zoom);
-  const viewH = 490 / (32 * f.zoom);
+  const viewH = 480 / (32 * f.zoom);
   const x0 = f.cx - viewW / 2;
   return { x0, x1: x0 + (viewW * 620) / 960, y0: f.cy - viewH / 2, y1: f.cy + viewH / 2 };
 }
@@ -66,6 +88,50 @@ const BIG_BUILD: [AttachmentKind, number, string?][] = [
   ['watermelon', 90, 'spring'],
   ['stove', 135, 'spring'],
 ];
+
+/** The biggest box any build reaches (probed over every kind, mount and rim angle): a square
+ * wheel on a spring under the dome lifts it highest, a melon on a spring is the tallest part on
+ * top and the widest at the front and the back. */
+const HUGE_BUILD: [AttachmentKind, number, string?][] = [
+  ['wheelCircle', -45, 'spring'],
+  ['wheelCircle', -135, 'spring'],
+  ['wheelSquare', -90, 'spring'],
+  ['watermelon', 90, 'spring'],
+  ['watermelon', 0, 'spring'],
+  ['watermelon', 180, 'spring'],
+];
+
+/** Builds the layout tests try on every level: the bare dome, the level-1 solution, two big ones. */
+const BUILDS: Record<string, [AttachmentKind, number, string?][]> = {
+  bare: [],
+  plain: [['wheelCircle', -45], ['wheelCircle', -135]],
+  big: BIG_BUILD,
+  huge: HUGE_BUILD,
+};
+
+/** A pill's box (world m) at centre `at` for a 'big' widget of `size` px at camera zoom `zoom`
+ * (the course's own size budget, pulse included). */
+function pillBox(at: Vec2, size: number, zoom: number): Box {
+  const { w, h } = bigPillPx(size);
+  const hw = w / (2 * 32 * zoom);
+  const hh = h / (2 * 32 * zoom);
+  return { x0: at.x - hw, x1: at.x + hw, y0: at.y - hh, y1: at.y + hh };
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+}
+
+function inside(a: Box, b: Box): boolean {
+  return a.x0 >= b.x0 && a.x1 <= b.x1 && a.y0 >= b.y0 && a.y1 <= b.y1;
+}
+
+/** The highest ground under x0..x1 (sampled every 5 cm). */
+function groundUnder(level: VehicleLevel, x0: number, x1: number): number {
+  let top = -Infinity;
+  for (let x = x0; x <= x1 + 1e-9; x += 0.05) top = Math.max(top, heightAt(level.terrain, x));
+  return Math.max(top, heightAt(level.terrain, x1));
+}
 
 describe('vehicleSpec: wiring', () => {
   it('free building: drawer on, a part spawns at SPAWN, normalizeParts snaps it, no overlap resolve, no write-back', () => {
@@ -119,6 +185,31 @@ describe('vehicleSpec: wiring', () => {
     expect(Math.abs(sky.w / sky.h / aspect - 1)).toBeLessThan(0.03);
     const planet = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('planet'))!;
     expect(planet.x + planet.w / 2).toBeLessThan(VIEW_W);
+  });
+
+  it('2026-10-05 playtest: DRIVE in the scene is the only start control, a win banner, the coach, a rim-snap preview', () => {
+    expect(vehicleSpec.hud.playInBar).toBe(false);
+    expect(vehicleSpec.hud.winBanner).toBe(true);
+    expect(vehicleSpec.coach).toBe(roverCoach);
+    expect(vehicleSpec.idleWidgets).toBeTypeOf('function');
+    expect(vehicleSpec.dragSnap).toBeTypeOf('function');
+    expect(vehicleSpec.hud.lines.refused).toBe('Not enough coins for that part!');
+  });
+
+  it('every palette kind has its blurb (shelf title and unlock callout); the level-placed kinds have none', () => {
+    for (const level of LEVELS) {
+      for (const kind of level.palette) {
+        const blurb = vehicleSpec.hud.partInfo[kind].blurb;
+        expect(blurb, kind).toBe(BLURBS[kind as AttachmentKind]);
+        expect(blurb!.length, kind).toBeGreaterThan(0);
+      }
+    }
+    for (const kind of ['rover', 'block', 'finish'] as PartKind[]) expect(vehicleSpec.hud.partInfo[kind].blurb).toBeUndefined();
+  });
+
+  it('the drawer shows the Mount options\' own labels (no chip-label override hides "Spring (bouncy, +1 coin)")', () => {
+    const chip = vehicleSpec.hud.chipLabels ?? {};
+    for (const o of MOUNT_DESCRIPTOR.options) expect(chip[o.label] ?? chip[o.value] ?? o.label).toBe(o.label);
   });
 
   it('hud: a label and an emoji icon for every kind; DRIVE launch; the refused line is about coins', () => {
@@ -186,52 +277,165 @@ describe('vehicleSpec.focusFrame', () => {
     expect(view.x1).toBeCloseTo((960 / (32 * FOCUS_ZOOM)) * (620 / 960), 9);
   });
 
+  it('frameView matches the kit clamp written out here (with and without the drawer)', () => {
+    for (const level of LEVELS) {
+      const frame = buildFrame(level)!;
+      const view = frameView(frame, true);
+      const want = uncoveredView(frame);
+      for (const k of ['x0', 'x1', 'y0', 'y1'] as const) expect(view[k]).toBeCloseTo(want[k], 9);
+      const full = frameView(viewFrameAt(3), false);
+      expect(full).toEqual({ x0: 0, x1: VIEW_W, y0: -GROUND_DEPTH, y1: WORLD_H - GROUND_DEPTH });
+    }
+  });
+
   for (const level of LEVELS) {
-    it(`${level.id}: a big build and its DRIVE button fit in the view left of the drawer`, () => {
-      const parts = buildOn(level, BIG_BUILD);
-      const ext = buildExtent(parts, level)!;
-      const view = uncoveredView(buildFrame(level)!);
-      expect(ext.x0).toBeGreaterThan(view.x0);
-      expect(ext.x1).toBeLessThan(view.x1);
-      expect(ext.y1).toBeLessThan(view.y1);
-      expect(view.y0).toBeLessThan(ext.y0); // the wheels and the ground under them show
-      const drive = driveButtonAt(parts, level)!;
-      const radius = DRIVE_SIZE / (2 * 32 * FOCUS_ZOOM);
-      expect(drive.x + radius).toBeLessThan(view.x1);
-      expect(drive.y + radius).toBeLessThan(view.y1);
+    it(`${level.id}: the biggest build and its DRIVE pill fit in the view left of the drawer, the pill over the dome`, () => {
+      for (const sticks of [BIG_BUILD, HUGE_BUILD]) {
+        const parts = buildOn(level, sticks);
+        const ext = buildExtent(parts, level)!;
+        const view = uncoveredView(buildFrame(level)!);
+        expect(ext.x0).toBeGreaterThan(view.x0);
+        expect(ext.x1).toBeLessThan(view.x1);
+        expect(ext.y1).toBeLessThan(view.y1);
+        expect(view.y0).toBeLessThan(ext.y0); // the wheels and the ground under them show
+        const drive = driveButtonAt(parts, level)!;
+        const pill = pillBox(drive, DRIVE_SIZE, FOCUS_ZOOM);
+        expect(inside(pill, view)).toBe(true);
+        expect(overlaps(pill, ext)).toBe(false);
+        expect(drive.x).toBeCloseTo(domeOf(level).x, 9); // centred over the dome, not beside
+        expect(pill.y0).toBeGreaterThan(ext.y1);
+      }
     });
   }
 });
 
-describe('vehicleSpec.widgets: the green DRIVE button', () => {
-  it('only the dome has it: a play tap, 96 px, green', () => {
-    const parts = buildOn(LEVEL, [['wheelCircle', -45]]);
-    const dome = parts.find((p) => p.kind === 'rover')!;
-    const widgets = vehicleSpec.widgets!(dome, parts, LEVEL);
-    expect(widgets).toHaveLength(1);
-    const drive = widgets[0] as TapWidget;
-    expect(drive).toMatchObject({ kind: 'tap', id: 'drive', action: 'play', size: 96, label: 'DRIVE', color: 0x61bb46 });
-    const wheel = parts.find((p) => p.kind === 'wheelCircle')!;
-    expect(vehicleSpec.widgets!(wheel, parts, LEVEL)).toEqual([]);
+describe('vehicleSpec.widgets: the selected part\'s DRIVE pill', () => {
+  it('the dome and every part on it show one smaller DRIVE pill (id "drive", a play tap, green); scenery none', () => {
+    const parts = buildOn(LEVEL, [['wheelCircle', -45], ['fan', 180]]);
+    for (const part of parts.filter((p) => p.kind === 'rover' || ATTACHMENT_KINDS.includes(p.kind as AttachmentKind))) {
+      const widgets = vehicleSpec.widgets!(part, parts, LEVEL);
+      expect(widgets, part.kind).toHaveLength(1);
+      expect(widgets[0]).toMatchObject({ kind: 'tap', id: 'drive', style: 'big', action: 'play', size: DRIVE_SIZE, icon: '▶', label: 'DRIVE', color: DRIVE_GREEN });
+      expect((widgets[0] as TapWidget).at).toEqual(driveButtonAt(parts, LEVEL));
+    }
+    const finish = parts.find((p) => p.kind === 'finish')!;
+    expect(vehicleSpec.widgets!(finish, parts, LEVEL)).toEqual([]);
+    expect(DRIVE_SIZE).toBeLessThan(IDLE_DRIVE_SIZE);
+    expect(DRIVE_SIZE).toBeGreaterThanOrEqual(64); // the kit's finger floor
   });
 
-  it('sits above the dome on a plain build, clear of a part on top', () => {
-    const plain = buildOn(LEVEL, [['wheelCircle', -45], ['wheelCircle', -135]]);
-    const dome = plain.find((p) => p.kind === 'rover')!;
-    const at = driveButtonAt(plain, LEVEL)!;
-    expect(at.x).toBeCloseTo(dome.x, 9);
-    expect(at.y).toBeGreaterThan(dome.y + ROVER_R);
-    const withTop = buildOn(LEVEL, [['wheelCircle', -45], ['wheelCircle', -135], ['beans', 90]]);
-    const top = buildExtent(withTop, LEVEL)!.y1;
-    const at2 = driveButtonAt(withTop, LEVEL)!;
-    expect(at2.y - DRIVE_SIZE / (2 * 32 * FOCUS_ZOOM)).toBeGreaterThan(top);
+  it('no rocket: the DRIVE pills use ▶', () => {
+    const parts = buildOn(LEVEL, BUILDS.plain!);
+    const all = [...vehicleSpec.idleWidgets!(parts, LEVEL), ...vehicleSpec.widgets!(domeOf(LEVEL), parts, LEVEL)] as TapWidget[];
+    for (const w of all) expect(w.icon).not.toContain('🚀');
   });
 
-  it('moves beside the build (toward the drive direction) when a tall build leaves no room above', () => {
-    const tall = buildOn(LEVEL, BIG_BUILD);
-    const ext = buildExtent(tall, LEVEL)!;
-    const at = driveButtonAt(tall, LEVEL)!;
-    expect(at.x).toBeGreaterThan(ext.x1);
+  for (const level of LEVELS) {
+    it(`${level.id}: the pill is inside the strip left of the drawer and clear of every build`, () => {
+      const view = uncoveredView(buildFrame(level)!);
+      for (const [name, sticks] of Object.entries(BUILDS)) {
+        const parts = buildOn(level, sticks);
+        const pill = pillBox(driveButtonAt(parts, level)!, DRIVE_SIZE, FOCUS_ZOOM);
+        expect(inside(pill, view), name).toBe(true);
+        expect(overlaps(pill, buildExtent(parts, level)!), name).toBe(false);
+      }
+    });
+  }
+});
+
+describe('vehicleSpec.idleWidgets: BUILD over the rover, DRIVE beside it (nothing selected)', () => {
+  it('two big pills: BUILD (select the dome, blue) and DRIVE (play, green, the bigger one)', () => {
+    const parts = buildOn(LEVEL, BUILDS.plain!);
+    const widgets = vehicleSpec.idleWidgets!(parts, LEVEL) as TapWidget[];
+    expect(widgets.map((w) => w.id)).toEqual(['build', 'drive']);
+    const [build, drive] = widgets as [TapWidget, TapWidget];
+    expect(build).toMatchObject({ kind: 'tap', style: 'big', action: 'select', partId: domeOf(LEVEL).id, size: BUILD_SIZE, icon: '🔧', label: 'BUILD', color: BUILD_BLUE });
+    expect(drive).toMatchObject({ kind: 'tap', style: 'big', action: 'play', size: IDLE_DRIVE_SIZE, icon: '▶', label: 'DRIVE', color: DRIVE_GREEN });
+    expect(BUILD_BLUE).toBe(0x05aeed);
+    expect(DRIVE_GREEN).toBe(0x61bb46);
+    expect(IDLE_DRIVE_SIZE).toBeGreaterThan(BUILD_SIZE);
+    const at = idleButtonsAt(parts, LEVEL)!;
+    expect(build.at).toEqual(at.build);
+    expect(drive.at).toEqual(at.drive);
+    expect(vehicleSpec.idleWidgets!(parts.filter((p) => p.kind !== 'rover'), LEVEL)).toEqual([]);
+  });
+
+  for (const level of LEVELS) {
+    it(`${level.id}: both pills inside the zoom-1 view, clear of each other, every build and the ground`, () => {
+      const view = frameView(viewFrameAt(domeOf(level).x), false);
+      for (const [name, sticks] of Object.entries(BUILDS)) {
+        const parts = buildOn(level, sticks);
+        const ext = buildExtent(parts, level)!;
+        const at = idleButtonsAt(parts, level)!;
+        const build = pillBox(at.build, BUILD_SIZE, 1);
+        const drive = pillBox(at.drive, IDLE_DRIVE_SIZE, 1);
+        expect(inside(build, view), name).toBe(true);
+        expect(inside(drive, view), name).toBe(true);
+        expect(overlaps(build, drive), name).toBe(false);
+        expect(overlaps(build, ext), name).toBe(false);
+        expect(overlaps(drive, ext), name).toBe(false);
+        expect(build.y0, name).toBeGreaterThan(groundUnder(level, build.x0, build.x1));
+        expect(drive.y0, name).toBeGreaterThan(groundUnder(level, drive.x0, drive.x1));
+        expect(at.drive.x, name).toBeGreaterThan(at.build.x); // DRIVE toward the beacon
+      }
+    });
+  }
+
+  it('on flat-start levels BUILD sits right over the dome; on the flip mesa both move beside the build', () => {
+    for (const level of LEVELS) {
+      const parts = buildOn(level, HUGE_BUILD);
+      const ext = buildExtent(parts, level)!;
+      const at = idleButtonsAt(parts, level)!;
+      const build = pillBox(at.build, BUILD_SIZE, 1);
+      if (level.id === 'flip') {
+        expect(build.x0).toBeGreaterThan(ext.x1);
+      } else {
+        expect(build.x0).toBeLessThan(domeOf(level).x);
+        expect(build.x1).toBeGreaterThan(domeOf(level).x);
+        expect(build.y0).toBeGreaterThan(ext.y1);
+      }
+    }
+  });
+
+  it('the fit comment\'s numbers: HUGE_BUILD on level 1', () => {
+    const at = idleButtonsAt(buildOn(LEVEL, HUGE_BUILD), LEVEL)!;
+    const ext = buildExtent(buildOn(LEVEL, HUGE_BUILD), LEVEL)!;
+    expect(ext.y1).toBeCloseTo(3.525, 3);
+    expect(at.build.x).toBeCloseTo(3.656, 3);
+    expect(at.drive.x).toBeCloseTo(11.625, 3);
+    expect(at.build.y).toBeCloseTo(5.575, 3);
+  });
+});
+
+describe('vehicleSpec.dragSnap: the ghost lands on the rim', () => {
+  const parts = buildOn(LEVEL, BUILDS.plain!);
+  const dome = parts.find((p) => p.kind === 'rover')!;
+  const wheel = parts.find((p) => p.kind === 'wheelCircle')!;
+
+  it('an attachment snaps to the rim point on the 5-degree grid that normalizeParts would give it', () => {
+    for (let i = 0; i < 200; i++) {
+      const a = (i * 137.5 * Math.PI) / 180;
+      const r = 0.2 + (i % 7) * 0.6;
+      const at = { x: dome.x + r * Math.cos(a), y: dome.y + r * Math.sin(a) };
+      const p = vehicleSpec.dragSnap!(wheel, at, parts, LEVEL);
+      expect(p).toEqual(rimSnap(wheel, at, parts));
+      expect(Math.hypot(p.x - dome.x, p.y - dome.y)).toBeCloseTo(ROVER_R, 9);
+      const theta = Math.atan2(p.y - dome.y, p.x - dome.x);
+      const steps = theta / THETA_STEP;
+      expect(Math.abs(steps - Math.round(steps))).toBeLessThan(1e-6);
+      // Dropped there, normalizeParts keeps that rim angle.
+      const moved = normalizeRoverParts(parts.map((q) => (q.id === wheel.id ? { ...q, x: at.x, y: at.y } : q)), LEVEL.terrain);
+      const domeAfter = moved.find((q) => q.kind === 'rover')!;
+      const after = moved.find((q) => q.id === wheel.id)!;
+      const thetaAfter = Math.atan2(after.y - domeAfter.y, after.x - domeAfter.x);
+      expect(Math.abs(Math.atan2(Math.sin(thetaAfter - theta), Math.cos(thetaAfter - theta)))).toBeLessThan(1e-6);
+    }
+  });
+
+  it('the dome and the scenery follow the pointer', () => {
+    const at = { x: 7.3, y: 4.1 };
+    expect(vehicleSpec.dragSnap!(dome, at, parts, LEVEL)).toEqual(at);
+    expect(vehicleSpec.dragSnap!(parts.find((p) => p.kind === 'finish')!, at, parts, LEVEL)).toEqual(at);
   });
 });
 

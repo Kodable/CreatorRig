@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   ATTACHMENT_KINDS,
+  BLURBS,
   CATALOG,
   COST,
   DRIVE,
@@ -59,6 +60,26 @@ describe('vehicle catalog', () => {
       'parts/rover/real/spring.png',
     ]);
     for (const o of MOUNT_DESCRIPTOR.options) expect(existsSync(resolve(PUBLIC, o.image!))).toBe(true);
+  });
+
+  it('the mount labels say what each does; the spring names its bouncy behaviour and its extra coin', () => {
+    expect(MOUNT_DESCRIPTOR.options.map((o) => o.label)).toEqual(['Suction cup', 'Spring (bouncy, +1 coin)']);
+    expect(MOUNT_DESCRIPTOR.options[1]!.label).toContain(`+${SPRING_EXTRA} coin`);
+  });
+
+  it('blurbs (2026-10-05): one short kid-friendly sentence per attachment', () => {
+    expect(BLURBS).toEqual({
+      wheelCircle: 'Fast and smooth on flat ground.',
+      wheelSquare: 'Grips rocks and steps. Slow!',
+      wheelStar: 'Climbs almost anything.',
+      fan: 'A gentle push. Stick it on the back.',
+      stove: 'Puffs of push! Stick it on the back.',
+      jet: 'A huge push. Watch out, it can lift you!',
+      feather: 'Almost no weight.',
+      beans: 'Adds some weight to hold you down.',
+      watermelon: 'Heavy! Great for ramming.',
+    });
+    for (const kind of ATTACHMENT_KINDS) expect(BLURBS[kind].length, kind).toBeLessThanOrEqual(45);
   });
 
   it('costs: square 1, circle 2, star 3, fan 2, stove 3, jet 5, feather 1, beans 2, watermelon 3', () => {

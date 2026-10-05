@@ -39,6 +39,49 @@ export interface TapGeom extends WidgetGeomBase {
   color?: number;
   texture?: { role: string; tint?: number };
   hopTo?: Vec2;
+  /** 'card' (default) or 'big' (`TapWidget.style`). */
+  style: 'card' | 'big';
+  /** 'big' only: the pill's box and its content metrics, stage px already multiplied by pxScale.
+   * The icon sits at the left of the content run, then `gap`, then the label; the run is centred
+   * in the pill. */
+  pill?: BigPill;
+}
+
+/** A 'big' tap widget's pill (see `TapGeom.pill`). */
+export interface BigPill {
+  w: number;
+  h: number;
+  iconW: number;
+  labelW: number;
+  gap: number;
+  /** Width of the icon + gap + label run (what the scene centres in the pill). */
+  contentW: number;
+}
+
+/** 'big' tap widgets: the pill's height (screen-constant stage px), its label font size, the
+ * horizontal padding either side of the content, the icon/label gap, the minimum pill width, and
+ * how far the hit area reaches past the pill on every side. */
+export const BIG_PILL_H = 64;
+export const BIG_FONT_PX = 24;
+export const BIG_PAD_X = 26;
+export const BIG_GAP = 10;
+export const BIG_MIN_W = 140;
+export const BIG_HIT_PAD = 8;
+
+/** Width in px of `text` drawn bold at BIG_FONT_PX. The scene passes a canvas measurer; tests and
+ * any caller without a canvas get `estimateBigTextWidth`. */
+export type MeasureText = (text: string) => number;
+
+/** A canvas-free estimate of `text`'s width at BIG_FONT_PX bold: 0.62 em per ordinary character,
+ * 1.15 em per emoji/pictograph. */
+export function estimateBigTextWidth(text: string): number {
+  let w = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0) ?? 0;
+    if (cp === 0xfe0f || cp === 0x200d) continue; // variation selector / zero-width joiner
+    w += (cp >= 0x2190 ? 1.15 : 0.62) * BIG_FONT_PX;
+  }
+  return w;
 }
 
 export interface DialGeom extends WidgetGeomBase {
@@ -200,20 +243,42 @@ function lerpVec(a: Vec2, b: Vec2, t: number): Vec2 {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
-function layoutTap(w: TapWidget, toPx: (v: Vec2) => Vec2, pxScale: number): TapGeom {
-  const size = sizeOf(w.size, 76, pxScale);
+function layoutTap(w: TapWidget, toPx: (v: Vec2) => Vec2, pxScale: number, measure: MeasureText): TapGeom {
   const center = toPx(w.at);
-  return {
+  const base = {
     id: w.id,
-    kind: 'tap',
+    kind: 'tap' as const,
     center,
-    size,
     icon: w.icon,
     color: w.color,
     label: w.label,
     texture: w.texture,
     hopTo: w.hopTo ? toPx(w.hopTo) : undefined,
     locked: w.locked ?? false,
+  };
+  if (w.style === 'big') {
+    // The pill: width from the label (BIG_FONT_PX bold) and the icon, a fixed BIG_PILL_H height
+    // (`size` is not used), and a hit area BIG_HIT_PAD px wider than the pill on every side.
+    const iconW = w.icon ? measure(w.icon) : 0;
+    const labelW = w.label ? measure(w.label) : 0;
+    const gap = iconW > 0 && labelW > 0 ? BIG_GAP : 0;
+    const contentW = iconW + gap + labelW;
+    const pw = Math.max(BIG_MIN_W, contentW + 2 * BIG_PAD_X) * pxScale;
+    const ph = BIG_PILL_H * pxScale;
+    const pad = BIG_HIT_PAD * pxScale;
+    return {
+      ...base,
+      size: ph,
+      style: 'big',
+      pill: { w: pw, h: ph, iconW: iconW * pxScale, labelW: labelW * pxScale, gap: gap * pxScale, contentW: contentW * pxScale },
+      hits: [{ shape: { kind: 'rect', x: center.x, y: center.y, w: pw + 2 * pad, h: ph + 2 * pad }, index: 0 }],
+    };
+  }
+  const size = sizeOf(w.size, 76, pxScale);
+  return {
+    ...base,
+    size,
+    style: 'card',
     hits: [{ shape: { kind: 'rect', x: center.x, y: center.y, w: size, h: size }, index: 0 }],
   };
 }
@@ -424,14 +489,42 @@ function layoutPull(w: PullWidget, toPx: (v: Vec2) => Vec2, pxScale: number): Pu
   };
 }
 
+/** Where a pointer (the coach's hand) should point on a laid-out widget, stage px: a tap/cycle
+ * centre, a dial's handle, a rack's middle cell, a lever's knob, a pull's rest handle. */
+export function widgetAnchor(geom: WidgetGeom): Vec2 {
+  switch (geom.kind) {
+    case 'tap':
+    case 'cycle':
+      return geom.center;
+    case 'dial': {
+      const h = geom.hits[0]!.shape;
+      return { x: h.x, y: h.y };
+    }
+    case 'rack': {
+      const cell = geom.cells[Math.floor((geom.cells.length - 1) / 2)];
+      return cell ? cell.center : { x: 0, y: 0 };
+    }
+    case 'lever':
+      return geom.knob;
+    case 'pull':
+      return geom.at;
+  }
+}
+
 /** Lays out every widget in stage px. `toPx` converts world meters (a widget's `at`/`pivot`/`to`)
  * to stage px; `pxScale` (= 1 / camera zoom) keeps on-screen control size constant. Array order
- * is z-order: later entries draw on top and are hit first. */
-export function layoutWidgets(ws: Widget[], toPx: (v: Vec2) => Vec2, pxScale: number): WidgetGeom[] {
+ * is z-order: later entries draw on top and are hit first. `measure` sizes a 'big' tap widget's
+ * label (default: `estimateBigTextWidth`). */
+export function layoutWidgets(
+  ws: Widget[],
+  toPx: (v: Vec2) => Vec2,
+  pxScale: number,
+  measure: MeasureText = estimateBigTextWidth,
+): WidgetGeom[] {
   return ws.map((w): WidgetGeom => {
     switch (w.kind) {
       case 'tap':
-        return layoutTap(w, toPx, pxScale);
+        return layoutTap(w, toPx, pxScale, measure);
       case 'dial':
         return layoutDial(w, toPx, pxScale);
       case 'rack':

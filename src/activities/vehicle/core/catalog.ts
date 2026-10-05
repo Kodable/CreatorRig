@@ -36,14 +36,21 @@ export function isWeight(kind: string): kind is WeightKind {
 
 // ---- the mount ---------------------------------------------------------------------------------
 
+/** A spring mount costs this much more than a suction cup. */
+export const SPRING_EXTRA = 1;
+
 /** Every attachment's one property: how it is stuck to the dome. `cup` = a suction cup, rigid;
- * `spring` = on a spring, soft (wheels: suspension; weights: bouncy). */
+ * `spring` = on a spring, soft (wheels: suspension; weights: bouncy). The options carry pictures,
+ * so the drawer shows no caption under them; its row title reads "Mount · <active label>"
+ * (BuilderHud `syncDrawerActive`, 16 px bold in the 340 px drawer: "Mount · Spring (bouncy, +1
+ * coin)" fits on one line), which is where the spring says what it does and what it costs
+ * (Jon, playtest review 2026-10-05: "show what the spring does"). */
 export const MOUNT_DESCRIPTOR: PropertyDescriptor = {
   code: 'mount',
   label: 'Mount',
   options: [
     { value: 'cup', label: 'Suction cup', image: `${ART_DIR}suctioncup.png` },
-    { value: 'spring', label: 'Spring', image: `${ART_DIR}spring.png` },
+    { value: 'spring', label: `Spring (bouncy, +${SPRING_EXTRA} coin)`, image: `${ART_DIR}spring.png` },
   ],
   default: 'cup',
 };
@@ -68,9 +75,6 @@ export const COST: Record<AttachmentKind, number> = {
   beans: 2,
   watermelon: 3,
 };
-
-/** A spring mount costs this much more than a suction cup. */
-export const SPRING_EXTRA = 1;
 
 /** `CourseSpec.partCost`: an attachment's coins (its kind + its mount); the dome and the level's
  * scenery are free. */
@@ -129,6 +133,21 @@ export const CATALOG: Record<PartKind, CatalogEntry> = (Object.keys(LABELS) as P
   },
   {} as Record<PartKind, CatalogEntry>,
 );
+
+/** One kid-friendly sentence per part (`HudSpec.partInfo.blurb`): shown in the shelf's unlock
+ * callout when a level introduces the part, and as its shelf button's title (Jon, playtest
+ * review 2026-10-05: "explain what each part does"). */
+export const BLURBS: Record<AttachmentKind, string> = {
+  wheelCircle: 'Fast and smooth on flat ground.',
+  wheelSquare: 'Grips rocks and steps. Slow!',
+  wheelStar: 'Climbs almost anything.',
+  fan: 'A gentle push. Stick it on the back.',
+  stove: 'Puffs of push! Stick it on the back.',
+  jet: 'A huge push. Watch out, it can lift you!',
+  feather: 'Almost no weight.',
+  beans: 'Adds some weight to hold you down.',
+  watermelon: 'Heavy! Great for ramming.',
+};
 
 /** The default props for `kind` (a copy; callers may mutate it freely). */
 export function defaultProps(kind: PartKind): Record<string, string> {

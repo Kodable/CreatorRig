@@ -27,7 +27,10 @@ const INTROS = ['wheels', 'shape', 'mount', 'weight', 'power'];
 describe('vehicle levels: structure', () => {
   it('has 14 levels: five intros (one new thing each, in order), three challenges, five long challenges, then free play', () => {
     expect(LEVELS.map((l) => l.id)).toEqual(ORDER);
-    for (const [i, id] of INTROS.entries()) expect(LEVELS[i]!.introduces).toEqual([id]);
+    // Each intro names its concept first, then a `part:<kind>` entry per kind it unlocks.
+    for (const [i, id] of INTROS.entries()) {
+      expect(LEVELS[i]!.introduces).toEqual([id, ...CONCEPT_KINDS[id]!.map((kind) => `part:${kind}`)]);
+    }
     for (const level of LEVELS.slice(INTROS.length)) expect(level.introduces ?? []).toEqual([]);
     expect(findLevel('jump')?.title).toBe('Crevasse jump');
     expect(findLevel('nope')).toBeUndefined();
@@ -35,6 +38,34 @@ describe('vehicle levels: structure', () => {
 
   it('the Mount row (prop code "mount") is introduced by the mount level', () => {
     expect(findLevel('mount')!.introduces).toContain('mount');
+  });
+
+  it('part:<kind> unlocks (shelf callout, 2026-10-05): each kind is announced on the level that first offers it, and is in that palette', () => {
+    const offered = new Set<PartKind>();
+    const announced: Record<string, string[]> = {};
+    for (const level of LEVELS) {
+      const parts = (level.introduces ?? []).filter((e) => e.startsWith('part:')).map((e) => e.slice('part:'.length));
+      for (const kind of parts) expect(level.palette, `${level.id}: ${kind}`).toContain(kind);
+      const firsts = level.palette.filter((k) => !offered.has(k));
+      expect([...parts].sort(), level.id).toEqual([...firsts].sort());
+      for (const k of level.palette) offered.add(k);
+      if (parts.length > 0) announced[level.id] = parts;
+    }
+    expect(announced).toEqual({
+      wheels: ['wheelCircle', 'wheelSquare'],
+      shape: ['wheelStar'],
+      weight: ['feather', 'beans', 'watermelon'],
+      power: ['fan', 'stove', 'jet'],
+    });
+    expect(offered).toEqual(new Set(ATTACHMENT_KINDS));
+  });
+
+  it('the intro Bruno lines are short (the coach carries the steps) and coins are not on them', () => {
+    for (const id of INTROS) {
+      const bruno = findLevel(id)!.bruno;
+      expect(bruno.length, id).toBeLessThanOrEqual(70);
+      expect(bruno, id).not.toMatch(/coin/i);
+    }
   });
 
   for (const level of LEVELS) {

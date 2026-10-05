@@ -2,7 +2,8 @@
 // level places Kevin's glass dome (locked, the child never drags it) and the beacon; the child
 // spends the level's coins on parts from the palette, sticks them anywhere on the dome's rim,
 // presses DRIVE and watches. Intro levels first, one new thing each (the palette is the gate;
-// the Mount row unlocks with `introduces: ['mount']`), then challenges, then free play.
+// the Mount row unlocks with `introduces: ['mount']`, and each intro's `part:<kind>` entries play
+// the shelf's unlock callout for the parts it adds), then challenges, then free play.
 // Units are meters, y up, ground height from each level's `terrain` profile (terrain.ts), world
 // 90 x 15 m since 2026-10-05 (walls at x 0 and 90; the panel shows 30 m of it and the camera
 // scrolls). The first nine levels keep their 2026-10-02 content on x 0..30 and simply continue
@@ -155,6 +156,13 @@ export const CONCEPT_KINDS: Record<string, PartKind[]> = {
   power: POWER,
 };
 
+/** A level's `introduces` for `concept`: the concept id, then a `part:<kind>` entry for every kind
+ * it unlocks (kit/types.ts: the shelf plays its unlock callout for those kinds, with the part's
+ * blurb, on that level; levels.test checks each is in the palette and offered there first). */
+function unlock(concept: string): string[] {
+  return [concept, ...(CONCEPT_KINDS[concept] ?? []).map((kind) => `part:${kind}`)];
+}
+
 // ---- terrains of the long challenges (2026-10-05) ----------------------------------------------
 
 /** Topsy-turvy: a 9 m mesa, cliffs of 4.5 m at x 16 and x 40, then flat ground. */
@@ -204,12 +212,14 @@ export const LEVELS: VehicleLevel[] = [
   level({
     id: 'wheels',
     title: 'Dusty hill',
-    bruno: "Kevin's rover is just a glass dome! Tap a wheel to stick it on, then another. Then tap the dome and press DRIVE.",
+    // 2026-10-05 playtest review (Jon): the coach (../coach.ts) carries the taps (BUILD, a Round
+    // wheel, another, DRIVE); Bruno's line just sets the scene.
+    bruno: "Kevin's rover is just a glass dome. Let's give it wheels!",
     terrain: withHill(flat(), 11, 17, 1.2),
     budget: 4,
     extentW: 30,
     palette: WHEELS,
-    introduces: ['wheels'],
+    introduces: unlock('wheels'),
     hints: [
       'A dome with no wheels just sits there. Wheels make it roll!',
       'Each wheel costs coins. Round wheels cost 2, square wheels cost 1.',
@@ -228,14 +238,14 @@ export const LEVELS: VehicleLevel[] = [
   level({
     id: 'shape',
     title: 'Rock steps',
-    bruno: 'Rock steps! Round wheels hit them too fast and trip. Maybe a wheel with points can grab the rock?',
+    bruno: 'Rock steps ahead! Build your rover and tap DRIVE to try them.',
     terrain: withStairs(flat(), 12, 4, 0.15, 0.6),
     budget: 6,
     extentW: 30,
     // Every round layout trips over the first step and flips (rigid, at 6 m/s); every star layout
     // climbs. Square wheels climb too (slowly), so this intro compares round with star only.
     palette: ['wheelCircle', 'wheelStar'],
-    introduces: ['shape'],
+    introduces: unlock('shape'),
     hints: [
       'Round wheels roll fast, so they trip over the first step and tip over.',
       'Try the new star wheels. Their points hook onto each step.',
@@ -254,7 +264,7 @@ export const LEVELS: VehicleLevel[] = [
   level({
     id: 'mount',
     title: 'Bumpy road',
-    bruno: 'This road is so bumpy! Suction cups hold the wheels stiff. Tap a wheel and try a spring instead.',
+    bruno: 'A bumpy road! Build your rover, tap DRIVE and watch the wheels.',
     terrain: withCobbles(flat(), 8, 18, 0.15, 0.6),
     budget: 6,
     extentW: 30,
@@ -262,7 +272,7 @@ export const LEVELS: VehicleLevel[] = [
     // Round wheels only: square and star wheels crawl over the bumps on suction cups, which
     // would hide the lesson (springs soak up bumps).
     palette: ['wheelCircle'],
-    introduces: ['mount'],
+    introduces: unlock('mount'),
     hints: [
       'Stiff wheels bounce on every bump.',
       'Tap a wheel on your rover, then pick the spring in the drawer. A spring costs 1 more coin.',
@@ -284,12 +294,12 @@ export const LEVELS: VehicleLevel[] = [
   level({
     id: 'weight',
     title: 'Boulder push',
-    bruno: 'A boulder is blocking the trail! The wheels just bump into it. Stick something heavy on the front and ram it!',
+    bruno: 'A boulder blocks the trail! Build your rover and DRIVE into it.',
     terrain: flat(),
     budget: 7,
     extentW: 30,
     palette: [...ALL_WHEELS, ...WEIGHTS],
-    introduces: ['weight'],
+    introduces: unlock('weight'),
     finishX: 17,
     scenery: (terrain) => [boulderAt(terrain, 3, 14, '1.6x1.2', 'rock')],
     hints: [
@@ -314,12 +324,12 @@ export const LEVELS: VehicleLevel[] = [
   level({
     id: 'power',
     title: 'Crater rim',
-    bruno: 'The crater rim is so steep, the wheels just slip! We need a push. Fans, stoves and jets push the rover.',
+    bruno: 'The crater rim is so steep! Build your rover and try to DRIVE up.',
     terrain: withHill(flat(), 10, 16, 2.5),
     budget: 8,
     extentW: 30,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
-    introduces: ['power'],
+    introduces: unlock('power'),
     hints: [
       'Wheels slip on a hill this steep, even with more of them.',
       'A fan, a stove or a jet pushes the rover away from where it is stuck on.',

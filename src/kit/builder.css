@@ -292,3 +292,134 @@
   background: repeating-linear-gradient(90deg, #3d4a80 0 2px, transparent 2px 6px);
 }
 .world-scroll-thumb.dragging .world-scroll-grip { background: #05aeed; border-color: #ffffff; }
+
+/* ======== Builder-kit UX for the first levels (2026-10-05 playtest review). Every rule below is
+   for DOM that only shows on a course that opts in (HudSpec.winBanner, HudState.coach,
+   HudState.unlocked / partInfo.blurb); other courses never render these elements. ======== */
+
+/* ---- Win banner (HudSpec.winBanner): over the world panel (x 32..992, y 210..690). ---- */
+.win-banner {
+  position: absolute; left: 32px; top: 210px; width: 960px; height: 480px; z-index: 40;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-radius: 12px; pointer-events: auto;
+  background: radial-gradient(ellipse at 50% 45%, rgba(11, 16, 48, 0.3), rgba(11, 16, 48, 0.72));
+}
+.win-confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.confetti-piece {
+  position: absolute; left: 50%; top: 42%; width: 10px; height: 16px; margin: -8px 0 0 -5px;
+  border-radius: 2px; opacity: 0; animation: confetti-burst 1400ms linear both;
+}
+.confetti-piece.round { width: 11px; height: 11px; margin: -5px 0 0 -5px; border-radius: 50%; }
+@keyframes confetti-burst {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(0.5); animation-timing-function: cubic-bezier(.15, .75, .35, 1); }
+  35% { opacity: 1; transform: translate(calc(var(--dx) * 0.65), var(--up)) rotate(calc(var(--rot) * 0.4)) scale(1); animation-timing-function: cubic-bezier(.45, 0, .85, .55); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1); }
+}
+.win-card {
+  position: relative; min-width: 440px; max-width: 620px; box-sizing: border-box;
+  padding: 30px 46px 28px; border-radius: 28px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: linear-gradient(180deg, #2f3d80 0%, #1a2142 100%);
+  border: 4px solid #61bb46;
+  box-shadow: 0 12px 0 rgba(0, 0, 0, 0.22), 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+.win-card.enter { animation: win-pop 440ms cubic-bezier(.2, .9, .3, 1.25) both; }
+@keyframes win-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.win-title {
+  font: 800 48px/1.05 "Arial Rounded MT Bold", "Nunito", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #ffb40f; letter-spacing: 0.5px;
+  text-shadow: 0 4px 0 #8a5a00, 0 8px 16px rgba(0, 0, 0, 0.45);
+}
+.win-outcome { font-size: 19px; font-weight: 700; line-height: 1.3; color: #e6e9f5; max-width: 500px; }
+.win-actions { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 10px; }
+.win-actions button {
+  border: none; cursor: pointer; white-space: nowrap;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  font-family: "Arial Rounded MT Bold", "Nunito", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.win-next {
+  height: 68px; padding: 0 36px; border-radius: 34px; background: #61bb46; color: #fff;
+  font-size: 27px; font-weight: 800; line-height: 1;
+  box-shadow: 0 6px 0 #3f8a2b, 0 10px 18px rgba(0, 0, 0, 0.35);
+  animation: win-next-pulse 1200ms ease-in-out infinite;
+}
+.win-next:active { transform: translateY(4px); box-shadow: 0 2px 0 #3f8a2b; animation: none; }
+@keyframes win-next-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+.win-retry {
+  height: 50px; padding: 0 24px; border-radius: 25px; background: #2c3560; color: #fff;
+  font-size: 18px; font-weight: 700; line-height: 1; box-shadow: inset 0 0 0 2px #3d4a80;
+}
+.win-close {
+  position: absolute; top: 10px; right: 12px; width: 40px; height: 40px; border-radius: 50%;
+  border: none; background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 20px; font-weight: 700;
+  line-height: 1; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.win-close:hover { background: rgba(255, 255, 255, 0.22); }
+
+/* ---- Shelf unlock (HudState.unlocked): a NEW badge on the button (a tap on it re-opens the
+   callout), a staggered pop-in, and the callout card beside the button. ---- */
+.unlock-badge {
+  position: absolute; top: -8px; left: -8px; z-index: 1;
+  padding: 0 6px; border-radius: 999px; background: #05aeed; color: #0b1030;
+  font-size: 10px; font-weight: 800; line-height: 1.6; letter-spacing: 0.04em;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); cursor: pointer; pointer-events: auto;
+}
+.unlock-badge::before { content: ''; position: absolute; inset: -8px; } /* a finger-sized hit area */
+.palette-chip.has-new { position: relative; }
+.palette-chip .unlock-badge { top: 2px; left: 2px; }
+.shelf-btn.unlock-pop, .palette-chip.unlock-pop { animation: unlock-pop 400ms cubic-bezier(.3, .8, .4, 1.2) both; }
+@keyframes unlock-pop {
+  0% { transform: scale(0.6); box-shadow: 0 0 0 0 rgba(5, 174, 237, 0.7); }
+  60% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(5, 174, 237, 0.35); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(5, 174, 237, 0); }
+}
+.unlock-callout {
+  position: absolute; left: 0; top: 0; width: 260px; z-index: 42; box-sizing: border-box;
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: #ffffff; color: #1a2142; border: 3px solid #05aeed; border-radius: 16px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45); pointer-events: auto;
+}
+.unlock-callout.enter { animation: callout-in 260ms cubic-bezier(.2, .9, .3, 1.2) both; }
+@keyframes callout-in { from { opacity: 0; transform: translateX(12px) scale(0.9); } to { opacity: 1; transform: none; } }
+/* The arrow: right edge by default (the card sits left of a shelf button), bottom edge with
+   .above (over a palette chip). --arrow-y / --arrow-x are set from JS to point at the button. */
+.unlock-callout::after {
+  content: ''; position: absolute; right: -11px; top: var(--arrow-y, 50%); width: 16px; height: 16px;
+  margin-top: -9px; background: #ffffff; border-top: 3px solid #05aeed; border-right: 3px solid #05aeed;
+  transform: rotate(45deg);
+}
+.unlock-callout.above::after {
+  right: auto; top: auto; bottom: -11px; left: var(--arrow-x, 50%); margin: 0 0 0 -9px;
+  border-top: none; border-bottom: 3px solid #05aeed;
+}
+.unlock-callout-img { flex: 0 0 auto; width: 60px; height: 60px; object-fit: contain; pointer-events: none; }
+.unlock-callout-icon { flex: 0 0 auto; width: 60px; font-size: 40px; line-height: 1; text-align: center; }
+.unlock-callout-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.unlock-callout-kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: #05aeed; line-height: 1.2; }
+.unlock-callout-title {
+  font: 800 18px/1.15 "Arial Rounded MT Bold", "Nunito", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.unlock-callout-text { font-size: 14px; line-height: 1.3; color: #2c3560; }
+
+/* ---- The coach's pointer hand over a DOM target (HudState.coach: shelf / drawer / bar). The
+   48 px box's fingertip sits at (22, 5); JS places that point on the target. ---- */
+.coach-hand {
+  position: absolute; left: 0; top: 0; width: 48px; height: 48px; z-index: 45; pointer-events: none;
+  font-size: 40px; line-height: 48px; text-align: center;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45)); transform-origin: 22px 5px;
+}
+.coach-hand.enter { animation: coach-in 300ms cubic-bezier(.3, .8, .4, 1.3) both; }
+.coach-hand-glyph { display: inline-block; animation: coach-bounce 900ms ease-in-out infinite; }
+@keyframes coach-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
+@keyframes coach-in { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-hand-glyph, .coach-hand.enter, .win-card.enter, .win-next, .unlock-callout.enter,
+  .shelf-btn.unlock-pop, .palette-chip.unlock-pop { animation: none !important; }
+  .confetti-piece { display: none; }
+}

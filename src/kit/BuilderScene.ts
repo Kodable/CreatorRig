@@ -16,11 +16,14 @@ import {
   type WorldDims,
 } from './camera';
 import {
+  BIG_FONT_PX,
   dialAngleToValue,
   dialPoint,
+  estimateBigTextWidth,
   hitWidget,
   layoutWidgets,
   leverPointToValue,
+  widgetAnchor,
   type CycleGeom,
   type DialGeom,
   type LeverGeom,
@@ -80,6 +83,9 @@ interface WidgetHop {
   start: number;
 }
 
+/** An in-scene target for the coach's pointer hand (`CoachTarget` 'widget' / 'part'). */
+export type CoachSceneTarget = { type: 'widget'; id: string } | { type: 'part'; partId: number };
+
 const HIT_MARGIN = 0.3; // meters, expands bounds so thin parts are easy to grab
 const MOVE_THRESHOLD = 6; // px
 
@@ -124,6 +130,19 @@ const GLIDE_LERP = 0.3;
 /** An intro pan's clock never advances more than this per frame, so the hitch of the level's
  * first build does not swallow the start of the pan. */
 const INTRO_MAX_DT_MS = 50;
+
+/** The 'big' tap widget's type: rounded where the system has it (macOS: Arial Rounded MT Bold),
+ * the HUD's sans otherwise. Also what `measureBig` measures with, so the pill fits its label. */
+const BIG_FONT_FAMILY = '"Arial Rounded MT Bold", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+/** 'big' tap widget: one soft pulse (scale 1.0 -> 1.04 -> 1.0) per this many ms. */
+const BIG_PULSE_MS = 1200;
+/** The coach's pointer hand: glyph size (stage px, screen-constant), bounce depth and period, and
+ * how long it takes to pop in when the step changes. */
+const COACH_HAND_PX = 40;
+const COACH_BOUNCE_PX = 6;
+const COACH_BOUNCE_MS = 900;
+const COACH_IN_MS = 300;
+const DEPTH_COACH = DEPTH_WIDGETS + 0.2; // above widget text (+0.05) and hops (+0.1)
 
 const WIDGET_HOP_MS = 350; // tap/cycle/rack hopTo icon/texture flight
 const WIDGET_SPRING_MS = 150; // pull handle spring-back when released short of threshold
@@ -286,6 +305,11 @@ export class BuilderScene extends Phaser.Scene {
   onWidgetBlocked?: (id: string) => void;
   /** A pull widget is being dragged; `t` is live 0..1. */
   onWidgetDrag?: (id: string, t: number) => void;
+  /** `CourseSpec.dragSnap`, resolved by the controller: while part `partId` is dragged with the
+   * pointer at world point `at`, the world-meter delta from the part's stored anchor to where its
+   * ghost should sit (the drop then commits exactly that delta via `onPartMoved`). Unset or null
+   * = today's offset drag (the ghost follows the finger with the grab offset). */
+  dragSnap?: (partId: number, at: Vec2) => Vec2 | null;
 
   private readonly view: ReturnType<typeof makeView>;
 
@@ -412,6 +436,18 @@ export class BuilderScene extends Phaser.Scene {
   /** Keys already warned about (missing/failed texture); each is logged once, not once per
    * frame/setItems call. */
   private readonly warnedTextureKeys = new Set<string>();
+
+  /** 'big' tap widgets: label widths (px at BIG_FONT_PX bold in BIG_FONT_FAMILY), measured once
+   * per string on an offscreen canvas. */
+  private readonly bigTextWidths = new Map<string, number>();
+  private measureCtx: CanvasRenderingContext2D | null | undefined;
+
+  // ---- the coach's pointer hand (see `setCoachTarget`) ----
+  private coachTarget: CoachSceneTarget | null = null;
+  /** Step id + target: the hand pops in again whenever it changes. */
+  private coachKey = '';
+  private coachStart = 0;
+  private coachHand?: Phaser.GameObjects.Text;
 
   constructor(
     key: string,
@@ -1127,6 +1163,53 @@ export class BuilderScene extends Phaser.Scene {
       for (const text of this.widgetTextCache.values()) text.setVisible(false);
       for (const img of this.widgetImageCache.values()) img.setVisible(false);
     }
+
+    this.drawCoachHand();
+  }
+
+  /** The coach's hand (see `setCoachTarget`), placed after the widgets so it can find their
+   * geometry for this frame. */
+  private drawCoachHand(): void {
+    const target = this.coachTarget;
+    let p: Vec2 | null = null;
+    if (target && this.editable) {
+      if (target.type === 'widget') {
+        const geom = this.widgetGeoms.find((gm) => gm.id === target.id);
+        if (geom) p = widgetAnchor(geom);
+      } else {
+        const b = this.boundsByPart.get(target.partId);
+        if (b) {
+          const extra = target.partId === this.dragPartId ? this.dragOffset : { x: 0, y: 0 };
+          p = this.view.toPx({ x: b.x + extra.x, y: b.y + extra.y });
+        }
+      }
+    }
+    // Off camera (a focus zoom elsewhere, a scrolled wide world): no hand.
+    if (p && !this.worldCam.worldView.contains(p.x, p.y)) p = null;
+    if (!p) {
+      this.coachHand?.setVisible(false);
+      return;
+    }
+    let hand = this.coachHand;
+    if (!hand) {
+      hand = this.onWorld(
+        this.add.text(0, 0, '👆', { fontSize: `${COACH_HAND_PX}px`, resolution: TEXT_RESOLUTION, padding: { x: 4, y: 4 } }),
+      );
+      // The 👆 glyph's fingertip sits near the top middle of its box.
+      hand.setOrigin(0.45, 0.06);
+      hand.setShadow(0, 4, 'rgba(0, 0, 0, 0.45)', 6, false, true);
+      hand.setDepth(DEPTH_COACH);
+      this.coachHand = hand;
+    }
+    const s = this.pxScale;
+    const tIn = Math.min(1, Math.max(0, (this.nowMs - this.coachStart) / COACH_IN_MS));
+    const grow = tIn >= 1 ? 1 : 0.3 + 0.7 * easeOutBack(tIn);
+    // The bounce: away from the target and back, like a finger tapping it.
+    const bounce = COACH_BOUNCE_PX * (0.5 - 0.5 * Math.cos(((this.nowMs - this.coachStart) / COACH_BOUNCE_MS) * 2 * Math.PI));
+    hand.setScale(s * grow);
+    hand.setAlpha(Math.min(1, tIn * 1.5));
+    hand.setPosition(p.x, p.y + (6 + bounce) * s);
+    hand.setVisible(true);
   }
 
   setSelected(partId: number | null): void {
@@ -1183,6 +1266,22 @@ export class BuilderScene extends Phaser.Scene {
     }
     for (const id of [...this.widgetSpring.keys()]) if (!ids.has(id)) this.widgetSpring.delete(id);
     for (const key of [...this.widgetPop.keys()]) if (!ids.has(key.split(':')[0]!)) this.widgetPop.delete(key);
+  }
+
+  /** The coach's pointer hand for an in-scene target (`CoachTarget` 'widget' / 'part'): a bouncing
+   * 👆 drawn in world-camera space (counter-scaled, so ~40 px on screen at any zoom) with its
+   * fingertip on the widget's anchor (see `widgetAnchor`: a tap's centre, a dial's handle, ...) or
+   * the part's bounds centre. `stepId` is the coach step's id: the hand pops in again when it (or
+   * the target) changes. null hides the hand. Nothing is drawn while the target is not found (no
+   * widget with that id on screen, no such part) or sits outside the camera view, or while the
+   * scene is not editable (play mode). Cheap to call every frame. */
+  setCoachTarget(target: CoachSceneTarget | null, stepId = ''): void {
+    const key = target ? `${stepId}|${target.type === 'widget' ? `w:${target.id}` : `p:${target.partId}`}` : '';
+    if (key !== this.coachKey) {
+      this.coachKey = key;
+      this.coachStart = this.nowMs;
+    }
+    this.coachTarget = target;
   }
 
   // ---------------- drawing ----------------
@@ -1500,7 +1599,7 @@ export class BuilderScene extends Phaser.Scene {
 
   private drawWidgets(): void {
     const toPx = (v: Vec2): Vec2 => this.view.toPx(v);
-    this.widgetGeoms = layoutWidgets(this.widgetSpecs, toPx, this.pxScale);
+    this.widgetGeoms = layoutWidgets(this.widgetSpecs, toPx, this.pxScale, this.measureBig);
     const seenText = new Set<string>();
     const seenImg = new Set<string>();
 
@@ -1541,11 +1640,19 @@ export class BuilderScene extends Phaser.Scene {
     color: string,
     centered: boolean,
     bold = false,
+    /** A font family for this text (created with it; the default is Phaser's). */
+    family?: string,
   ): Phaser.GameObjects.Text {
     let text = this.widgetTextCache.get(key);
     if (!text) {
       text = this.onWorld(
-        this.add.text(0, 0, content, { fontSize: `${fontSize}px`, color, fontStyle: bold ? 'bold' : 'normal', resolution: TEXT_RESOLUTION }),
+        this.add.text(0, 0, content, {
+          fontSize: `${fontSize}px`,
+          color,
+          fontStyle: bold ? 'bold' : 'normal',
+          resolution: TEXT_RESOLUTION,
+          ...(family ? { fontFamily: family } : {}),
+        }),
       );
       if (centered) text.setOrigin(0.5, 0.5);
       text.setDepth(DEPTH_WIDGETS + 0.05);
@@ -1597,7 +1704,86 @@ export class BuilderScene extends Phaser.Scene {
     return (raw >= 72 ? 14 : 10) * this.pxScale;
   }
 
+  /** Width of `text` at BIG_FONT_PX bold in BIG_FONT_FAMILY (px), for a 'big' tap widget's pill;
+   * measured once per string on an offscreen canvas (the estimate when there is no 2D context). */
+  private readonly measureBig = (text: string): number => {
+    let w = this.bigTextWidths.get(text);
+    if (w !== undefined) return w;
+    if (this.measureCtx === undefined) {
+      try {
+        this.measureCtx = document.createElement('canvas').getContext('2d');
+      } catch {
+        this.measureCtx = null;
+      }
+    }
+    const ctx = this.measureCtx;
+    if (ctx) {
+      ctx.font = `bold ${BIG_FONT_PX}px ${BIG_FONT_FAMILY}`;
+      w = ctx.measureText(text).width;
+    } else {
+      w = estimateBigTextWidth(text);
+    }
+    this.bigTextWidths.set(text, w);
+    return w;
+  };
+
+  /** `TapWidget.style` 'big': a chunky pill filled with the widget colour (default GO green), a
+   * darker lip and a dark drop shadow under it, a soft highlight on its top half, a white rim, and
+   * the icon + label (BIG_FONT_PX bold, white) inside. Pulses 1.0 -> 1.04 every BIG_PULSE_MS
+   * unless locked; pops on tap like the card. Its label is always drawn (it IS the control), at
+   * any zoom. */
+  private drawBigTap(geom: TapGeom, pill: NonNullable<TapGeom['pill']>, seenText: Set<string>): void {
+    const g = this.widgetGfx;
+    const s = this.pxScale;
+    const locked = geom.locked;
+    const alpha = locked ? 0.55 : 1;
+    const fill = locked ? MUTED : geom.color ?? GO;
+    const pulse = locked ? 1 : 1 + 0.02 * (1 - Math.cos((this.nowMs / BIG_PULSE_MS) * 2 * Math.PI));
+    const k = pulse * this.popFor(geom.id);
+    const w = pill.w * k;
+    const h = pill.h * k;
+    const r = Math.max(1, Math.min(h, w) / 2 - 0.5 * s);
+    const x0 = geom.center.x - w / 2;
+    const y0 = geom.center.y - h / 2;
+
+    g.fillStyle(SHADOW_COLOR, 0.5 * alpha);
+    g.fillRoundedRect(x0 + 1 * s, y0 + 9 * s, w, h, r);
+    g.fillStyle(darken(fill, 0.32), alpha);
+    g.fillRoundedRect(x0, y0 + 5 * s, w, h, r);
+    g.fillStyle(fill, alpha);
+    g.fillRoundedRect(x0, y0, w, h, r);
+    // A soft highlight across the top half (glossy, "press me").
+    const hr = Math.max(1, Math.min(r * 0.8, (h * 0.4) / 2));
+    g.fillStyle(0xffffff, 0.2 * alpha);
+    g.fillRoundedRect(x0 + 10 * s, y0 + 5 * s, w - 20 * s, h * 0.4, hr);
+    g.lineStyle(3 * s, 0xffffff, 0.85 * alpha);
+    g.strokeRoundedRect(x0, y0, w, h, r);
+
+    let x = geom.center.x - (pill.contentW * k) / 2;
+    if (geom.icon && pill.iconW > 0) {
+      const key = `tap:${geom.id}:bigicon`;
+      seenText.add(key);
+      const t = this.widgetText(key, geom.icon, BIG_FONT_PX, '#ffffff', true, true, BIG_FONT_FAMILY);
+      t.setAlpha(alpha);
+      t.setScale(s * k);
+      t.setPosition(x + (pill.iconW * k) / 2, geom.center.y);
+      x += (pill.iconW + pill.gap) * k;
+    }
+    if (geom.label) {
+      const key = `tap:${geom.id}:biglabel`;
+      seenText.add(key);
+      const t = this.widgetText(key, geom.label, BIG_FONT_PX, '#ffffff', true, true, BIG_FONT_FAMILY);
+      t.setAlpha(alpha);
+      t.setScale(s * k);
+      t.setPosition(x + (pill.labelW * k) / 2, geom.center.y);
+    }
+  }
+
   private drawTapWidget(geom: TapGeom, seenText: Set<string>, seenImg: Set<string>): void {
+    if (geom.style === 'big' && geom.pill) {
+      this.drawBigTap(geom, geom.pill, seenText);
+      return;
+    }
     const g = this.widgetGfx;
     const s = this.pxScale;
     const locked = geom.locked;
@@ -2418,9 +2604,19 @@ export class BuilderScene extends Phaser.Scene {
     if (this.toolKind === 'place') return;
 
     const w = this.view.toWorld({ x: sx, y: sy });
+    this.dragPartId = this.gesture.partId;
+    if (this.dragSnap) {
+      // A snapping course (`CourseSpec.dragSnap`): the ghost sits where the course says for this
+      // pointer position, and the drop commits exactly that delta. It stays put until the finger
+      // has really moved (a tap's jiggle must not jump the part to a snap point).
+      const snapped = this.gesture.moved ? this.dragSnap(this.gesture.partId, w) : { x: 0, y: 0 };
+      if (snapped) {
+        this.dragOffset = snapped;
+        return;
+      }
+    }
     const dx = w.x - this.gesture.startWorld.x;
     const dy = w.y - this.gesture.startWorld.y;
-    this.dragPartId = this.gesture.partId;
     this.dragOffset = this.clampDrag(this.gesture.partId, dx, dy);
   }
 

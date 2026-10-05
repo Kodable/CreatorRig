@@ -63,6 +63,7 @@ export function bootBuilderActivity<
       exit: () => host.exit(),
       setTool: (id: string) => app?.setTool(id),
       scrollTo: (t: number) => app?.scrollTo(t),
+      dismissWin: () => app?.dismissWin(),
     },
     spec.hud,
     spec.drawer,

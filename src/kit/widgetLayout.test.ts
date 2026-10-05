@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BIG_GAP,
+  BIG_HIT_PAD,
+  BIG_MIN_W,
+  BIG_PAD_X,
+  BIG_PILL_H,
   MIN_TOUCH_PX,
+  estimateBigTextWidth,
+  widgetAnchor,
+  type TapGeom,
   dialAngleToValue,
   dialValueToAngle,
   dialPoint,
@@ -282,5 +290,96 @@ describe('cycle layout', () => {
     const wrapped: CycleWidget = { ...cycle, value: 'c' };
     const [geom] = layoutWidgets([wrapped], toPx, 1) as [CycleGeom];
     expect(geom.nextValue).toBe('a');
+  });
+});
+
+describe("tap widget style 'big' (the one obvious start button)", () => {
+  const big: TapWidget = { id: 'go', kind: 'tap', at: { x: 5, y: 5 }, icon: '▶', label: 'DRIVE', style: 'big' };
+  /** 10 px per code unit: '▶' = 10, 'DRIVE' = 50. */
+  const measure = (t: string): number => t.length * 10;
+
+  it('sizes the pill from the measured icon + label, BIG_PILL_H tall, centred on `at`', () => {
+    const [g] = layoutWidgets([{ ...big, label: 'LAUNCH THE ROVER' }], toPx, 1, measure) as TapGeom[];
+    expect(g!.style).toBe('big');
+    expect(g!.center).toEqual(toPx({ x: 5, y: 5 }));
+    // icon 10 + gap + label 160, padded on both sides.
+    expect(g!.pill).toEqual({ w: 10 + BIG_GAP + 160 + 2 * BIG_PAD_X, h: BIG_PILL_H, iconW: 10, labelW: 160, gap: BIG_GAP, contentW: 180 });
+    expect(g!.size).toBe(BIG_PILL_H);
+  });
+
+  it('never gets narrower than BIG_MIN_W', () => {
+    const [g] = layoutWidgets([{ ...big, label: 'GO' }], toPx, 1, measure) as TapGeom[];
+    expect(g!.pill!.w).toBe(BIG_MIN_W);
+    expect(g!.pill!.contentW).toBe(10 + BIG_GAP + 20);
+  });
+
+  it('drops the gap when there is no label (icon only)', () => {
+    const [g] = layoutWidgets([{ ...big, label: undefined }], toPx, 1, measure) as TapGeom[];
+    expect(g!.pill!.gap).toBe(0);
+    expect(g!.pill!.contentW).toBe(10);
+  });
+
+  it('hits the pill plus BIG_HIT_PAD on every side, and nothing past that', () => {
+    const [g] = layoutWidgets([big], toPx, 1, measure) as TapGeom[];
+    const pill = g!.pill!;
+    expect(g!.hits[0]!.shape).toEqual({ kind: 'rect', x: g!.center.x, y: g!.center.y, w: pill.w + 2 * BIG_HIT_PAD, h: pill.h + 2 * BIG_HIT_PAD });
+    const edgeX = g!.center.x + pill.w / 2;
+    expect(hitWidget([g!], edgeX + BIG_HIT_PAD - 1, g!.center.y)?.id).toBe('go');
+    expect(hitWidget([g!], edgeX + BIG_HIT_PAD + 1, g!.center.y)).toBeNull();
+    expect(hitWidget([g!], g!.center.x, g!.center.y - pill.h / 2 - BIG_HIT_PAD + 1)?.id).toBe('go');
+  });
+
+  it('is screen-constant: the pill, its metrics and its hit area all scale with pxScale', () => {
+    const [g1] = layoutWidgets([big], toPx, 1, measure) as TapGeom[];
+    const [g2] = layoutWidgets([big], toPx, 0.5, measure) as TapGeom[];
+    expect(g2!.pill!.w).toBeCloseTo(g1!.pill!.w / 2, 9);
+    expect(g2!.pill!.h).toBeCloseTo(BIG_PILL_H / 2, 9);
+    expect(g2!.pill!.labelW).toBeCloseTo(25, 9);
+    expect((g2!.hits[0]!.shape as { h: number }).h).toBeCloseTo((BIG_PILL_H + 2 * BIG_HIT_PAD) / 2, 9);
+  });
+
+  it('ignores `size` (the pill height is fixed)', () => {
+    const [g] = layoutWidgets([{ ...big, size: 200 }], toPx, 1, measure) as TapGeom[];
+    expect(g!.pill!.h).toBe(BIG_PILL_H);
+  });
+
+  it('measures with estimateBigTextWidth by default; an emoji gets more room than a letter', () => {
+    const [g] = layoutWidgets([big], toPx, 1) as TapGeom[];
+    expect(g!.pill!.labelW).toBeCloseTo(estimateBigTextWidth('DRIVE'), 9);
+    expect(estimateBigTextWidth('🚀')).toBeGreaterThan(estimateBigTextWidth('D'));
+    expect(estimateBigTextWidth('🔧\uFE0F')).toBeCloseTo(estimateBigTextWidth('🔧'), 9);
+  });
+
+  it("leaves a plain tap widget a 'card' with its square hit (as before)", () => {
+    const [g] = layoutWidgets([{ id: 't', kind: 'tap', at: { x: 1, y: 1 }, icon: '?', size: 80 }], toPx, 1) as TapGeom[];
+    expect(g!.style).toBe('card');
+    expect(g!.pill).toBeUndefined();
+    expect(g!.hits[0]!.shape).toEqual({ kind: 'rect', x: g!.center.x, y: g!.center.y, w: 80, h: 80 });
+  });
+});
+
+describe('widgetAnchor (where the coach hand points)', () => {
+  it("is a tap's centre, a dial's handle, a rack's middle cell and a lever's knob", () => {
+    const tap: TapWidget = { id: 't', kind: 'tap', at: { x: 2, y: 3 }, icon: '?' };
+    const dial: DialWidget = {
+      id: 'd', kind: 'dial', pivot: { x: 5, y: 5 }, radiusPx: 100, arcFrom: 0, arcTo: Math.PI / 2,
+      options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], value: 'b',
+    };
+    const rack: RackWidget = {
+      id: 'r', kind: 'rack', at: { x: 10, y: 10 }, value: 'a',
+      items: ['a', 'b', 'c'].map((v) => ({ value: v, icon: v, label: v })),
+    };
+    const lever: LeverWidget = {
+      id: 'l', kind: 'lever', at: { x: 1, y: 1 }, lengthPx: 100, value: 'hi',
+      options: [{ value: 'lo', label: 'Lo' }, { value: 'hi', label: 'Hi' }],
+    };
+    const [tg, dg, rg, lg] = layoutWidgets([tap, dial, rack, lever], toPx, 1);
+    expect(widgetAnchor(tg!)).toEqual(toPx({ x: 2, y: 3 }));
+    const pivot = toPx({ x: 5, y: 5 });
+    const handle = widgetAnchor(dg!);
+    expect(handle.x).toBeCloseTo(pivot.x, 6); // value 'b' sits at 90 degrees: straight up
+    expect(handle.y).toBeCloseTo(pivot.y - 100, 6);
+    expect(widgetAnchor(rg!)).toEqual((rg as RackGeom).cells[1]!.center);
+    expect(widgetAnchor(lg!)).toEqual((lg as LeverGeom).knob);
   });
 });

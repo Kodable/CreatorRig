@@ -2,6 +2,7 @@
 // driven by a HudSpec instead of Goldberg's hardcoded part/meter/line tables. Moved from
 // activities/goldberg/ui/goldbergHud.ts.
 import type {
+  CoachTarget,
   Goal,
   GoalResult,
   HudCallbacks,
@@ -26,6 +27,25 @@ const SCROLL_RIGHT = 976;
 const SCROLL_RIGHT_DRAWER = 640;
 /** The thumb is never narrower than this (stage px), whatever the view/world ratio. */
 const SCROLL_THUMB_MIN = 88;
+
+/** The world panel's top/bottom edges in stage px (the drawer and the win banner cover it). */
+const PANEL_TOP = 210;
+const PANEL_BOTTOM = 690;
+
+/** Win banner confetti: pieces per burst, their colours, and how long until they are removed. */
+const CONFETTI_COUNT = 40;
+const CONFETTI_COLORS = ['#61bb46', '#ffb40f', '#05aeed', '#c32f96', '#ffffff', '#ff7a45'];
+const CONFETTI_CLEAR_MS = 1900;
+
+/** The shelf unlock callout stays this long (or until the next tap anywhere). */
+const CALLOUT_MS = 4000;
+const CALLOUT_W = 260;
+/** Stagger between the unlocked shelf buttons' pop-ins. */
+const UNLOCK_STAGGER_MS = 120;
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+}
 
 function fmt1(v: number): string {
   return v.toFixed(1);
@@ -176,6 +196,40 @@ export class BuilderHud<
    * once the flight finishes: the child may have reselected something else by then). */
   private flight: PendingFlight | null = null;
 
+  // ---- coach (HudState.coach): Bruno's line and the pointer hand over a DOM target ----
+  private coachHandEl!: HTMLDivElement;
+  /** Step id + resolved target: the hand pops in again when it changes. */
+  private coachHandKey = '';
+  /** Property rows in the dash chip panel, by code (a coach 'drawer' target on a no-drawer course). */
+  private propRowByCode = new Map<string, HTMLDivElement>();
+  /** Drawer property sections, by code (a coach 'drawer' target without a value). */
+  private drawerSectionByCode = new Map<string, HTMLDivElement>();
+
+  // ---- win banner (HudSpec.winBanner only) ----
+  private winEl: HTMLDivElement | null = null;
+  private winCardEl: HTMLDivElement | null = null;
+  private winConfettiEl: HTMLDivElement | null = null;
+  private winOutcomeEl: HTMLDivElement | null = null;
+  private winNextBtn: HTMLButtonElement | null = null;
+  private winOpen = false;
+  /** The current pass already opened the banner: it shows once per pass, and a dismissed banner
+   * stays hidden until the next pass. */
+  private winShownThisPass = false;
+  private confettiTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // ---- shelf unlock callout (HudState.unlocked) ----
+  private calloutEl!: HTMLDivElement;
+  private calloutImgEl!: HTMLImageElement;
+  private calloutIconEl!: HTMLSpanElement;
+  private calloutTitleEl!: HTMLDivElement;
+  private calloutTextEl!: HTMLDivElement;
+  /** The kind the callout explains, or null while it is hidden. */
+  private calloutKind: K | null = null;
+  private calloutTimer: ReturnType<typeof setTimeout> | undefined;
+  /** This level load's unlock pop + callout already played (or there was nothing to play). */
+  private unlockPlayed = true;
+  private readonly onCalloutPointerDown = (): void => this.hideCallout();
+
   private resultCardEl!: HTMLDivElement;
   private resultTitleEl!: HTMLDivElement;
   private resultRowsEl!: HTMLDivElement;
@@ -244,6 +298,8 @@ export class BuilderHud<
 
   destroy(): void {
     if (this.intervalId !== undefined) clearInterval(this.intervalId);
+    clearTimeout(this.confettiTimer);
+    this.hideCallout();
     window.removeEventListener('resize', this.syncHandler);
     window.removeEventListener('orientationchange', this.syncHandler);
     window.visualViewport?.removeEventListener('resize', this.syncHandler);
@@ -558,6 +614,366 @@ export class BuilderHud<
 
     // ---- properties drawer (right edge of the world panel; spec.drawer courses only) ----
     if (this.drawerMode) this.buildDrawer();
+
+    // ---- over everything in the panel: the win banner, the unlock callout, the coach's hand ----
+    if (this.hud.winBanner) this.buildWinBanner();
+    this.buildCallout();
+    this.buildCoachHand();
+  }
+
+  /** "Level complete!" over the world panel (`HudSpec.winBanner` only): confetti, the result
+   * card's outcome line, a big green Next button, Try again, and a close ✕. Hidden until a pass. */
+  private buildWinBanner(): void {
+    const wrap = document.createElement('div');
+    wrap.className = 'win-banner';
+    wrap.hidden = true;
+    this.boolCache.set(wrap, true);
+    const confetti = document.createElement('div');
+    confetti.className = 'win-confetti';
+    const card = document.createElement('div');
+    card.className = 'win-card';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'win-close';
+    close.textContent = '✕';
+    close.setAttribute('aria-label', 'Close');
+    close.addEventListener('click', () => {
+      this.dismissWin();
+      this.cb.dismissWin();
+    });
+    const title = document.createElement('div');
+    title.className = 'win-title';
+    title.textContent = 'Level complete!';
+    const outcome = document.createElement('div');
+    outcome.className = 'win-outcome';
+    const actions = document.createElement('div');
+    actions.className = 'win-actions';
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'win-next';
+    next.textContent = 'Next level ▶';
+    next.addEventListener('click', () => this.cb.next());
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'win-retry';
+    retry.textContent = 'Try again';
+    retry.addEventListener('click', () => this.cb.stop());
+    actions.append(next, retry);
+    card.append(close, title, outcome, actions);
+    wrap.append(confetti, card);
+    this.root.appendChild(wrap);
+    this.winEl = wrap;
+    this.winCardEl = card;
+    this.winConfettiEl = confetti;
+    this.winOutcomeEl = outcome;
+    this.winNextBtn = next;
+  }
+
+  /** The shelf unlock callout: the new part's picture, its label and `partInfo[kind].blurb`, in a
+   * card beside its shelf button. Hidden until a level that unlocks a kind opens its shelf. */
+  private buildCallout(): void {
+    const el = document.createElement('div');
+    el.className = 'unlock-callout';
+    el.hidden = true;
+    this.boolCache.set(el, true);
+    const img = document.createElement('img');
+    img.className = 'unlock-callout-img';
+    img.alt = '';
+    img.draggable = false;
+    const icon = document.createElement('span');
+    icon.className = 'unlock-callout-icon';
+    const body = document.createElement('div');
+    body.className = 'unlock-callout-body';
+    const kicker = document.createElement('div');
+    kicker.className = 'unlock-callout-kicker';
+    kicker.textContent = 'NEW PART!';
+    const title = document.createElement('div');
+    title.className = 'unlock-callout-title';
+    const text = document.createElement('div');
+    text.className = 'unlock-callout-text';
+    body.append(kicker, title, text);
+    el.append(img, icon, body);
+    this.root.appendChild(el);
+    this.calloutEl = el;
+    this.calloutImgEl = img;
+    this.calloutIconEl = icon;
+    this.calloutTitleEl = title;
+    this.calloutTextEl = text;
+  }
+
+  /** The coach's pointer hand for DOM targets (shelf buttons, drawer rows/options, bottom-bar
+   * buttons): a bouncing 👆 with its fingertip on the target. Hidden while there is none. */
+  private buildCoachHand(): void {
+    const hand = document.createElement('div');
+    hand.className = 'coach-hand';
+    hand.hidden = true;
+    this.boolCache.set(hand, true);
+    const glyph = document.createElement('span');
+    glyph.className = 'coach-hand-glyph';
+    glyph.textContent = '👆';
+    hand.appendChild(glyph);
+    this.root.appendChild(hand);
+    this.coachHandEl = hand;
+  }
+
+  /** Restarts a one-shot CSS animation class on `el` (even mid-animation). */
+  private restartAnim(el: HTMLElement, cls: string): void {
+    el.classList.remove(cls);
+    void el.offsetWidth; // a reflow, so re-adding the class restarts the animation
+    el.classList.add(cls);
+  }
+
+  /** Hides the win banner until the next pass (the close ✕; `HudCallbacks.dismissWin`). */
+  dismissWin(): void {
+    if (!this.winEl || !this.winOpen) return;
+    this.winOpen = false;
+    this.setHidden(this.winEl, true);
+    clearTimeout(this.confettiTimer);
+    if (this.winConfettiEl) this.winConfettiEl.innerHTML = '';
+  }
+
+  private showWin(): void {
+    if (!this.winEl || !this.winCardEl) return;
+    this.winOpen = true;
+    this.setHidden(this.winEl, false);
+    if (!prefersReducedMotion()) this.restartAnim(this.winCardEl, 'enter');
+    this.burstConfetti();
+  }
+
+  /** ~40 DOM confetti pieces bursting from the card's middle (CSS keyframes, ~1.5 s), removed
+   * shortly after. None when the child's system asks for reduced motion. */
+  private burstConfetti(): void {
+    const host = this.winConfettiEl;
+    if (!host) return;
+    host.innerHTML = '';
+    clearTimeout(this.confettiTimer);
+    if (prefersReducedMotion()) return;
+    for (let i = 0; i < CONFETTI_COUNT; i++) {
+      const piece = document.createElement('span');
+      piece.className = i % 3 === 0 ? 'confetti-piece round' : 'confetti-piece';
+      const dx = (Math.random() * 2 - 1) * 440;
+      piece.style.setProperty('--dx', `${dx.toFixed(0)}px`);
+      piece.style.setProperty('--up', `${(-(120 + Math.random() * 170)).toFixed(0)}px`);
+      piece.style.setProperty('--dy', `${(170 + Math.random() * 190).toFixed(0)}px`);
+      piece.style.setProperty('--rot', `${((Math.random() < 0.5 ? -1 : 1) * (360 + Math.random() * 720)).toFixed(0)}deg`);
+      piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length]!;
+      piece.style.animationDelay = `${(Math.random() * 160).toFixed(0)}ms`;
+      piece.style.animationDuration = `${(1250 + Math.random() * 300).toFixed(0)}ms`;
+      host.appendChild(piece);
+    }
+    this.confettiTimer = setTimeout(() => {
+      host.innerHTML = '';
+    }, CONFETTI_CLEAR_MS);
+  }
+
+  /** The win banner per frame: opens once when a pass lands in done mode, closes on leaving it
+   * (Try again / `stop`, a new run, a level change). */
+  private syncWin(state: HudState<K, M, O, L>): void {
+    if (!this.winEl) return;
+    const passNow = state.mode === 'done' && state.passed;
+    if (!passNow) {
+      this.winShownThisPass = false;
+      if (this.winOpen) this.dismissWin();
+      return;
+    }
+    if (!this.winShownThisPass) {
+      this.winShownThisPass = true;
+      this.showWin();
+    }
+    if (!this.winOpen) return;
+    if (this.winOutcomeEl) this.setText(this.winOutcomeEl, state.result?.outcome || this.hud.lines.pass);
+    if (this.winNextBtn) this.setHidden(this.winNextBtn, this.levelIndex >= this.allLevels.length - 1);
+  }
+
+  /** A DOM element's box in stage px, or null when it is not on screen: hidden, inside the closed
+   * drawer, scrolled out of its drawer column, or outside the stage. */
+  private visibleStageRect(el: HTMLElement): { x: number; y: number; w: number; h: number } | null {
+    if (el.closest('[hidden]')) return null;
+    if (el.closest('.prop-drawer') && !this.drawerOpen) return null;
+    const rootRect = this.root.getBoundingClientRect();
+    if (rootRect.width <= 0 || rootRect.height <= 0) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return null;
+    const midY = r.top + r.height / 2;
+    const clip = el.closest('.prop-drawer-body, .drawer-pinned-panel');
+    if (clip) {
+      const c = clip.getBoundingClientRect();
+      if (midY < c.top || midY > c.bottom) return null;
+    }
+    const k = STAGE_W / rootRect.width;
+    const rect = { x: (r.left - rootRect.left) * k, y: (r.top - rootRect.top) * k, w: r.width * k, h: r.height * k };
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    if (cx < 0 || cx > STAGE_W || cy < 0 || cy > 768) return null;
+    return rect;
+  }
+
+  /** The DOM element a coach target points at (null for in-scene 'widget'/'part' targets, which
+   * the scene draws, and for 'none'). */
+  private coachTargetEl(t: CoachTarget<K>): HTMLElement | null {
+    switch (t.type) {
+      case 'shelf':
+        return this.shelfButtons.get(t.kind) ?? this.paletteButtons.get(t.kind) ?? null;
+      case 'drawer':
+        if (t.value !== undefined) {
+          return this.drawerOptionsByCode.get(t.code)?.get(t.value) ?? this.propChipsByCode.get(t.code)?.get(t.value) ?? null;
+        }
+        return this.drawerSectionByCode.get(t.code) ?? this.propRowByCode.get(t.code) ?? null;
+      case 'bar':
+        switch (t.button) {
+          case 'play':
+            return this.playBtn;
+          case 'next':
+            return this.winOpen && this.winNextBtn ? this.winNextBtn : this.nextBtn;
+          case 'undo':
+            return this.undoBtn;
+          case 'clear':
+            return this.clearBtn;
+        }
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  /** Places the coach's hand on its DOM target (fingertip just above the target's centre),
+   * popping it in when the step or target changes; hidden when there is no DOM target on screen. */
+  private syncCoachHand(state: HudState<K, M, O, L>): void {
+    const step = state.coach;
+    const el = step ? this.coachTargetEl(step.target) : null;
+    const rect = el ? this.visibleStageRect(el) : null;
+    if (!step || !rect) {
+      this.setHidden(this.coachHandEl, true);
+      this.coachHandKey = '';
+      return;
+    }
+    const fx = rect.x + rect.w / 2;
+    const fy = rect.y + rect.h * 0.45;
+    // The glyph box is 48 px square; the 👆 fingertip sits about (22, 5) inside it.
+    this.coachHandEl.style.left = `${(fx - 22).toFixed(1)}px`;
+    this.coachHandEl.style.top = `${(fy - 5).toFixed(1)}px`;
+    this.setHidden(this.coachHandEl, false);
+    const key = `${step.id}|${JSON.stringify(step.target)}`;
+    if (key !== this.coachHandKey) {
+      this.coachHandKey = key;
+      this.restartAnim(this.coachHandEl, 'enter');
+    }
+  }
+
+  /** The button an unlocked kind lives on right now: its shelf button while the drawer is open,
+   * else its bottom-bar palette chip (a kind without a shelf picture). */
+  private unlockButton(kind: K): HTMLButtonElement | undefined {
+    return (this.drawerOpen ? this.shelfButtons.get(kind) : undefined) ?? this.paletteButtons.get(kind);
+  }
+
+  /** A small NEW badge for an unlocked kind's shelf button / palette chip; tapping it (not the
+   * button) shows that kind's callout again. */
+  private makeUnlockBadge(kind: K): HTMLSpanElement {
+    const badge = document.createElement('span');
+    badge.className = 'unlock-badge';
+    badge.textContent = 'NEW';
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.showCallout(kind);
+    });
+    return badge;
+  }
+
+  private showCallout(kind: K): void {
+    const info = this.hud.partInfo[kind];
+    if (!info) return;
+    this.calloutKind = kind;
+    if (info.image) {
+      if (this.calloutImgEl.getAttribute('src') !== info.image) this.calloutImgEl.src = info.image;
+      this.calloutImgEl.hidden = false;
+      this.calloutIconEl.hidden = true;
+    } else {
+      this.calloutImgEl.hidden = true;
+      this.calloutIconEl.hidden = false;
+      this.calloutIconEl.textContent = info.icon;
+    }
+    this.calloutTitleEl.textContent = info.label;
+    this.calloutTextEl.textContent = info.blurb ?? '';
+    this.calloutTextEl.hidden = !info.blurb;
+    this.setHidden(this.calloutEl, false);
+    const btn = this.unlockButton(kind);
+    const rect = btn ? this.visibleStageRect(btn) : null;
+    if (rect) this.placeCallout(rect);
+    if (!prefersReducedMotion()) this.restartAnim(this.calloutEl, 'enter');
+    clearTimeout(this.calloutTimer);
+    this.calloutTimer = setTimeout(() => this.hideCallout(), CALLOUT_MS);
+    // The next tap anywhere closes it (a tap on the NEW badge then re-opens it on click).
+    window.addEventListener('pointerdown', this.onCalloutPointerDown, true);
+  }
+
+  private hideCallout(): void {
+    clearTimeout(this.calloutTimer);
+    this.calloutTimer = undefined;
+    window.removeEventListener('pointerdown', this.onCalloutPointerDown, true);
+    if (this.calloutKind === null) return;
+    this.calloutKind = null;
+    if (this.calloutEl) this.setHidden(this.calloutEl, true);
+  }
+
+  /** Puts the callout card left of its button (the shelf sits at the panel's right edge), its
+   * arrow pointing at the button; above the button when there is no room on the left. */
+  private placeCallout(rect: { x: number; y: number; w: number; h: number }): void {
+    const el = this.calloutEl;
+    const h = el.offsetHeight || 96;
+    const midY = rect.y + rect.h / 2;
+    let left = rect.x - 16 - CALLOUT_W;
+    let top: number;
+    const above = left < 40;
+    if (above) {
+      left = Math.max(40, Math.min(STAGE_W - 36 - CALLOUT_W, rect.x + rect.w / 2 - CALLOUT_W / 2));
+      top = rect.y - 16 - h;
+      el.style.setProperty('--arrow-x', `${(rect.x + rect.w / 2 - left).toFixed(1)}px`);
+    } else {
+      top = Math.max(PANEL_TOP + 4, Math.min(PANEL_BOTTOM - 4 - h, midY - h / 2));
+      el.style.setProperty('--arrow-y', `${(midY - top).toFixed(1)}px`);
+    }
+    el.classList.toggle('above', above);
+    el.style.left = `${left.toFixed(1)}px`;
+    el.style.top = `${top.toFixed(1)}px`;
+  }
+
+  /** The unlock callout per frame: keeps it beside its button (the drawer slides) and closes it
+   * when the button leaves the screen; on a level that unlocks kinds, plays the NEW pop-in and the
+   * callout once, the first time one of those buttons is on screen in edit mode. */
+  private syncUnlock(state: HudState<K, M, O, L>): void {
+    if (this.calloutKind !== null) {
+      const btn = state.mode === 'edit' ? this.unlockButton(this.calloutKind) : undefined;
+      const rect = btn ? this.visibleStageRect(btn) : null;
+      if (rect) this.placeCallout(rect);
+      else this.hideCallout();
+    }
+    if (this.unlockPlayed) return;
+    if (state.unlocked.length === 0) {
+      this.unlockPlayed = true;
+      return;
+    }
+    if (state.mode !== 'edit') return;
+    const shown: { kind: K; btn: HTMLButtonElement }[] = [];
+    for (const kind of state.unlocked) {
+      const btn = this.unlockButton(kind);
+      if (btn && this.visibleStageRect(btn)) shown.push({ kind, btn });
+    }
+    if (shown.length === 0) return;
+    this.unlockPlayed = true;
+    if (!prefersReducedMotion()) {
+      shown.forEach(({ btn }, i) => {
+        btn.style.animationDelay = `${i * UNLOCK_STAGGER_MS}ms`;
+        const done = (): void => {
+          btn.removeEventListener('animationend', done);
+          btn.classList.remove('unlock-pop');
+          btn.style.animationDelay = '';
+        };
+        btn.addEventListener('animationend', done);
+        this.restartAnim(btn, 'unlock-pop');
+      });
+    }
+    this.showCallout(shown[0]!.kind);
   }
 
   /** The world scrollbar: a thin track along the bottom edge of the world panel and a wide thumb
@@ -761,6 +1177,12 @@ export class BuilderHud<
     const idx = all.indexOf(level);
     this.levelIndex = idx >= 0 ? idx : 0;
 
+    // A new level load: no banner, no callout; this level's unlock pop-in may play again.
+    this.dismissWin();
+    this.winShownThisPass = false;
+    this.hideCallout();
+    this.unlockPlayed = false;
+
     this.setText(this.titleEl, level.title);
 
     // ---- goals column ----
@@ -823,6 +1245,7 @@ export class BuilderHud<
     if (key === this.propPanelKey) return;
     this.propPanelKey = key;
     this.propChipsByCode.clear();
+    this.propRowByCode.clear();
     this.propRowsEl.innerHTML = '';
     if (!sel) return;
 
@@ -866,6 +1289,7 @@ export class BuilderHud<
       row.append(chips);
       this.propRowsEl.appendChild(row);
       this.propChipsByCode.set(descriptor.code, chipMap);
+      this.propRowByCode.set(descriptor.code, row);
     }
     this.syncPropChipActive(sel.part.props, sel.descriptors, sel.optionCosts, state.budget ? state.budget.total - state.budget.used : null);
   }
@@ -976,6 +1400,7 @@ export class BuilderHud<
     this.drawerPanelKey = key;
     this.drawerOptionsByCode.clear();
     this.drawerSectionLabelByCode.clear();
+    this.drawerSectionByCode.clear();
     container.innerHTML = '';
 
     const info = this.hud.partInfo[sel.part.kind];
@@ -1042,6 +1467,7 @@ export class BuilderHud<
       section.append(label, options);
       container.appendChild(section);
       this.drawerOptionsByCode.set(descriptor.code, btnMap);
+      this.drawerSectionByCode.set(descriptor.code, section);
     }
   }
 
@@ -1059,9 +1485,10 @@ export class BuilderHud<
     }
 
     const groups = shelfGroups(state.palette, this.hud.partInfo);
-    const key = groups
-      .map((g) => `${g.group}:${g.kinds.map((k) => `${k}=${this.hud.partInfo[k].image}@${state.paletteCosts[k] ?? ''}`).join(',')}`)
-      .join(';');
+    const key =
+      groups
+        .map((g) => `${g.group}:${g.kinds.map((k) => `${k}=${this.hud.partInfo[k].image}@${state.paletteCosts[k] ?? ''}`).join(',')}`)
+        .join(';') + `|new:${state.unlocked.join(',')}`;
     if (key !== this.shelfKey) {
       this.shelfKey = key;
       this.drawerShelfEl.innerHTML = '';
@@ -1079,6 +1506,7 @@ export class BuilderHud<
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'shelf-btn';
+          if (info.blurb) btn.title = info.blurb;
           const img = document.createElement('img');
           img.src = info.image!;
           img.alt = info.label;
@@ -1094,6 +1522,7 @@ export class BuilderHud<
             costEl.textContent = `🪙 ${cost}`;
             btn.appendChild(costEl);
           }
+          if (state.unlocked.includes(kind)) btn.appendChild(this.makeUnlockBadge(kind));
           btn.addEventListener('click', () => {
             this.popOptionButton(btn);
             this.cb.addPart(kind);
@@ -1301,7 +1730,7 @@ export class BuilderHud<
     this.paletteEl.style.visibility = visible.length === 0 ? 'hidden' : '';
     // Costs are folded into the key (not just the kind list): a course with `partCost` reports
     // the same number for a kind on every call, but the key stays honest if that ever changes.
-    const key = visible.map((kind) => `${kind}:${state.paletteCosts[kind] ?? ''}`).join(',');
+    const key = visible.map((kind) => `${kind}:${state.paletteCosts[kind] ?? ''}`).join(',') + `|new:${state.unlocked.join(',')}`;
     if (key !== this.paletteKey) {
       this.paletteKey = key;
       this.paletteEl.innerHTML = '';
@@ -1311,6 +1740,7 @@ export class BuilderHud<
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'palette-chip';
+        if (info.blurb) btn.title = info.blurb;
         const icon = document.createElement('span');
         icon.className = 'icon';
         icon.textContent = info.icon;
@@ -1324,6 +1754,10 @@ export class BuilderHud<
           costEl.className = 'cost';
           costEl.textContent = `🪙 ${cost}`;
           btn.appendChild(costEl);
+        }
+        if (state.unlocked.includes(kind)) {
+          btn.classList.add('has-new');
+          btn.appendChild(this.makeUnlockBadge(kind));
         }
         btn.addEventListener('click', () => this.cb.addPart(kind));
         this.paletteEl.appendChild(btn);
@@ -1365,6 +1799,10 @@ export class BuilderHud<
     } else {
       brunoLine = level.bruno;
     }
+    // The coach's step wins over the level's line (and the play/done lines) while it is set;
+    // the 2 s refused/locked feedback below still wins over the coach.
+    const coached = !!state.coach?.text;
+    if (coached) brunoLine = state.coach!.text;
     const showRefused = editMode && !!flags?.refused;
     if (showRefused) brunoLine = this.hud.lines.refused ?? 'You cannot add that here.';
     const showLocked = !!flags?.locked;
@@ -1372,7 +1810,7 @@ export class BuilderHud<
     this.setText(this.brunoTextEl, brunoLine);
     const isPass = doneMode && state.passed;
     const isFail =
-      (doneMode && !state.passed && state.outcome !== null && this.hud.failOutcomes.includes(state.outcome)) ||
+      (doneMode && !coached && !state.passed && state.outcome !== null && this.hud.failOutcomes.includes(state.outcome)) ||
       showRefused ||
       showLocked;
     this.brunoTextEl.classList.toggle('pass', isPass);
@@ -1482,6 +1920,7 @@ export class BuilderHud<
         this.drawerPanelKey = null;
         this.drawerOptionsByCode.clear();
         this.drawerSectionLabelByCode.clear();
+        this.drawerSectionByCode.clear();
         this.drawerRowsEl.innerHTML = '';
         this.drawerPinnedRowsEl.innerHTML = '';
       }
@@ -1523,7 +1962,10 @@ export class BuilderHud<
     this.rebuildPalette(state);
 
     // ---- bottom bar buttons ----
-    this.setHidden(this.playBtn, !(editMode || (doneMode && state.canPlay)));
+    // `playInBar: false`: the course's own in-scene start control is the only one (no bar
+    // Play/Start in edit mode, no "Run it again" in done mode); Stop/Reset, Undo, Clear stay.
+    const playInBar = this.hud.playInBar !== false;
+    this.setHidden(this.playBtn, !playInBar || !(editMode || (doneMode && state.canPlay)));
     this.setHidden(this.stopBtn, editMode);
     this.setDisabled(this.playBtn, !state.canPlay);
     this.setText(this.playBtn, editMode
@@ -1545,5 +1987,10 @@ export class BuilderHud<
 
     // ---- park button ----
     this.setDisabled(this.parkBtn, playMode);
+
+    // ---- overlays, last (they measure the buttons laid out above) ----
+    this.syncWin(state);
+    this.syncUnlock(state);
+    this.syncCoachHand(state);
   }
 }

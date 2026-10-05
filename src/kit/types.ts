@@ -108,7 +108,9 @@ export interface FollowSpec { roles: string[]; zoom: number; lerp?: number; offs
 
 /** What the controller does when a widget fires, before `CourseSpec.onWidget`.
  * Default: 'setProp' when the widget has a `code`, otherwise 'none'. */
-export type WidgetAction = 'setProp' | 'play' | 'none';
+/** 'select' (idle widgets only): selects `TapWidget.partId` (opens its drawer) - a BUILD button
+ * floating over a machine. */
+export type WidgetAction = 'setProp' | 'play' | 'select' | 'none';
 
 interface WidgetBase {
   /** Stable and unique among the widgets of one selected part; keys drag and animation state. */
@@ -137,6 +139,12 @@ export interface TapWidget extends WidgetBase {
   values?: string[];
   hopTo?: Vec2;
   texture?: { role: string; tint?: number };
+  /** 'card' (default): the square icon card with a caption under it. 'big': a chunky rounded
+   * pill with the label INSIDE in 24 px bold next to the icon, a soft pulse, and a wider hit area
+   * (the one obvious start button, e.g. "▶ DRIVE"; or "🔧 BUILD"). */
+  style?: 'card' | 'big';
+  /** With `action: 'select'`: the part to select when tapped. */
+  partId?: number;
 }
 
 /** A handle dragged along an arc around `pivot`, snapping to `options` on release. Option i sits
@@ -323,6 +331,8 @@ export interface Level<K extends string, M, O extends string> {
    * course shows no scrollbar and never scrolls into its empty tail. Absent = the whole world. */
   extentW?: number;
 }
+// `Level.introduces` may also list `part:<kind>` entries: those kinds get the shelf unlock
+// callout on that level (`HudState.unlocked`); they must also be in the level's `palette`.
 
 export type Mode = 'edit' | 'play' | 'done';
 
@@ -366,6 +376,11 @@ export interface HudState<K extends string, M, O extends string, L> {
    * camera window's left edge as 0..1 of the scrollable range; null when the world fits the view
    * or in play mode (the follow camera scrolls by itself, the HUD may show the bar read-only). */
   scroll: number | null;
+  /** The coach's current step (see `CourseSpec.coach`), or null. */
+  coach: CoachStep<K> | null;
+  /** Kinds this level unlocks on the shelf (`Level.introduces` entries `part:<kind>`): the HUD
+   * plays the unlock callout (the button pops in with NEW and its blurb) once per level load. */
+  unlocked: K[];
 }
 
 export interface HudCallbacks<K extends string = string> {
@@ -388,6 +403,40 @@ export interface HudCallbacks<K extends string = string> {
   /** Edit mode, wide worlds: scroll the camera window so its left edge sits at `t` (0..1 of the
    * scrollable range). Ignored when the world fits the view. */
   scrollTo(t: number): void;
+  /** Hides the win banner and leaves the done-mode dash (its Next button calls `next`, its
+   * Try-again button calls `stop`). */
+  dismissWin(): void;
+}
+
+// ---- coach (tap tutorials) ---------------------------------------------------------------
+
+/** Where the coach's pointer hand goes. 'widget' = an in-scene widget by id (idle or selected);
+ * 'part' = a placed part (the hand hovers over it); 'shelf' = the drawer's shelf button for a
+ * kind; 'drawer' = a property row (and one option when `value` is set); 'bar' = a bottom-bar
+ * button; 'none' = text only. */
+export type CoachTarget<K extends string = string> =
+  | { type: 'widget'; id: string }
+  | { type: 'part'; partId: number }
+  | { type: 'shelf'; kind: K }
+  | { type: 'drawer'; code: string; value?: string }
+  | { type: 'bar'; button: 'play' | 'next' | 'undo' | 'clear' }
+  | { type: 'none' };
+
+export interface CoachStep<K extends string = string> {
+  /** Stable id: the HUD animates the hand in again only when it changes. */
+  id: string;
+  text: string;
+  target: CoachTarget<K>;
+}
+
+export interface CoachContext<K extends string, L> {
+  level: L;
+  parts: PlacedPart<K>[];
+  selectedId: number | null;
+  mode: Mode;
+  passed: boolean;
+  /** How many runs were started on this level load. */
+  runs: number;
 }
 
 // ---- course spec -------------------------------------------------------------------------
@@ -450,7 +499,10 @@ export interface HudSpec<K extends string, M, O extends string> {
    * big picture buttons grouped by `group` (in first-seen order), each with its coin cost, in a
    * scrollable list; a tap adds the part. The bottom-bar chip palette then shows only kinds
    * without an image (none for a course that gives every palette kind an image). */
-  partInfo: Record<K, { label: string; icon: string; image?: string; group?: string }>;
+  partInfo: Record<K, { label: string; icon: string; image?: string; group?: string;
+    /** One kid-friendly sentence on what the part does ("Pushes the rover. Stick it on the
+     * back!"). Shown in the shelf's unlock callout and as the shelf button's title. */
+    blurb?: string }>;
   /** Display-only overrides for long option labels (value or label -> shown text). */
   chipLabels?: Record<string, string>;
   meters: MeterSpec<M>[];
@@ -474,6 +526,13 @@ export interface HudSpec<K extends string, M, O extends string> {
   };
   /** Outcomes that read `level.failHints[outcome]` in Bruno's bubble with the fail colour. */
   failOutcomes: O[];
+  /** Hide the bottom bar's Play/Start button (the course offers its own start control in the
+   * scene, e.g. the big DRIVE button). Stop/Reset, Undo, Clear stay. Default false. */
+  playInBar?: false;
+  /** A "Level complete!" banner over the world panel on a pass (confetti, the result card's
+   * outcome line, a big "Next level ▶" button and "Try again"). Default false: today's behaviour
+   * (Bruno waves, the dash shows the result card). */
+  winBanner?: boolean;
 }
 
 /** One end of a link drag: an existing part, or a point in empty space. */
@@ -537,6 +596,19 @@ export interface CourseSpec<
   /** In-scene controls for the selected part; re-asked whenever the part or its props change.
    * Shown only while `canTune` and the part is selected. */
   widgets?: (part: PlacedPart<K>, parts: PlacedPart<K>[], level: L) => Widget[];
+  /** In-scene controls shown in edit/tune mode while NOTHING is selected (a BUILD button floating
+   * over the machine with `action: 'select'` + `partId`, a big DRIVE button). Hidden in play mode
+   * and while a part is selected (then `widgets` of that part show). */
+  idleWidgets?: (parts: PlacedPart<K>[], level: L) => Widget[];
+  /** While a part is DRAGGED, where its ghost should sit for the pointer position `at` (world m):
+   * a rim-snapping course returns the snapped point so the child sees where the part will land
+   * before releasing. Default: the pointer position. */
+  dragSnap?: (part: PlacedPart<K>, at: Vec2, parts: PlacedPart<K>[], level: L) => Vec2;
+  /** The "coach": the one tap the child should do next, re-asked every frame in edit/tune mode
+   * (and in done mode for the win step). The HUD/scene draw a bouncing pointer hand at the
+   * target and put `text` in Bruno's bubble (it wins over the level's `bruno` line while set).
+   * Return null when the child is on their own. Keep steps to the first levels. */
+  coach?: (ctx: CoachContext<K, L>) => CoachStep<K> | null;
   /** A widget the controller could not resolve itself (`action: 'none'`, or a tap with no
    * `code`). Return a replacement part list (undo + rebuild follow) or nothing. */
   onWidget?: (id: string, part: PlacedPart<K>, parts: PlacedPart<K>[], level: L) => PlacedPart<K>[] | void;

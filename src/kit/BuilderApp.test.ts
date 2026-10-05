@@ -1,11 +1,13 @@
 // BuilderApp's wide-world camera wiring (WorldSpec.worldW wider than the view): the edit-mode
 // rest frame, `scrollTo` <-> `HudState.scroll`, the level-load intro pan sequencing, and what
-// play/stop/done do to the rest frame. The scene and HUD are recording fakes (no Phaser).
+// play/stop/done do to the rest frame; and the first-levels UX hooks: idle widgets ('select' /
+// 'play'), the coach, `HudState.unlocked` and `dragSnap`. The scene and HUD are recording fakes
+// (no Phaser).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BuilderApp } from './BuilderApp';
 import type { BuilderScene } from './BuilderScene';
 import type { BuilderHud } from './BuilderHud';
-import type { CameraFrame, CourseSim, CourseSpec, HudState, Level, WorldSpec } from './types';
+import type { CameraFrame, CoachContext, CourseSim, CourseSpec, HudState, Level, TapWidget, Vec2, Widget, WorldSpec } from './types';
 import type { FrameState } from './camera';
 
 type K = 'box';
@@ -60,7 +62,16 @@ class FakeScene {
   /** Last `setWorldExtent` argument: the EFFECTIVE world (`WorldSpec.worldW` narrowed by
    * `Level.extentW`) the controller handed the scene for the level now loaded. */
   worldExtent: WorldSpec | null = null;
+  /** The widget list last sent (`setWidgets`), the selection, and the coach hand's target. */
+  widgetsNow: Widget[] = [];
+  selected: number | null = null;
+  coach: { target: unknown; stepId: string } | null = null;
   onUpdate?: (dt: number) => void;
+  onPartTapped?: (id: number) => void;
+  onEmptyTapped?: (at: Vec2) => void;
+  onPartMoved?: (id: number, dx: number, dy: number) => void;
+  onWidgetAction?: (id: string, value?: string, live?: boolean) => void;
+  dragSnap?: (id: number, at: Vec2) => Vec2 | null;
   private rec(name: string, ...args: unknown[]): void {
     this.calls.push({ name, args });
   }
@@ -73,12 +84,20 @@ class FakeScene {
   }
   setTool(): void {}
   setGrid(): void {}
-  setWidgets(): void {}
+  setWidgets(ws: Widget[]): void {
+    this.rec('setWidgets', ws);
+    this.widgetsNow = ws;
+  }
   setEditable(): void {}
   setMarkers(): void {}
   setItems(): void {}
   syncTransforms(): void {}
-  setSelected(): void {}
+  setSelected(id: number | null): void {
+    this.selected = id;
+  }
+  setCoachTarget(target: unknown, stepId: string): void {
+    this.coach = target ? { target, stepId } : null;
+  }
   celebrate(): void {}
   trackPoint(p: unknown): void {
     this.rec('trackPoint', p);
@@ -128,6 +147,10 @@ class FakeScene {
 
 class FakeHud {
   last: HudState<K, M, O, L> | null = null;
+  dismissed = 0;
+  dismissWin(): void {
+    this.dismissed++;
+  }
   setLevel(): void {}
   update(state: HudState<K, M, O, L>): void {
     this.last = state;
@@ -369,5 +392,177 @@ describe('BuilderApp: Level.extentW (a short level in a wide course)', () => {
     expect(scene.base!.cx).toBeCloseTo(45, 9);
     app.addPart('box');
     expect(app.parts.at(-1)!.x).toBeCloseTo(30 + 5, 9);
+  });
+});
+
+describe('BuilderApp: idle widgets (nothing selected)', () => {
+  const BUILD: TapWidget = { kind: 'tap', id: 'build', action: 'select', partId: 1, at: { x: 3, y: 2 }, icon: '🔧', label: 'BUILD', style: 'big' };
+  const DRIVE: TapWidget = { kind: 'tap', id: 'drive', action: 'play', at: { x: 6, y: 2 }, icon: '▶', label: 'DRIVE', style: 'big' };
+
+  it("shows idleWidgets while nothing is selected; 'select' selects its part like a tap on it", async () => {
+    const selected: Widget[] = [{ kind: 'tap', id: 'own', at: { x: 3, y: 3 }, icon: '?' }];
+    const { app, scene, hud } = boot(makeSpec(SINGLE, { idleWidgets: () => [BUILD, DRIVE], widgets: () => selected }));
+    await flush();
+    frame(scene, hud);
+    expect(scene.widgetsNow.map((w) => w.id)).toEqual(['build', 'drive']);
+    scene.onWidgetAction!('build');
+    expect(app.selectedId).toBe(1);
+    expect(scene.selected).toBe(1);
+    frame(scene, hud);
+    expect(scene.widgetsNow.map((w) => w.id)).toEqual(['own']); // the selected part's widgets
+  });
+
+  it("'select' opens even a part with no rows and no widgets (the shelf is the point)", async () => {
+    const { app, scene, hud } = boot(makeSpec(SINGLE, { idleWidgets: () => [BUILD] }));
+    await flush();
+    frame(scene, hud);
+    scene.onPartTapped!(1); // a plain tap on that bare part does nothing, as before
+    expect(app.selectedId).toBeNull();
+    scene.onWidgetAction!('build');
+    expect(app.selectedId).toBe(1);
+    expect(frame(scene, hud).selected?.part.id).toBe(1);
+  });
+
+  it("'play' from an idle widget starts a run, and idle widgets hide in play mode", async () => {
+    const { app, scene, hud } = boot(makeSpec(SINGLE, { idleWidgets: () => [BUILD, DRIVE] }));
+    await flush();
+    frame(scene, hud);
+    scene.onWidgetAction!('drive');
+    expect(app.mode).toBe('play');
+    frame(scene, hud);
+    expect(scene.widgetsNow).toEqual([]);
+  });
+
+  it('re-asks idleWidgets when the build changes, not every frame', async () => {
+    let calls = 0;
+    const { app, scene, hud } = boot(makeSpec(SINGLE, { idleWidgets: () => (calls++, [BUILD]) }));
+    await flush();
+    frame(scene, hud);
+    frame(scene, hud);
+    expect(calls).toBe(1);
+    app.addPart('box'); // selects the new part: no idle widgets
+    frame(scene, hud);
+    expect(calls).toBe(1);
+    scene.onEmptyTapped!({ x: 0, y: 0 });
+    await flush();
+    frame(scene, hud);
+    expect(calls).toBe(2); // deselected with one more part: asked again
+    frame(scene, hud);
+    expect(calls).toBe(2);
+  });
+});
+
+describe('BuilderApp: the coach', () => {
+  it('asks spec.coach each frame and sends the step to the HUD and in-scene targets to the scene', async () => {
+    const seen: CoachContext<K, L>[] = [];
+    const spec = makeSpec(SINGLE, {
+      idleWidgets: () => [{ kind: 'tap', id: 'build', action: 'select', partId: 1, at: { x: 3, y: 2 }, icon: '🔧' }],
+      coach: (ctx) => {
+        seen.push(ctx);
+        if (ctx.mode === 'done') return { id: 'win', text: 'You did it!', target: { type: 'bar', button: 'next' } };
+        return ctx.selectedId == null
+          ? { id: 'tap-build', text: 'Tap BUILD', target: { type: 'widget', id: 'build' } }
+          : { id: 'add-box', text: 'Add a box', target: { type: 'shelf', kind: 'box' } };
+      },
+    });
+    const { app, scene, hud } = boot(spec);
+    await flush();
+    let st = frame(scene, hud);
+    expect(st.coach).toEqual({ id: 'tap-build', text: 'Tap BUILD', target: { type: 'widget', id: 'build' } });
+    expect(scene.coach).toEqual({ target: { type: 'widget', id: 'build' }, stepId: 'tap-build' });
+    expect(seen.at(-1)).toMatchObject({ mode: 'edit', selectedId: null, passed: false, runs: 0 });
+
+    scene.onWidgetAction!('build');
+    st = frame(scene, hud);
+    expect(st.coach?.id).toBe('add-box');
+    expect(scene.coach).toBeNull(); // a shelf target is the HUD's to draw
+
+    app.play();
+    const asked = seen.length;
+    st = frame(scene, hud);
+    expect(st.coach).toBeNull(); // never while a run plays
+    expect(seen.length).toBe(asked);
+
+    (app.sim as FakeSim).outcome = 'done';
+    st = frame(scene, hud);
+    expect(st.mode).toBe('done');
+    expect(st.coach?.id).toBe('win');
+    expect(seen.at(-1)).toMatchObject({ mode: 'done', runs: 1 });
+  });
+
+  it('counts runs per level load', async () => {
+    const seen: number[] = [];
+    const { app, scene, hud } = boot(makeSpec(SINGLE, { coach: (ctx) => (seen.push(ctx.runs), null) }));
+    await flush();
+    app.play();
+    (app.sim as FakeSim).outcome = 'done';
+    frame(scene, hud);
+    app.stop();
+    await flush();
+    app.play();
+    (app.sim as FakeSim).outcome = 'done';
+    frame(scene, hud);
+    expect(seen.at(-1)).toBe(2);
+    app.selectLevel('one');
+    await flush();
+    frame(scene, hud);
+    expect(seen.at(-1)).toBe(0);
+  });
+
+  it('reports no coach without spec.coach', async () => {
+    const { scene, hud } = boot(makeSpec(SINGLE));
+    await flush();
+    expect(frame(scene, hud).coach).toBeNull();
+    expect(scene.coach).toBeNull();
+  });
+});
+
+describe('BuilderApp: HudState.unlocked', () => {
+  it("lists the level's `part:<kind>` introduces entries that are in its palette, once each", async () => {
+    const level: L = { ...LEVEL, introduces: ['part:box', 'power', 'part:ghost', 'part:box'] };
+    const { scene, hud } = boot(makeSpec(SINGLE, { levels: [level] }));
+    await flush();
+    expect(frame(scene, hud).unlocked).toEqual(['box']);
+  });
+
+  it('is empty on a level without such entries', async () => {
+    const { scene, hud } = boot(makeSpec(SINGLE));
+    await flush();
+    expect(frame(scene, hud).unlocked).toEqual([]);
+  });
+});
+
+describe('BuilderApp: dragSnap', () => {
+  it("gives the scene the course's snapped ghost delta, and the drop lands the part on it", async () => {
+    const spec = makeSpec(SINGLE, { dragSnap: (_part, at) => ({ x: Math.round(at.x), y: 1.5 }) });
+    const { app, scene } = boot(spec);
+    await flush();
+    // Part 1 sits at (3, 1); the pointer at (6.4, 4) snaps to (6, 1.5).
+    const delta = scene.dragSnap!(1, { x: 6.4, y: 4 });
+    expect(delta!.x).toBeCloseTo(3, 9);
+    expect(delta!.y).toBeCloseTo(0.5, 9);
+    scene.onPartMoved!(1, delta!.x, delta!.y);
+    const part = app.parts.find((p) => p.id === 1)!;
+    expect(part.x).toBeCloseTo(6, 9);
+    expect(part.y).toBeCloseTo(1.5, 9);
+  });
+
+  it('leaves the offset drag alone without spec.dragSnap, and for a lockPosition part', async () => {
+    const { scene } = boot(makeSpec(SINGLE));
+    await flush();
+    expect(scene.dragSnap).toBeUndefined();
+    const pinned: L = { ...LEVEL, parts: [{ ...LEVEL.parts[0]!, lockPosition: true }] };
+    const b = boot(makeSpec(SINGLE, { levels: [pinned], dragSnap: (_p, at) => at }));
+    await flush();
+    expect(b.scene.dragSnap!(1, { x: 5, y: 5 })).toBeNull();
+  });
+});
+
+describe('BuilderApp: dismissWin', () => {
+  it('routes to the HUD', async () => {
+    const { app, hud } = boot(makeSpec(SINGLE));
+    await flush();
+    app.dismissWin();
+    expect(hud.dismissed).toBe(1);
   });
 });

@@ -12,10 +12,19 @@
 // (90 m) wide, the panel shows a VIEW_W (30 m) window of it, the kit scrolls the camera (follow in
 // play mode, a scrollbar in edit mode), and a level whose beacon is out of the first view opens
 // with a pan from the beacon back to the start (`intro`).
+//
+// 2026-10-05 playtest review (Jon; Gao agrees): one obvious start control, the DRIVE button on
+// the rover (no bottom-bar Play, `hud.playInBar`), and a BUILD button over the rover (tapping the
+// dome was not apparent): both float over the rover while nothing is selected (`idleWidgets`);
+// tap tutorials on the first levels (`coach`, coach.ts); a win banner with a clear Next button
+// (`hud.winBanner`); what each part does and an unlock moment for the parts a level introduces
+// (`hud.partInfo.blurb`, levels.ts `part:<kind>` entries); a live rim-snap preview while dragging
+// (`dragSnap`); the spring says what it does (catalog.ts MOUNT_DESCRIPTOR).
 import type { CameraFrame, CourseSpec, PlacedPart, RenderItem, Vec2, Widget } from '../../kit/types';
 import type { AttachmentKind, Metrics, Outcome, PartKind, VehicleLevel } from './core/types';
 import {
   ATTACHMENT_KINDS,
+  BLURBS,
   CATALOG,
   LABELS,
   ICONS,
@@ -28,59 +37,76 @@ import {
 } from './core/catalog';
 import { ART_DIR } from './core/art';
 import { GROUND_DEPTH, WORLD_H } from './core/build';
-import { ROVER_R, SPAWN, layoutRover, normalizeRoverParts, rotate, roverTextures } from './core/geometry';
+import { ROVER_R, SPAWN, layoutRover, normalizeRoverParts, rotate, roverTextures, thetaOf } from './core/geometry';
 import { VIEW_W, WORLD_W, heightAt } from './core/terrain';
 import { createVehicleSim } from './core/sim';
 import { LEVELS } from './core/levels';
+import { BUILD_WIDGET, DRIVE_WIDGET, roverCoach } from './coach';
 
-/** The world camera's panel is 960 x 490 stage px at ppm 32 (see the catapult spec's note); the
- * drawer (src/kit/builder.css, 340 px wide) is now ALWAYS open while building this course (every
- * palette kind lives on the parts shelf, see `hud.partInfo` below), covering its right 340 px.
+/** Building zooms in on the dome (`focusFrame`, the same frame for the dome and every attachment)
+ * with the drawer open over the panel's right 340 px (src/kit/builder.css; BuilderHud opens it
+ * only while a part is selected). The world panel is 960 x 480 stage px at ppm 32 (kit camera.ts
+ * STAGE_PANEL_H; the 10 px earth margin under it is not world view).
  *
- * Fit arithmetic (measured in spec.test.ts on BIG_BUILD: 3 wheels, a jet on the FRONT and the
- * BACK, a watermelon on top, a stove — denser than any level's own solution):
- *  - At zoom z the camera's own view is 960/(32 z) m wide, 490/(32 z) m tall: 10.714 x 5.469 m at
- *    2.8. The drawer leaves 620/960 = 0.6458 of the width uncovered: 6.920 m at 2.8.
- *  - cx wants the dome mid-way across that uncovered strip: rover.x + (1 - 0.6458)/2 * viewW =
- *    rover.x + 1.897 at 2.8. But the kit's camera clamp keeps the WHOLE view (not just the
- *    uncovered part) inside the world (x in [0, WORLD_W]), clamping cx >= viewW/2 = 15/zoom =
- *    5.357 at 2.8; every level places the dome at x 3 (levels.ts ROVER_X), so this clamp always
- *    wins and the uncovered strip's left edge sits exactly on the world wall (x0 = 0).
- *  - BIG_BUILD spans rover.x +/- 1.690 m (symmetric: a wheel/jet at 0 and at 180 degrees reaches
- *    the same ROVER_R 0.75 m + mount + reach/picture-halfwidth either way). At zoom 2.8 that
- *    leaves 1.310 m clear on the left of the strip and 2.229 m on the right (x0 1.310, x1 4.690
- *    of the strip's [0, 6.920]) — the extra room on the right is for the DRIVE button.
- *  - cy = heightAt(terrain, rover.x) + FOCUS_CY_ABOVE_GROUND: the watermelon on top reaches
- *    rover.y + 1.742, a rear jet dips to rover.y - 1.641. At zoom 2.8 the view's y-range (+/-
- *    2.734 around cy) clears both, with 0.909 m of air above the build (room for DRIVE + its
- *    caption) and 1.177 m of ground showing under the wheels.
- *  - DRIVE (96 px -> 0.536 m radius at 2.8) goes beside the build, not above it, on BIG_BUILD:
- *    above the build it would need ext.y1 + DRIVE_CAPTION + radius = 4.412 m of headroom under
- *    the view's top edge, which only has 4.384 (minus FRAME_MARGIN) — 0.027 m short, so
- *    `driveButtonAt` falls back to beside, landing with 0.858 m still clear of the strip's right
- *    edge.
- *  - Zoom is not what makes BIG_BUILD fit: the view, the build's extent and DRIVE's radius are
- *    all in world meters, and only the view's width (and the clamp's own margin) scale with
- *    1/zoom, so a LOWER zoom buys MORE room, not less (checked at 2.4: the uncovered strip grows
- *    to 8.073 m and DRIVE fits ABOVE the build instead of beside it). The 2.4 floor is a screen
- *    real-estate rule, not an overflow one: below it the 0.75 m dome and its attachments (suction
- *    cups, mounts, the Mount drawer row's own pictures) read too small on the panel for a
- *    child's finger to place precisely (Jon's tactile-variables rule). 2.8 is the zoom the build
- *    already used before the drawer went always-open; this spec keeps it, since the fit above
- *    holds with room to spare. */
+ * Fit arithmetic while a part is selected (spec.test.ts checks every level on HUGE_BUILD: a
+ * square wheel on a spring under the dome (lifts it highest), a melon on a spring on top (the
+ * tallest part), melons on springs at the front and back (the widest), two more sprung wheels):
+ *  - At zoom z the view is 960/(32 z) x 480/(32 z) m: 10.714 x 5.357 m at 2.8. The drawer leaves
+ *    620/960 of the width uncovered: 6.920 m at 2.8.
+ *  - cx wants the dome mid-way across that strip, rover.x + 1.897, but the kit clamps cx >=
+ *    15/zoom = 5.357 and every level places the dome at x 3 (levels.ts ROVER_X), so the strip
+ *    always runs x 0..6.920. HUGE_BUILD spans rover.x -1.742..+1.742 (x 1.258..4.742).
+ *  - cy = ground under the dome + FOCUS_CY_ABOVE_GROUND (1.9): the view runs ground - 0.779 ..
+ *    ground + 4.579. HUGE_BUILD's dome rests at ground + 1.784 and its melon reaches ground +
+ *    3.525, leaving 1.054 m of air for the DRIVE pill above it (raised from 1.7 on 2026-10-05:
+ *    at 1.7 the 0.786 m pill had 0.068 m, 6 px, for its gap and margin); 0.779 m of ground
+ *    still shows under the wheels. The flip level's mesa (ground 9) clamps cy to 10.821 (the
+ *    view's top at the world's 13.5), which leaves 0.975 m.
+ *  - The selected part's DRIVE pill (DRIVE_SIZE 64 px, budget 202 x 70 px with the pulse, see
+ *    `bigPillPx`: 2.259 x 0.786 m at 2.8) sits over the dome: centre ext.y1 + DRIVE_GAP + 0.393 =
+ *    ground + 3.998, top ground + 4.391 under the view's top minus FRAME_MARGIN (ground + 4.529),
+ *    x 1.870..4.130 inside the strip. `driveButtonAt` falls back to the strip's top-right corner
+ *    beside the build if a build ever outgrows that.
+ *  - Zoom 2.8 is kept, above the 2.4 tactile-size floor: below it the 0.75 m dome and its
+ *    attachments read too small for a child's finger (Jon's tactile-variables rule). */
 export const FOCUS_ZOOM = 2.8;
 const PANEL_W_PX = 960;
-const PANEL_H_PX = 490;
+const PANEL_H_PX = 480;
 const DRAWER_PX = 340;
 const PPM = 32;
-/** The DRIVE button's size (stage px). Its caption hangs ~22 px under it: DRIVE_CAPTION (m at the
- * focus zoom, plus a little air) between the build's top and the button's bottom edge. */
-export const DRIVE_SIZE = 96;
-const DRIVE_CAPTION = 0.35;
-const DRIVE_SIDE_GAP = 0.3;
+/** The selected part's DRIVE pill (stage px tall): smaller than the idle one, so the child can
+ * drive straight from the drawer. */
+export const DRIVE_SIZE = 64;
+/** The idle BUILD and DRIVE pills (stage px tall). DRIVE is the bigger one: the start control. */
+export const BUILD_SIZE = 84;
+export const IDLE_DRIVE_SIZE = 96;
+/** Kodable accent blue (BUILD) and the "go" green (DRIVE). */
+export const BUILD_BLUE = 0x05aeed;
+export const DRIVE_GREEN = 0x61bb46;
+/** World meters between the build's top and the selected DRIVE pill. */
+const DRIVE_GAP = 0.08;
 const FRAME_MARGIN = 0.05;
 /** The focus frame's centre sits this high above the ground under the dome. */
-const FOCUS_CY_ABOVE_GROUND = 1.7;
+const FOCUS_CY_ABOVE_GROUND = 1.9;
+
+/** A 'big' tap widget is a pill `size` px tall with its icon and a 24 px bold label inside (kit
+ * TapWidget.style). The kit sizes it to its content; this course budgets BIG_CONTENT_PX for the
+ * icon, the gap and a five-letter label ("BUILD", "DRIVE": about 28 + 8 + 75 px) on top of the
+ * pill's rounded ends (`size`), and BIG_PULSE for the soft pulse, so a layout that keeps these
+ * boxes clear keeps the drawn pills clear. */
+const BIG_CONTENT_PX = 120;
+const BIG_PULSE = 1.1;
+export function bigPillPx(size: number): { w: number; h: number } {
+  return { w: BIG_PULSE * (size + BIG_CONTENT_PX), h: BIG_PULSE * size };
+}
+function bigPillM(size: number, zoom: number): { w: number; h: number } {
+  const px = bigPillPx(size);
+  return { w: px.w / (PPM * zoom), h: px.h / (PPM * zoom) };
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
 
 /** The intro pan's length (ms): from the beacon back to the start. */
 export const INTRO_MS = 2800;
@@ -122,9 +148,9 @@ function levelRover(level: VehicleLevel): PlacedPart<PartKind> | undefined {
 
 /** The camera frame for building: the same for the dome and every attachment (stable while the
  * child adds and drags parts), from the level's dome x and the ground under it. At zoom 2.8 the
- * view is 10.7 x 5.5 m; cx puts the dome mid-way across the part the drawer leaves uncovered
+ * view is 10.7 x 5.4 m; cx puts the dome mid-way across the part the drawer leaves uncovered
  * (the kit clamps cx >= 15 / zoom, so a dome at x 3 sits a little left of that); cy leaves
- * ~1 m of ground under the wheels and room for the DRIVE button over a part on top. */
+ * ~0.8 m of ground under the wheels and room for the DRIVE pill over a part on top. */
 export function buildFrame(level: VehicleLevel): { cx: number; cy: number; zoom: number } | null {
   const rover = levelRover(level);
   if (!rover) return null;
@@ -161,19 +187,91 @@ export function buildExtent(parts: PlacedPart<PartKind>[], level: VehicleLevel):
   return ext;
 }
 
-/** The green DRIVE button: over the build when its button and caption fit under the build
- * frame's top edge, otherwise beside the build on the right (toward where the rover drives). */
+/** The world rectangle a frame shows, clamped the way the kit's camera clamps it (kit camera.ts
+ * `clampFrame`: the view stays inside x 0..WORLD_W and y -GROUND_DEPTH..WORLD_H - GROUND_DEPTH),
+ * and with `drawer` only the part left of the open drawer. */
+export function frameView(frame: CameraFrame, drawer: boolean): { x0: number; x1: number; y0: number; y1: number } {
+  const viewW = PANEL_W_PX / (PPM * frame.zoom);
+  const viewH = PANEL_H_PX / (PPM * frame.zoom);
+  const cx = clamp(frame.cx, viewW / 2, WORLD_W - viewW / 2);
+  const cy = clamp(frame.cy, -GROUND_DEPTH + viewH / 2, WORLD_H - GROUND_DEPTH - viewH / 2);
+  const x0 = cx - viewW / 2;
+  const w = drawer ? (viewW * (PANEL_W_PX - DRAWER_PX)) / PANEL_W_PX : viewW;
+  return { x0, x1: x0 + w, y0: cy - viewH / 2, y1: cy + viewH / 2 };
+}
+
+/** The selected part's DRIVE pill (world centre): over the build, centred on the dome, when it
+ * fits under the build frame's top edge (every build of every level, see the fit arithmetic);
+ * otherwise in the top-right corner of the strip left of the drawer, beside the build. */
 export function driveButtonAt(parts: PlacedPart<PartKind>[], level: VehicleLevel): Vec2 | null {
   const rover = parts.find((p) => p.kind === 'rover');
   const ext = buildExtent(parts, level);
   const frame = buildFrame(level);
   if (!rover || !ext || !frame) return null;
-  const viewH = PANEL_H_PX / (PPM * FOCUS_ZOOM);
-  const radius = DRIVE_SIZE / (2 * PPM * FOCUS_ZOOM);
-  const frameTop = frame.cy + viewH / 2;
-  const above = ext.y1 + DRIVE_CAPTION + radius;
-  if (above + radius <= frameTop - FRAME_MARGIN) return { x: rover.x, y: above };
-  return { x: ext.x1 + radius + DRIVE_SIDE_GAP, y: Math.min(rover.y + ROVER_R, frameTop - radius - FRAME_MARGIN) };
+  const view = frameView(frame, true);
+  const { w, h } = bigPillM(DRIVE_SIZE, FOCUS_ZOOM);
+  const top = view.y1 - FRAME_MARGIN;
+  const xMin = view.x0 + FRAME_MARGIN + w / 2;
+  const xMax = view.x1 - FRAME_MARGIN - w / 2;
+  const above = ext.y1 + DRIVE_GAP + h / 2;
+  if (above + h / 2 <= top) return { x: clamp(rover.x, xMin, xMax), y: above };
+  return { x: Math.min(xMax, ext.x1 + DRIVE_GAP + w / 2), y: top - h / 2 };
+}
+
+/** World meters between the build (or the ground) and the idle pills, between the two pills,
+ * and between the pills and the view's edges. */
+const IDLE_GAP = 0.4;
+const IDLE_PILL_GAP = 0.75;
+const IDLE_MARGIN = 0.15;
+
+/** The highest ground (m) anywhere in x0..x1. */
+function groundTop(terrain: Vec2[], x0: number, x1: number): number {
+  let top = Math.max(heightAt(terrain, x0), heightAt(terrain, x1));
+  for (const p of terrain) if (p.x > x0 && p.x < x1) top = Math.max(top, p.y);
+  return top;
+}
+
+/** Where the idle BUILD and DRIVE pills go (world centres), shown while NOTHING is selected. The
+ * drawer is closed then and the camera rests on the zoom-1 view (x 0..30, y -1.5..13.5; kit
+ * `fullFrame`, or the intro pan's `to` frame, the same one), where a pill is big in world terms:
+ * BUILD (84 px) budgets 224 x 92 px = 7.0 x 2.9 m, DRIVE (96 px) 238 x 106 px = 7.4 x 3.3 m.
+ *  - One row, BUILD then DRIVE to its right (toward the beacon), IDLE_PILL_GAP apart. BUILD is
+ *    centred over the dome, nudged right only as far as the view's left edge needs (a dome at
+ *    x 3 puts it at x 3.66, spanning 0.15..7.16; DRIVE at 11.63 spans 7.91..15.34).
+ *  - The row's bottom sits IDLE_GAP over the build's top AND over the highest ground under the
+ *    row (the power level's 2.5 m crater rim at x 10..16 is under DRIVE), so the pills never
+ *    cover the build or the obstacle. HUGE_BUILD on flat ground: build top 3.525, row centre
+ *    5.575, row top 7.225 of the view's 13.5.
+ *  - When the row does not fit over the build (the flip level's 9 m mesa puts even the bare
+ *    dome's top at 10.52), both pills move to the right of the build at the top of the view. */
+export function idleButtonsAt(parts: PlacedPart<PartKind>[], level: VehicleLevel): { build: Vec2; drive: Vec2 } | null {
+  const rover = parts.find((p) => p.kind === 'rover');
+  const ext = buildExtent(parts, level);
+  if (!rover || !ext) return null;
+  const view = frameView(viewFrameAt(rover.x), false);
+  const b = bigPillM(BUILD_SIZE, 1);
+  const d = bigPillM(IDLE_DRIVE_SIZE, 1);
+  const h = Math.max(b.h, d.h);
+  const pitch = b.w / 2 + IDLE_PILL_GAP + d.w / 2;
+  const top = view.y1 - IDLE_MARGIN - h / 2;
+  let x = clamp(rover.x, view.x0 + IDLE_MARGIN + b.w / 2, view.x1 - IDLE_MARGIN - d.w / 2 - pitch);
+  let y = Math.max(ext.y1, groundTop(level.terrain, x - b.w / 2, x + pitch + d.w / 2)) + IDLE_GAP + h / 2;
+  if (y > top) {
+    x = ext.x1 + IDLE_GAP + b.w / 2;
+    y = top;
+  }
+  return { build: { x, y }, drive: { x: x + pitch, y } };
+}
+
+/** `CourseSpec.dragSnap`: an attachment's ghost sits on the rim point it will snap to on release
+ * (normalizeParts' rule: the direction from the dome's centre to the pointer, in 5 degree
+ * notches); anything else follows the pointer. */
+export function rimSnap(part: PlacedPart<PartKind>, at: Vec2, parts: PlacedPart<PartKind>[]): Vec2 {
+  if (!isAttachment(part.kind)) return at;
+  const rover = parts.find((p) => p.kind === 'rover');
+  if (!rover) return at;
+  const theta = thetaOf(at, rover);
+  return { x: rover.x + ROVER_R * Math.cos(theta), y: rover.y + ROVER_R * Math.sin(theta) };
 }
 
 /** Result-card rows: how many of each part, the springs, and the coins. */
@@ -238,6 +336,8 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
   // (wheels low, propulsion at the back, weights on top) and the child drags it from there.
   spawn: SPAWN,
   normalizeParts: (parts, level) => normalizeRoverParts(parts, level.terrain),
+  // While dragging, the ghost lands where normalizeParts will put the part (a clear landing).
+  dragSnap: (part, at, parts) => rimSnap(part, at, parts),
   // Several parts may share a spot on the rim; the dome's height comes from normalizeParts.
   resolveOverlaps: false,
   writeBackSettled: false,
@@ -270,7 +370,8 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
     ],
   },
 
-  // The drawer shows the selected part's Mount row (suction cup / spring pictures). Every part
+  // The drawer shows the parts shelf and the selected part's Mount row (suction cup / spring
+  // pictures); it opens only while a part is selected (BUILD selects the dome). Every part
   // is drawn with the real art (core/art.ts has the scale rule and the anchors).
   drawer: true,
   textures: {
@@ -298,14 +399,29 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
   follow: (_level, outcome) =>
     outcome === 'running' ? { roles: ['rover'], zoom: 1.6, lerp: 0.1, offset: { x: 1.5, y: 0.5 } } : null,
 
-  // The only in-scene control: the green DRIVE button over the dome, shown when the child taps
-  // the dome. (An attachment shows its selection ring and the drawer instead.)
+  // Nothing selected: BUILD over the dome (selects it, which opens the drawer and its parts
+  // shelf) and the big green DRIVE beside it, the one start control (Jon, 2026-10-05).
+  idleWidgets: (parts, level): Widget[] => {
+    const rover = parts.find((p) => p.kind === 'rover');
+    const at = idleButtonsAt(parts, level);
+    if (!rover || !at) return [];
+    return [
+      { kind: 'tap', id: BUILD_WIDGET, style: 'big', action: 'select', partId: rover.id, at: at.build, size: BUILD_SIZE, icon: '🔧', label: 'BUILD', color: BUILD_BLUE },
+      { kind: 'tap', id: DRIVE_WIDGET, style: 'big', action: 'play', at: at.drive, size: IDLE_DRIVE_SIZE, icon: '▶', label: 'DRIVE', color: DRIVE_GREEN },
+    ];
+  },
+
+  // The dome or any part on it selected (the drawer open): a smaller DRIVE over the build, so the
+  // child can drive straight from the drawer. Same id as the idle one (the coach points at it).
   widgets: (part, parts, level): Widget[] => {
-    if (part.kind !== 'rover') return [];
+    if (part.kind !== 'rover' && !isAttachment(part.kind)) return [];
     const at = driveButtonAt(parts, level);
     if (!at) return [];
-    return [{ kind: 'tap', id: 'drive', action: 'play', at, size: DRIVE_SIZE, icon: '🚀', label: 'DRIVE', color: 0x61bb46 }];
+    return [{ kind: 'tap', id: DRIVE_WIDGET, style: 'big', action: 'play', at, size: DRIVE_SIZE, icon: '▶', label: 'DRIVE', color: DRIVE_GREEN }];
   },
+
+  // Tap tutorials on the five intro levels (coach.ts).
+  coach: roverCoach,
 
   // A new mount flies to the rim point the part is stuck on.
   partTargets: (part, code) => (isAttachment(part.kind) && code === 'mount' ? [{ at: { x: part.x, y: part.y }, size: 0.35 }] : []),
@@ -341,14 +457,15 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
           label: LABELS[kind],
           icon: ICONS[kind],
           ...(isAttachment(kind)
-            ? { image: SHELF_IMAGE[kind as AttachmentKind], group: SHELF_GROUP[kind as AttachmentKind] }
+            ? { image: SHELF_IMAGE[kind], group: SHELF_GROUP[kind], blurb: BLURBS[kind] }
             : {}),
         };
         return acc;
       },
-      {} as Record<PartKind, { label: string; icon: string; image?: string; group?: string }>,
+      {} as Record<PartKind, { label: string; icon: string; image?: string; group?: string; blurb?: string }>,
     ),
-    chipLabels: { cup: 'Suction cup', spring: 'Spring' },
+    // No chipLabels: the Mount options' own labels are what the drawer should show
+    // ("Mount · Spring (bouncy, +1 coin)", catalog.ts MOUNT_DESCRIPTOR).
     meters: [
       { id: 'meter-finish', label: 'Finish', metric: 'reachedFinish', format: (v) => (v >= 1 ? 'yes' : 'not yet') },
       { id: 'meter-time', label: 'Time', metric: 'time', format: (v) => `${v.toFixed(1)} s` },
@@ -381,10 +498,14 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
       launch: '▶ DRIVE',
       playAgain: '▶ Drive again',
       reset: '↺ Reset',
-      refused: 'Not enough coins! Take a part off first.',
+      refused: 'Not enough coins for that part!',
       locked: "Kevin's dome stays put. Build onto it!",
     },
     failOutcomes: ['fell', 'stuck', 'timeout'],
+    // The DRIVE pill in the scene is the only start control (Jon, 2026-10-05); Reset, Undo and
+    // Clear stay in the bar.
+    playInBar: false,
+    winBanner: true,
   },
 };
 
