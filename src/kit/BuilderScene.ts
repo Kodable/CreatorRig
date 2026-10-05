@@ -13,6 +13,7 @@ import {
   lerpFrame,
   panelPxToStagePx,
   type FrameState,
+  type WorldDims,
 } from './camera';
 import {
   dialAngleToValue,
@@ -368,6 +369,14 @@ export class BuilderScene extends Phaser.Scene {
   /** What `focusFrame(null)` means: the edit-mode rest frame (the scrolled view window of a wide
    * world; the full field otherwise). Set by the controller via `setBaseFrame`. */
   private baseFrame: FrameState;
+  /** The EFFECTIVE world every camera clamp (focus, follow/track, the edit-mode rest frame and
+   * the intro pan) is bounded to: `min(WorldSpec.worldW, Level.extentW ?? Infinity)` for the
+   * level now loaded, set by the controller via `setWorldExtent` on every `loadLevel`. Drawing
+   * (sky, ground, terrain) and gesture hit-testing keep using the full `world` passed to the
+   * constructor regardless — only where the camera is ALLOWED TO SIT shrinks for a short level in
+   * a wide course, so no scrollbar shows and the camera never pans into the level's empty tail.
+   * Defaults to the full world until the first `setWorldExtent` call. */
+  private camWorld: WorldDims;
   /** A level-load intro pan (`playIntro`) is running: focus requests wait for it (the last one
    * is kept in `introDeferred` and applied when the pan ends), and a tap skips it. */
   private introActive = false;
@@ -425,6 +434,7 @@ export class BuilderScene extends Phaser.Scene {
     this.panelY1 = PANEL_BOTTOM_Y + PANEL_Y_MARGIN;
     this.worldX1 = this.view.originX + world.worldW * world.ppm;
     this.wide = this.view.viewW < world.worldW;
+    this.camWorld = world;
 
     const initial = fullFrame(world);
     this.camCur = initial;
@@ -736,11 +746,11 @@ export class BuilderScene extends Phaser.Scene {
     } else if (this.camMode === 'track' && this.trackTarget) {
       const target = clampFrame(
         { cx: this.trackTarget.p.x, cy: this.trackTarget.p.y, zoom: this.trackTarget.zoom },
-        this.world,
+        this.camWorld,
       );
       this.camCur = approachFrame(this.camCur, target, this.trackTarget.lerp, dtMs);
     }
-    this.camCur = clampFrame(this.camCur, this.world);
+    this.camCur = clampFrame(this.camCur, this.camWorld);
 
     const px = this.view.toPx({ x: this.camCur.cx, y: this.camCur.cy });
     this.worldCam.setZoom(RENDER_SCALE * this.camCur.zoom);
@@ -759,7 +769,7 @@ export class BuilderScene extends Phaser.Scene {
    * — calling this only updates the rest frame in the meantime. While an intro pan runs it is
    * deferred until the pan ends (the latest request wins). */
   focusFrame(frame: CameraFrame | null, ms = FOCUS_MS): void {
-    const target = clampFrame(frame ?? this.baseFrame, this.world);
+    const target = clampFrame(frame ?? this.baseFrame, this.camWorld);
     this.camRest = target;
     if (this.introActive) {
       this.introDeferred = target;
@@ -802,7 +812,16 @@ export class BuilderScene extends Phaser.Scene {
   /** What `focusFrame(null)` returns to: the edit-mode rest frame (null = the full field, the
    * world's left view window at zoom 1). Does not move the camera by itself. */
   setBaseFrame(frame: CameraFrame | null): void {
-    this.baseFrame = clampFrame(frame ?? fullFrame(this.world), this.world);
+    this.baseFrame = clampFrame(frame ?? fullFrame(this.camWorld), this.camWorld);
+  }
+
+  /** Sets the EFFECTIVE world (see `camWorld`'s doc) every camera clamp bounds itself to, for the
+   * level now loading: `min(WorldSpec.worldW, Level.extentW ?? Infinity)`. Called by
+   * `BuilderApp.loadLevel` before it recomputes the rest frame, so a short level in a wide course
+   * never lets the camera (or the edit-mode scrollbar) wander into its empty tail. Does not move
+   * the camera by itself — the next `setBaseFrame`/`focusFrame`/`glideTo` call does. */
+  setWorldExtent(world: WorldDims): void {
+    this.camWorld = world;
   }
 
   /** Glides (an exponential approach, no fixed duration) to `frame`, which also becomes the rest
@@ -810,7 +829,7 @@ export class BuilderScene extends Phaser.Scene {
    * restart stutter a fixed-length eased tween would have. Ends an intro pan where it is; while
    * a `trackPoint` follow is active only the rest frame changes. */
   glideTo(frame: CameraFrame): void {
-    const target = clampFrame(frame, this.world);
+    const target = clampFrame(frame, this.camWorld);
     this.cancelIntro();
     this.camRest = target;
     if (this.camMode === 'track') return;
@@ -822,8 +841,8 @@ export class BuilderScene extends Phaser.Scene {
    * clamped to the world. `to` becomes the rest frame. Until the pan ends, `focusFrame` requests
    * wait (the latest one is applied when it ends) and a tap on the canvas skips to the end. */
   playIntro(from: CameraFrame, to: CameraFrame, ms: number): void {
-    const a = clampFrame(from, this.world);
-    const b = clampFrame(to, this.world);
+    const a = clampFrame(from, this.camWorld);
+    const b = clampFrame(to, this.camWorld);
     this.trackTarget = null;
     this.introDeferred = null;
     this.camFrom = a;

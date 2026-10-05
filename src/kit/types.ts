@@ -318,6 +318,10 @@ export interface Level<K extends string, M, O extends string> {
   /** Coins the child may spend on the parts they add (see `CourseSpec.partCost`). Level-placed
    * (`locked`) parts are free. Absent = no budget (today's `partLimit` rule only). */
   budget?: number;
+  /** The width of the world this level actually uses (meters, from x 0). The camera clamp and
+   * the edit-mode scrollbar use min(`WorldSpec.worldW`, `extentW`): a short level in a wide
+   * course shows no scrollbar and never scrolls into its empty tail. Absent = the whole world. */
+  extentW?: number;
 }
 
 export type Mode = 'edit' | 'play' | 'done';

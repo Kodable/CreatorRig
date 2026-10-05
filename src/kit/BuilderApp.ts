@@ -18,6 +18,7 @@ import type {
   Vec2,
   Widget,
   WidgetAction,
+  WorldSpec,
  SimSnapshot } from './types';
 import { gatedOptions, isKnown, isOptionKnown, knownConcepts } from './concepts';
 import { allPass, evaluateGoals } from './goals';
@@ -100,10 +101,17 @@ export class BuilderApp<
   private destroyed = false;
 
   // ---- wide worlds: the edit-mode rest frame and the level-load intro pan ----
-  /** Meters the panel shows across at zoom 1 (`WorldSpec.worldW` when the world fits). */
-  private readonly viewW: number;
-  /** `WorldSpec.worldW` exceeds the view width: the edit-mode window scrolls (`scrollTo`). */
-  private readonly wide: boolean;
+  /** The EFFECTIVE world every camera clamp (and the scrollbar) is bounded to for `this.level`:
+   * `{ ...spec.world, worldW: min(spec.world.worldW, level.extentW ?? Infinity) }`. Recomputed on
+   * `loadLevel` and handed to the scene via `scene.setWorldExtent`, so a short level in a wide
+   * course shows no scrollbar and the camera never strays into its empty tail. Drawing (the kit
+   * draws sky/ground/terrain for the whole `spec.world.worldW` regardless) and part drag/placement
+   * clamps keep using `spec.world` directly. */
+  private effWorld: WorldSpec;
+  /** Meters the panel shows across at zoom 1 (`effWorld.worldW` when the world fits). */
+  private viewW: number;
+  /** `effWorld.worldW` exceeds the view width: the edit-mode window scrolls (`scrollTo`). */
+  private wide: boolean;
   /** The edit-mode rest frame (`restCx` = its cx): what deselecting, `stop()` and the end of a
    * run return to. The world's left view window by default, `CourseSpec.intro`'s `to` after a pan,
    * moved by the scrollbar. In done mode on a wide world it sits where the run ended. */
@@ -132,6 +140,9 @@ export class BuilderApp<
     this.level = level;
     this.tool = spec.tools?.[0]?.id ?? null;
     this.gated = gatedOptions(spec.levels);
+    // Placeholders (the full world): `loadLevel` below recomputes all four from the first
+    // level's `extentW` before the scene ever reads them.
+    this.effWorld = spec.world;
     this.viewW = viewWidth(spec.world);
     this.wide = isWideWorld(spec.world);
     this.restFrame = fullFrame(spec.world);
@@ -178,6 +189,16 @@ export class BuilderApp<
     this.levelIndex = idx >= 0 ? idx : 0;
     this.known = knownConcepts(this.spec.levels, level.id);
 
+    // The effective world for THIS level: min(spec.world.worldW, level.extentW ?? Infinity). A
+    // short level in a wide course then shows no scrollbar (viewW covers the whole effective
+    // world) and the camera (focus, follow, the scrollbar, the intro pan) never strays past its
+    // own content into the course's empty tail.
+    const eff = Math.min(this.spec.world.worldW, level.extentW ?? Infinity);
+    this.effWorld = { ...this.spec.world, worldW: eff };
+    this.viewW = viewWidth(this.effWorld);
+    this.wide = isWideWorld(this.effWorld);
+    this.scene.setWorldExtent(this.effWorld);
+
     this.mode = 'edit';
     this.outcome = null;
     this.passed = false;
@@ -198,7 +219,7 @@ export class BuilderApp<
     // its opening frame until the level's first build is ready (see `rebuild`), so it never
     // pans over the previous level's parts.
     const intro = this.spec.intro?.(level) ?? null;
-    this.restFrame = intro ? clampFrame(intro.to, this.spec.world) : fullFrame(this.spec.world);
+    this.restFrame = intro ? clampFrame(intro.to, this.effWorld) : fullFrame(this.effWorld);
     this.editRest = null;
     this.pendingIntro = intro;
     this.scene.cancelIntro();
@@ -712,8 +733,8 @@ export class BuilderApp<
     if (!this.wide || this.mode === 'play' || !Number.isFinite(t)) return;
     this.pendingIntro = null;
     this.scene.cancelIntro();
-    const cx = scrollToCx(t, this.viewW, this.spec.world.worldW, this.restFrame.zoom);
-    this.restFrame = clampFrame({ ...this.restFrame, cx }, this.spec.world);
+    const cx = scrollToCx(t, this.viewW, this.effWorld.worldW, this.restFrame.zoom);
+    this.restFrame = clampFrame({ ...this.restFrame, cx }, this.effWorld);
     this.scene.setBaseFrame(this.restFrame);
     this.scene.glideTo(this.restFrame);
   }
@@ -736,7 +757,7 @@ export class BuilderApp<
   private scrollState(): number | null {
     if (!this.wide || this.mode === 'play') return null;
     const f = !this.pendingIntro && this.scene.isAtBase() ? this.restFrame : this.scene.cameraFrame();
-    return cxToScroll(f.cx, this.viewW, this.spec.world.worldW, f.zoom);
+    return cxToScroll(f.cx, this.viewW, this.effWorld.worldW, f.zoom);
   }
 
   // ---- widgets --------------------------------------------------------------
@@ -892,7 +913,7 @@ export class BuilderApp<
         // A wide world stays where the run ended (zoomed back out to the rest zoom): the child
         // sees how far the run got, and can scroll from there. `stop()` restores the edit rest.
         const cur = this.scene.cameraFrame();
-        this.restFrame = clampFrame({ ...this.restFrame, cx: cur.cx }, this.spec.world);
+        this.restFrame = clampFrame({ ...this.restFrame, cx: cur.cx }, this.effWorld);
         this.scene.setBaseFrame(this.restFrame);
       }
       if (this.spec.follow || this.spec.focusFrame || this.wide) {

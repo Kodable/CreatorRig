@@ -276,6 +276,47 @@ describe('clampFrame on a wide world', () => {
   });
 });
 
+// ---- Level.extentW: the camera clamped to an EFFECTIVE world narrower than the drawn worldW ----
+// (BuilderApp builds `{ ...spec.world, worldW: min(spec.world.worldW, level.extentW) }` and hands
+// it to these same, unmodified functions — a short level in a wide course just passes a smaller
+// `worldW` through. Drawing keeps using the full `spec.world`.)
+
+describe('clampFrame / viewWidth / isWideWorld with an effective width smaller than the drawn worldW', () => {
+  // The course draws a 90 m world (ppm 32, so the view is 30 m); this level's content only
+  // reaches x 20, so its EFFECTIVE world is 20 m, narrower than the 30 m view.
+  const EFF_SHORT = { worldW: 20, worldH: 15, ppm: 32 };
+
+  it('a short level is not wide: the scrollbar never shows', () => {
+    expect(viewWidth(EFF_SHORT)).toBe(20);
+    expect(isWideWorld(EFF_SHORT)).toBe(false);
+  });
+
+  it('fullFrame centres the SHORT effective world, not the course worldW', () => {
+    expect(fullFrame(EFF_SHORT)).toEqual({ cx: 10, cy: 7.5, zoom: 1 });
+  });
+
+  it('clampFrame at zoom 1 recentres to the short world regardless of how far the frame asks to go', () => {
+    expect(clampFrame({ cx: 1000, cy: 7.5, zoom: 1 }, EFF_SHORT)).toEqual({ cx: 10, cy: 7.5, zoom: 1 });
+  });
+
+  // This level's content reaches x 50: still narrower than the course's 90 m worldW, but still
+  // wider than the 30 m view, so it DOES scroll, just over its own 50 m rather than the full 90.
+  const EFF_LONG = { worldW: 50, worldH: 15, ppm: 32 };
+
+  it('a level still wider than the view scrolls, clamped to ITS OWN width', () => {
+    expect(isWideWorld(EFF_LONG)).toBe(true);
+    // zoom 1: cx clamps to worldW - viewW / 2 = 50 - 15 = 35, never the course's full 90 m tail
+    // (90 - 15 = 75).
+    expect(clampFrame({ cx: 1000, cy: 7.5, zoom: 1 }, EFF_LONG)).toEqual({ cx: 35, cy: 7.5, zoom: 1 });
+  });
+
+  it('scrollToCx / cxToScroll range over the effective width, not the course worldW', () => {
+    const viewW = viewWidth(EFF_LONG); // 30
+    expect(scrollToCx(1, viewW, EFF_LONG.worldW)).toBeCloseTo(35, 9); // 15 + 1 * (50 - 30), not 75
+    expect(cxToScroll(35, viewW, EFF_LONG.worldW)).toBeCloseTo(1, 9);
+  });
+});
+
 describe('scrollToCx / cxToScroll', () => {
   it('maps 0 and 1 to the window at the world start and end', () => {
     expect(scrollToCx(0, 30, 90)).toBe(15);

@@ -102,6 +102,11 @@ interface LevelDef {
   /** Level-placed scenery besides the dome and the beacon. */
   scenery?: (terrain: Vec2[]) => RoverPart[];
   finishX?: number;
+  /** `Level.extentW` (kit/types.ts): the width (m, from x 0) this level's content actually uses.
+   * The camera clamp and the edit-mode scrollbar use `min(WORLD_W, extentW)`, so a short level in
+   * this 90 m-wide, 30 m-view course shows no scrollbar and never scrolls into its empty tail
+   * (see levels.test.ts's `extentW` checks for how each value was chosen). */
+  extentW: number;
   solution?: Stick[];
   /** More builds that pass (levels.test proves each). */
   altSolutions?: Stick[][];
@@ -122,6 +127,7 @@ function level(def: LevelDef): VehicleLevel {
     failHints: def.failHints,
     terrain: def.terrain,
     budget: def.budget,
+    extentW: def.extentW,
     ...(def.introduces ? { introduces: def.introduces } : {}),
     ...(def.solution ? { solution: [...preset, ...stickOn(def.terrain, def.solution)] } : {}),
     ...(def.altSolutions ? { altSolutions: def.altSolutions.map((alt) => [...preset, ...stickOn(def.terrain, alt)]) } : {}),
@@ -201,6 +207,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: "Kevin's rover is just a glass dome! Tap a wheel to stick it on, then another. Then tap the dome and press DRIVE.",
     terrain: withHill(flat(), 11, 17, 1.2),
     budget: 4,
+    extentW: 30,
     palette: WHEELS,
     introduces: ['wheels'],
     hints: [
@@ -224,6 +231,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'Rock steps! Round wheels hit them too fast and trip. Maybe a wheel with points can grab the rock?',
     terrain: withStairs(flat(), 12, 4, 0.15, 0.6),
     budget: 6,
+    extentW: 30,
     // Every round layout trips over the first step and flips (rigid, at 6 m/s); every star layout
     // climbs. Square wheels climb too (slowly), so this intro compares round with star only.
     palette: ['wheelCircle', 'wheelStar'],
@@ -249,6 +257,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'This road is so bumpy! Suction cups hold the wheels stiff. Tap a wheel and try a spring instead.',
     terrain: withCobbles(flat(), 8, 18, 0.15, 0.6),
     budget: 6,
+    extentW: 30,
     // Every rigid layout (2 or 3 round wheels) bounces over; every spring layout rolls through.
     // Round wheels only: square and star wheels crawl over the bumps on suction cups, which
     // would hide the lesson (springs soak up bumps).
@@ -278,6 +287,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'A boulder is blocking the trail! The wheels just bump into it. Stick something heavy on the front and ram it!',
     terrain: flat(),
     budget: 7,
+    extentW: 30,
     palette: [...ALL_WHEELS, ...WEIGHTS],
     introduces: ['weight'],
     finishX: 17,
@@ -307,6 +317,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'The crater rim is so steep, the wheels just slip! We need a push. Fans, stoves and jets push the rover.',
     terrain: withHill(flat(), 10, 16, 2.5),
     budget: 8,
+    extentW: 30,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     introduces: ['power'],
     hints: [
@@ -334,6 +345,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'A huge crevasse! Wheels alone will not get Kevin across. We need real speed.',
     terrain: withRampToLip(flat(), 9, 15, 1, 5.5, -0.5),
     budget: 9,
+    extentW: 30,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     goals: [
       ...REACH,
@@ -365,6 +377,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'Rubble AND rock steps, and Kevin is in a hurry! Use everything you have learned.',
     terrain: withStairs(withCobbles(flat(), 6, 12, 0.2, 0.6), 14, 4, 0.2, 0.6),
     budget: 10,
+    extentW: 30,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     goals: [
       ...REACH,
@@ -395,6 +408,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'A race across the plain! Wheels alone are not fast enough to beat the clock.',
     terrain: flat(),
     budget: 9,
+    extentW: 30,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     goals: [
       ...REACH,
@@ -435,6 +449,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: "Two giant cliffs! Kevin's rover will tumble and land on its roof. Stick wheels on top too, so it can drive upside down!",
     terrain: FLIP_TERRAIN,
     budget: 12,
+    extentW: 84,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     finishX: 80,
     timeout: LONG_TIMEOUT,
@@ -474,6 +489,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'Bumpy hills, a dip, then the giant canyon wall! The wall at the end is so steep, wheels alone will slip.',
     terrain: CANYON_TERRAIN,
     budget: 12,
+    extentW: 82,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     finishX: 78,
     timeout: LONG_TIMEOUT,
@@ -513,6 +529,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'Rock stairs up the ridge, a big drop, then a bumpy valley! What soaks up all those bumps?',
     terrain: RIDGE_TERRAIN,
     budget: 14,
+    extentW: 80,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     finishX: 76,
     timeout: LONG_TIMEOUT,
@@ -551,6 +568,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'Ramp, gap, ramp, gap! Every gap is wider than the last one, and the last one is HUGE.',
     terrain: HOPS_TERRAIN,
     budget: 15,
+    extentW: 84,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     finishX: 80,
     timeout: LONG_TIMEOUT,
@@ -590,6 +608,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'The big one! Hills, bumps, stairs, a jump and a drop, all the way across Marstopia. And Kevin is in a hurry!',
     terrain: MARATHON_TERRAIN,
     budget: 20,
+    extentW: 90,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     finishX: 87,
     timeout: LONG_TIMEOUT,
@@ -627,6 +646,7 @@ export const LEVELS: VehicleLevel[] = [
     bruno: 'No rules! Lots of coins. Build the wildest rover you can and roam Marstopia.',
     terrain: withHill(withHill(flat(), 8, 12, 0.8), 18, 22, 0.6),
     budget: 40,
+    extentW: 90,
     palette: [...ALL_WHEELS, ...WEIGHTS, ...POWER],
     goals: [],
     hints: [

@@ -24,6 +24,13 @@ const LEVEL: L = {
   failHints: {},
 };
 
+/** `extentW` 20 on a 90 m-wide/30 m-view world: the effective world (20) fits the view (30), so
+ * this level shows no scrollbar. */
+const SHORT_LEVEL: L = { ...LEVEL, id: 'short', extentW: 20 };
+/** `extentW` 60: the effective world (60) is still wider than the 30 m view, so this level
+ * scrolls, but only over its own 60 m, never the course's full 90 m. */
+const LONG_LEVEL: L = { ...LEVEL, id: 'long', extentW: 60 };
+
 class FakeSim implements CourseSim<M, O> {
   outcome: O = 'running';
   play(): void {}
@@ -50,12 +57,19 @@ class FakeScene {
   base: CameraFrame | null = null;
   rest: CameraFrame | null = null;
   intro = false;
+  /** Last `setWorldExtent` argument: the EFFECTIVE world (`WorldSpec.worldW` narrowed by
+   * `Level.extentW`) the controller handed the scene for the level now loaded. */
+  worldExtent: WorldSpec | null = null;
   onUpdate?: (dt: number) => void;
   private rec(name: string, ...args: unknown[]): void {
     this.calls.push({ name, args });
   }
   named(name: string): unknown[][] {
     return this.calls.filter((c) => c.name === name).map((c) => c.args);
+  }
+  setWorldExtent(world: WorldSpec): void {
+    this.rec('setWorldExtent', world);
+    this.worldExtent = world;
   }
   setTool(): void {}
   setGrid(): void {}
@@ -310,5 +324,50 @@ describe('BuilderApp: the level-load intro pan', () => {
     await flush();
     expect(scene.named('playIntro')).toHaveLength(0);
     expect(scene.base).toEqual({ cx: 15, cy: 7.5, zoom: 1 });
+  });
+});
+
+describe('BuilderApp: Level.extentW (a short level in a wide course)', () => {
+  it('hands the scene the effective world: min(WorldSpec.worldW, Level.extentW)', async () => {
+    const { scene } = boot(makeSpec(WIDE, { levels: [SHORT_LEVEL, LONG_LEVEL] }));
+    await flush();
+    expect(scene.worldExtent).toEqual({ ...WIDE, worldW: 20 });
+  });
+
+  it('scroll is null (no scrollbar) when extentW fits the view, even on a wide-world course', async () => {
+    const { scene, hud } = boot(makeSpec(WIDE, { levels: [SHORT_LEVEL, LONG_LEVEL] }));
+    await flush();
+    expect(frame(scene, hud).scroll).toBeNull();
+  });
+
+  it('the rest frame is the full-field frame of the EFFECTIVE world, not the course worldW', async () => {
+    const { scene } = boot(makeSpec(WIDE, { levels: [SHORT_LEVEL] }));
+    await flush();
+    // fullFrame of a 20 m world (which fits its own 20 m view): cx = 10, not 15 (90 m world).
+    expect(scene.base).toEqual({ cx: 10, cy: 7.5, zoom: 1 });
+  });
+
+  it('scroll is non-null, and its range uses extentW, for a level still wider than the view', async () => {
+    const { app, scene, hud } = boot(makeSpec(WIDE, { levels: [SHORT_LEVEL, LONG_LEVEL] }));
+    await flush();
+    app.selectLevel('long');
+    await flush();
+    expect(scene.worldExtent).toEqual({ ...WIDE, worldW: 60 });
+    expect(frame(scene, hud).scroll).toBe(0);
+    app.scrollTo(1);
+    // viewW / 2 + 1 * (extentW 60 - viewW 30) = 45, never 75 (the course's full 90 m worldW).
+    expect((scene.named('glideTo').at(-1)![0] as CameraFrame).cx).toBeCloseTo(45, 9);
+    expect(frame(scene, hud).scroll).toBeCloseTo(1, 9);
+  });
+
+  it('a palette part still spawns inside the scrolled (effective-world) view window', async () => {
+    const { app, scene } = boot(makeSpec(WIDE, { levels: [SHORT_LEVEL, LONG_LEVEL] }));
+    await flush();
+    app.selectLevel('long');
+    await flush();
+    app.scrollTo(1); // window 30..60 of the 60 m effective world
+    expect(scene.base!.cx).toBeCloseTo(45, 9);
+    app.addPart('box');
+    expect(app.parts.at(-1)!.x).toBeCloseTo(30 + 5, 9);
   });
 });

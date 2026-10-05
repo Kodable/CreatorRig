@@ -56,6 +56,11 @@ describe('vehicle levels: structure', () => {
       for (let i = 1; i < level.terrain.length; i++) expect(level.terrain[i]!.x).toBeGreaterThan(level.terrain[i - 1]!.x);
       expect(level.bruno.length).toBeGreaterThan(0);
       expect(level.hints.length).toBeGreaterThanOrEqual(3);
+      // `Level.extentW` (kit/types.ts): the camera/scrollbar's effective world. Wide enough that
+      // the beacon is always inside it, with a little room to spare, but never past WORLD_W.
+      const finishX = level.parts.find((p) => p.kind === 'finish')!.x;
+      expect(level.extentW).toBeGreaterThanOrEqual(finishX + 2);
+      expect(level.extentW).toBeLessThanOrEqual(WORLD_W);
     });
 
     it(`${level.id}: the palette offers only attachments whose concept is known by this level`, () => {
@@ -118,6 +123,14 @@ describe('vehicle levels: the first nine are unchanged by the wide world', () =>
       if (old.solution.length) expect(sticksOf(level.solution!)).toEqual(old.solution);
     });
   }
+
+  it('each of the eight original challenge levels has extentW 30: their content ends well before x 30, so the course-wide 90 m world never shows a scrollbar or scrolls into their empty tail', () => {
+    for (const id of OLD) expect(findLevel(id)!.extentW).toBe(30);
+  });
+
+  it('free play has extentW 90 (not 30): a free build may roam the whole world, not just the old 0..30 content', () => {
+    expect(findLevel('free')!.extentW).toBe(90);
+  });
 });
 
 describe('vehicle levels: the long challenges (2026-10-05)', () => {
@@ -134,6 +147,11 @@ describe('vehicle levels: the long challenges (2026-10-05)', () => {
       expect(level.timeout).toBeGreaterThan(TIMEOUT_S);
       expect(level.altSolutions!.length).toBeGreaterThanOrEqual(3);
       expect(level.failHints.stuck).toBeTruthy();
+    });
+
+    it(`${id}: extentW is the beacon x + 4 m, rounded up, capped at WORLD_W`, () => {
+      const finish = level.parts.find((p) => p.kind === 'finish')!;
+      expect(level.extentW).toBe(Math.min(WORLD_W, Math.ceil(finish.x + 4)));
     });
 
     it(`${id}: varied terrain: the ground changes height well past the first view`, () => {
