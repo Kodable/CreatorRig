@@ -167,16 +167,19 @@
    buttons; a tap adds that part straight away (callbacks.addPart), no selection needed. ---- */
 .drawer-shelf { display: flex; flex-direction: column; gap: 14px; padding-bottom: 4px; }
 .drawer-shelf-section { display: flex; flex-direction: column; }
-.shelf-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Room above the first row: the badges sit on the buttons' top edge, under the group label. */
+.shelf-grid { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
 /* `.shelf-btn-wrap` is the real positioned box (70x70); badges are its own children, siblings of
    the button (see `BuilderHud.syncShelf`) — kept from the box_curved pass below even though the
    button itself fell back to `border-radius` (see that section's note on why). */
-.shelf-btn-wrap { position: relative; flex: 0 0 auto; width: 70px; min-height: 70px; }
+/* 82 px wide so the NEW badge (left) and the coin badge (right) fit side by side on the top
+   edge without covering each other or the picture's middle (Gao, 2026-10-05). */
+.shelf-btn-wrap { position: relative; flex: 0 0 auto; width: 82px; min-height: 84px; }
 .shelf-btn {
   position: absolute; inset: 0;
   background: #2c3560; border: 3px solid #3d4a80; border-radius: 16px; cursor: pointer; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  padding: 6px 4px 5px; color: #fff;
+  padding: 18px 4px 5px; color: #fff; /* top room for the badges on the top edge */
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   transition: border-color 120ms ease, filter 120ms ease, transform 120ms ease;
 }
@@ -189,7 +192,7 @@
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .shelf-btn-wrap .cost {
-  position: absolute; top: -6px; right: -6px; background: #ffb40f; color: #1a2142;
+  position: absolute; top: 2px; right: 3px; background: #ffb40f; color: #1a2142;
   font-size: 10px; font-weight: 800; line-height: 1.4; border-radius: 999px; padding: 0 5px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, .35); pointer-events: none;
 }
@@ -378,8 +381,8 @@
 /* ---- Shelf unlock (HudState.unlocked): a NEW badge on the button (a tap on it re-opens the
    callout), a staggered pop-in, and the callout card beside the button. ---- */
 .unlock-badge {
-  position: absolute; top: -8px; left: -8px; z-index: 1;
-  padding: 0 6px; border-radius: 999px; background: #05aeed; color: #0b1030;
+  position: absolute; top: 2px; left: 3px; z-index: 1;
+  padding: 0 5px; border-radius: 999px; background: #05aeed; color: #0b1030;
   font-size: 10px; font-weight: 800; line-height: 1.6; letter-spacing: 0.04em;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); cursor: pointer; pointer-events: auto;
 }

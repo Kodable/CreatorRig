@@ -22,6 +22,7 @@ import type {
   WorldSpec,
  SimSnapshot } from './types';
 import { gatedOptions, isKnown, isOptionKnown, knownConcepts } from './concepts';
+import { hasShelfKinds } from './shelf';
 import { allPass, evaluateGoals } from './goals';
 import { FixedStepper } from '../core/stepper';
 import { interpolateSnapshot } from './interpolate';
@@ -637,8 +638,12 @@ export class BuilderApp<
     if (!this.canTune()) return;
     const part = this.parts.find((p) => p.id === id);
     if (part && this.spec.catalog[part.kind].descriptors.length === 0) {
+      // A part with nothing to tune only opens on a tap when its drawer would show something:
+      // its own widgets, or the course's parts shelf (the rover's dome has no rows, but a tap
+      // on it must open the shelf just like the BUILD pill does).
       const hasWidgets = (this.spec.widgets?.(part, this.parts, this.level).length ?? 0) > 0;
-      if (!hasWidgets) return;
+      const hasShelf = !!this.spec.drawer && hasShelfKinds(this.level.palette, this.spec.hud.partInfo);
+      if (!hasWidgets && !hasShelf) return;
     }
     this.selectPart(id);
   }
