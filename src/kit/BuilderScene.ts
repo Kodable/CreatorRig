@@ -136,12 +136,24 @@ const INTRO_MAX_DT_MS = 50;
 const BIG_FONT_FAMILY = '"Arial Rounded MT Bold", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 /** 'big' tap widget: one soft pulse (scale 1.0 -> 1.04 -> 1.0) per this many ms. */
 const BIG_PULSE_MS = 1200;
-/** The coach's pointer hand: glyph size (stage px, screen-constant), bounce depth and period, and
- * how long it takes to pop in when the step changes. */
-const COACH_HAND_PX = 40;
-const COACH_BOUNCE_PX = 6;
-const COACH_BOUNCE_MS = 900;
+/** The coach's pointer hand (2026-10-05: the game's 3-frame glove, `public/ui/hand_0N.png` — a
+ * white glove, index finger pointing up-left): displayed height (stage px, screen-constant),
+ * its source aspect ratio (310x360), the 1 -> 2 -> 3 -> 2 frame loop's rate, and how long the pop
+ * -in takes when the step changes. */
+const COACH_HAND_H_PX = 64;
+const COACH_HAND_ASPECT = 310 / 360; // hand_0N.png is 310x360
+const COACH_FRAME_MS = 1000 / 8; // ~8 fps
 const COACH_IN_MS = 300;
+/** hand_0N.png's fingertip (the topmost opaque point), as a fraction of the image — measured with
+ * Pillow. Frame 1 is the finger fully extended, frame 3 the most curled; `setOrigin` to this
+ * fraction so the fingertip (not the image's centre) lands exactly on the coach's target. */
+const COACH_HAND_FRAMES: { key: string; fx: number; fy: number }[] = [
+  { key: 'ui-hand-1', fx: 108 / 310, fy: 2 / 360 },
+  { key: 'ui-hand-2', fx: 76 / 310, fy: 18 / 360 },
+  { key: 'ui-hand-3', fx: 60.5 / 310, fy: 38 / 360 },
+];
+/** Index into `COACH_HAND_FRAMES` for each step of the 1 -> 2 -> 3 -> 2 loop. */
+const COACH_FRAME_SEQUENCE = [0, 1, 2, 1];
 const DEPTH_COACH = DEPTH_WIDGETS + 0.2; // above widget text (+0.05) and hops (+0.1)
 
 const WIDGET_HOP_MS = 350; // tap/cycle/rack hopTo icon/texture flight
@@ -455,7 +467,10 @@ export class BuilderScene extends Phaser.Scene {
   /** Step id + target: the hand pops in again whenever it changes. */
   private coachKey = '';
   private coachStart = 0;
-  private coachHand?: Phaser.GameObjects.Text;
+  private coachHand?: Phaser.GameObjects.Image;
+  /** A darker, alpha-reduced copy of `coachHand`, drawn first and offset (0, 4 px) down — the
+   * glove's drop shadow. */
+  private coachHandShadow?: Phaser.GameObjects.Image;
 
   constructor(
     key: string,
@@ -497,6 +512,10 @@ export class BuilderScene extends Phaser.Scene {
     // 2026-10-05 box_curved skin: the 'big' tap widget's pill body (`drawBigTap`), a kit-level
     // asset (every course's BUILD/DRIVE-style pill uses it), not a per-course texture.
     this.load.image('ui-box2', 'ui/box_curved_2.png');
+    // The coach's pointer hand (2026-10-05): the game's 3-frame glove, kit-level like ui-box2.
+    this.load.image('ui-hand-1', 'ui/hand_01.png');
+    this.load.image('ui-hand-2', 'ui/hand_02.png');
+    this.load.image('ui-hand-3', 'ui/hand_03.png');
     for (const role of Object.values(this.roles)) {
       if (role.texture) this.load.image(role.texture.key, role.texture.url);
     }
@@ -1200,27 +1219,42 @@ export class BuilderScene extends Phaser.Scene {
     if (p && !this.worldCam.worldView.contains(p.x, p.y)) p = null;
     if (!p) {
       this.coachHand?.setVisible(false);
+      this.coachHandShadow?.setVisible(false);
       return;
     }
     let hand = this.coachHand;
-    if (!hand) {
-      hand = this.onWorld(
-        this.add.text(0, 0, '👆', { fontSize: `${COACH_HAND_PX}px`, resolution: TEXT_RESOLUTION, padding: { x: 4, y: 4 } }),
-      );
-      // The 👆 glyph's fingertip sits near the top middle of its box.
-      hand.setOrigin(0.45, 0.06);
-      hand.setShadow(0, 4, 'rgba(0, 0, 0, 0.45)', 6, false, true);
+    let shadow = this.coachHandShadow;
+    if (!hand || !shadow) {
+      // The shadow is a second, darker/fainter copy of the same glove, drawn first (lower depth)
+      // and offset (0, 4 px) down — same recipe as every other widget's drop shadow.
+      shadow = this.onWorld(this.add.image(0, 0, COACH_HAND_FRAMES[0]!.key));
+      shadow.setTint(0x000000);
+      shadow.setDepth(DEPTH_COACH - 0.01);
+      hand = this.onWorld(this.add.image(0, 0, COACH_HAND_FRAMES[0]!.key));
       hand.setDepth(DEPTH_COACH);
       this.coachHand = hand;
+      this.coachHandShadow = shadow;
     }
     const s = this.pxScale;
     const tIn = Math.min(1, Math.max(0, (this.nowMs - this.coachStart) / COACH_IN_MS));
     const grow = tIn >= 1 ? 1 : 0.3 + 0.7 * easeOutBack(tIn);
-    // The bounce: away from the target and back, like a finger tapping it.
-    const bounce = COACH_BOUNCE_PX * (0.5 - 0.5 * Math.cos(((this.nowMs - this.coachStart) / COACH_BOUNCE_MS) * 2 * Math.PI));
-    hand.setScale(s * grow);
-    hand.setAlpha(Math.min(1, tIn * 1.5));
-    hand.setPosition(p.x, p.y + (6 + bounce) * s);
+    const alpha = Math.min(1, tIn * 1.5);
+    // The 1 -> 2 -> 3 -> 2 loop, driven by the scene clock (not `coachStart`) so every coach hand
+    // on screen stays in lockstep.
+    const frame = COACH_HAND_FRAMES[COACH_FRAME_SEQUENCE[Math.floor(this.nowMs / COACH_FRAME_MS) % COACH_FRAME_SEQUENCE.length]!]!;
+    const h = COACH_HAND_H_PX * s * grow;
+    const w = h * COACH_HAND_ASPECT;
+    for (const img of [shadow, hand]) {
+      img.setTexture(frame.key);
+      img.setDisplaySize(w, h);
+      img.setOrigin(frame.fx, frame.fy);
+    }
+    shadow.setPosition(p.x, p.y + 4 * s);
+    shadow.setAlpha(0.35 * alpha);
+    shadow.setVisible(true);
+    hand.clearTint();
+    hand.setPosition(p.x, p.y);
+    hand.setAlpha(alpha);
     hand.setVisible(true);
   }
 
@@ -1741,11 +1775,11 @@ export class BuilderScene extends Phaser.Scene {
     return w;
   };
 
-  /** `TapWidget.style` 'big': a chunky pill filled with the widget colour (default GO green), a
-   * darker lip and a dark drop shadow under it, a soft highlight on its top half, a white rim, and
-   * the icon + label (BIG_FONT_PX bold, white) inside. Pulses 1.0 -> 1.04 every BIG_PULSE_MS
-   * unless locked; pops on tap like the card. Its label is always drawn (it IS the control), at
-   * any zoom. */
+  /** `TapWidget.style` 'big': a plain filled pill in the widget colour (default GO green) with a
+   * soft drop shadow under it (no white rim, no gloss band, no darker lip — 2026-10-05 stakeholder
+   * direction: "use simple, no-outline rounded box buttons with a drop shadow"), and the icon +
+   * label (BIG_FONT_PX bold, white) inside. Pulses 1.0 -> 1.04 every BIG_PULSE_MS unless locked;
+   * pops on tap like the card. Its label is always drawn (it IS the control), at any zoom. */
   /** `.ui-box2`-backed NineSlice for this pill's id, creating it (and recording whether NineSlice
    * works at all in this build) on first use. Returns null once NineSlice has failed/thrown once
    * (`nineSliceOk === false`), so `drawBigTap` falls back to the old drawn fill permanently rather
@@ -1785,16 +1819,13 @@ export class BuilderScene extends Phaser.Scene {
     const x0 = geom.center.x - w / 2;
     const y0 = geom.center.y - h / 2;
 
-    // The drop shadow and the darker 3D "lip" stay plain Graphics (rounded rects slightly under
-    // the body): box_curved_2's own corners are close enough to a rounded rect at this size that
-    // the approximation reads the same as the old all-Graphics pill.
-    g.fillStyle(SHADOW_COLOR, 0.5 * alpha);
-    g.fillRoundedRect(x0 + 1 * s, y0 + 9 * s, w, h, r);
-    g.fillStyle(darken(fill, 0.32), alpha);
-    g.fillRoundedRect(x0, y0 + 5 * s, w, h, r);
+    // A soft drop shadow under the body (offset 0,4 px, dark, alpha ~0.35 — same recipe as every
+    // other widget's `shadowRoundedRect`), no darker lip, no gloss band, no white rim.
+    this.shadowRoundedRect(geom.center.x, geom.center.y, w, h, r);
 
     // The main body: a tinted NineSlice of box_curved_2.png (2026-10-05 box_curved skin) when
-    // Phaser's NineSlice is available in this build, else the old drawn fill.
+    // Phaser's NineSlice is available in this build, else a plain drawn fill — either way a plain
+    // filled rounded box in the widget colour, nothing else layered on top of it.
     const ns = this.bigTapNineSlice(geom.id);
     if (ns) {
       const key = `tap:${geom.id}:bigbody`;
@@ -1810,13 +1841,6 @@ export class BuilderScene extends Phaser.Scene {
       g.fillStyle(fill, alpha);
       g.fillRoundedRect(x0, y0, w, h, r);
     }
-    // A soft highlight across the top half (glossy, "press me") and a white rim, layered on top of
-    // the NineSlice/fallback fill either way — same as before.
-    const hr = Math.max(1, Math.min(r * 0.8, (h * 0.4) / 2));
-    g.fillStyle(0xffffff, 0.2 * alpha);
-    g.fillRoundedRect(x0 + 10 * s, y0 + 5 * s, w - 20 * s, h * 0.4, hr);
-    g.lineStyle(3 * s, 0xffffff, 0.85 * alpha);
-    g.strokeRoundedRect(x0, y0, w, h, r);
 
     let x = geom.center.x - (pill.contentW * k) / 2;
     if (geom.icon && pill.iconW > 0) {

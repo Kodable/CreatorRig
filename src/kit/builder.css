@@ -324,13 +324,16 @@
   85% { opacity: 1; }
   100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1); }
 }
+/* 2026-10-05 stakeholder direction: "the BUILD pill and the celebration still don't use Creator's
+   styling: use simple, no-outline rounded box buttons with a drop shadow" — the card is a plain
+   navy rounded box (no border/outline), just a soft drop shadow under it; same for every button
+   in `.win-actions` and `.win-close` below. */
 .win-card {
   position: relative; min-width: 440px; max-width: 620px; box-sizing: border-box;
   padding: 30px 46px 28px; border-radius: 28px; text-align: center;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  background: linear-gradient(180deg, #2f3d80 0%, #1a2142 100%);
-  border: 4px solid #61bb46;
-  box-shadow: 0 12px 0 rgba(0, 0, 0, 0.22), 0 18px 40px rgba(0, 0, 0, 0.5);
+  background: #1a2142;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
 }
 .win-card.enter { animation: win-pop 440ms cubic-bezier(.2, .9, .3, 1.25) both; }
 @keyframes win-pop {
@@ -352,22 +355,25 @@
 }
 .win-next {
   height: 68px; padding: 0 36px; border-radius: 34px; background: #61bb46; color: #fff;
-  font-size: 27px; font-weight: 800; line-height: 1;
-  box-shadow: 0 6px 0 #3f8a2b, 0 10px 18px rgba(0, 0, 0, 0.35);
+  font-size: 27px; font-weight: 800; line-height: 1; outline: none;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
   animation: win-next-pulse 1200ms ease-in-out infinite;
 }
-.win-next:active { transform: translateY(4px); box-shadow: 0 2px 0 #3f8a2b; animation: none; }
+.win-next:active { transform: translateY(3px); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4); animation: none; }
 @keyframes win-next-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 .win-retry {
   height: 50px; padding: 0 24px; border-radius: 25px; background: #2c3560; color: #fff;
-  font-size: 18px; font-weight: 700; line-height: 1; box-shadow: inset 0 0 0 2px #3d4a80;
+  font-size: 18px; font-weight: 700; line-height: 1; outline: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
 }
+.win-retry:active { transform: translateY(2px); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
 .win-close {
   position: absolute; top: 10px; right: 12px; width: 40px; height: 40px; border-radius: 50%;
-  border: none; background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 20px; font-weight: 700;
+  border: none; outline: none; background: #171e3a; color: #fff; font-size: 20px; font-weight: 700;
   line-height: 1; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
 }
-.win-close:hover { background: rgba(255, 255, 255, 0.22); }
+.win-close:hover { background: #222b52; }
 
 /* ---- Shelf unlock (HudState.unlocked): a NEW badge on the button (a tap on it re-opens the
    callout), a staggered pop-in, and the callout card beside the button. ---- */
@@ -392,10 +398,12 @@
 .unlock-callout-wrap { position: absolute; left: 0; top: 0; width: 260px; z-index: 42; pointer-events: auto; }
 .unlock-callout-wrap.enter { animation: callout-in 260ms cubic-bezier(.2, .9, .3, 1.2) both; }
 @keyframes callout-in { from { opacity: 0; transform: translateX(12px) scale(0.9); } to { opacity: 1; transform: none; } }
+/* 2026-10-05 stakeholder direction: "same rule [no border, drop shadow]" for the unlock callout —
+   no border/outline on the card or its speech-bubble arrow, just the existing drop shadow. */
 .unlock-callout {
   box-sizing: border-box;
   display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-  background: #ffffff; color: #1a2142; border: 3px solid #05aeed; border-radius: 16px;
+  background: #ffffff; color: #1a2142; border-radius: 16px;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
 }
 /* The speech-bubble arrow: a real sibling element (not `.unlock-callout`'s own `::after`) — see
@@ -403,13 +411,12 @@
    shelf button), bottom edge with `.above` (over a palette chip); --arrow-y / --arrow-x are set
    from JS (on the wrap, which this inherits them from) to point at the button. */
 .unlock-callout-arrow {
-  position: absolute; right: -11px; top: var(--arrow-y, 50%); width: 16px; height: 16px;
-  margin-top: -9px; background: #ffffff; border-top: 3px solid #05aeed; border-right: 3px solid #05aeed;
-  transform: rotate(45deg); pointer-events: none;
+  position: absolute; right: -8px; top: var(--arrow-y, 50%); width: 16px; height: 16px;
+  margin-top: -9px; background: #ffffff; transform: rotate(45deg); pointer-events: none;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.2);
 }
 .unlock-callout-wrap.above .unlock-callout-arrow {
-  right: auto; top: auto; bottom: -11px; left: var(--arrow-x, 50%); margin: 0 0 0 -9px;
-  border-top: none; border-bottom: 3px solid #05aeed;
+  right: auto; top: auto; bottom: -8px; left: var(--arrow-x, 50%); margin: 0 0 0 -9px;
 }
 .unlock-callout-img { flex: 0 0 auto; width: 60px; height: 60px; object-fit: contain; pointer-events: none; }
 .unlock-callout-icon { flex: 0 0 auto; width: 60px; font-size: 40px; line-height: 1; text-align: center; }
@@ -420,20 +427,23 @@
 }
 .unlock-callout-text { font-size: 14px; line-height: 1.3; color: #2c3560; }
 
-/* ---- The coach's pointer hand over a DOM target (HudState.coach: shelf / drawer / bar). The
-   48 px box's fingertip sits at (22, 5); JS places that point on the target. ---- */
+/* ---- The coach's pointer hand over a DOM target (HudState.coach: shelf / drawer / bar). 2026-10-05:
+   the game's 3-frame glove (`public/ui/hand_0N.png`, 310x360, white glove + black outline, finger
+   pointing up-left) replaces the 👆 glyph — a 64 px-tall <img> (55 px wide, same aspect ratio),
+   its `src` cycled 1 -> 2 -> 3 -> 2 at ~8fps by `BuilderHud.syncCoachHand` (which also recomputes
+   left/top every frame so each frame's measured fingertip — not the box's corner — lands exactly
+   on the target; see COACH_HAND_FRAMES). The frame cycle IS the hand's motion now, so the old
+   bounce keyframes are gone; the pop-in stays. ---- */
 .coach-hand {
-  position: absolute; left: 0; top: 0; width: 48px; height: 48px; z-index: 45; pointer-events: none;
-  font-size: 40px; line-height: 48px; text-align: center;
-  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45)); transform-origin: 22px 5px;
+  position: absolute; left: 0; top: 0; width: 55px; height: 64px; z-index: 45; pointer-events: none;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
 }
+.coach-hand img { display: block; width: 100%; height: 100%; }
 .coach-hand.enter { animation: coach-in 300ms cubic-bezier(.3, .8, .4, 1.3) both; }
-.coach-hand-glyph { display: inline-block; animation: coach-bounce 900ms ease-in-out infinite; }
-@keyframes coach-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
 @keyframes coach-in { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .coach-hand-glyph, .coach-hand.enter, .win-card.enter, .win-next, .unlock-callout-wrap.enter,
+  .coach-hand.enter, .win-card.enter, .win-next, .unlock-callout-wrap.enter,
   .shelf-btn.unlock-pop, .palette-chip.unlock-pop { animation: none !important; }
   .confetti-piece { display: none; }
 }
@@ -469,12 +479,26 @@
 /* ---- Bottom bar: Play/Stop/Next centred (absolute, over the flex row) and the biggest buttons
    in the bar; Undo/Clear stay in normal flex flow, pushed to the right edge by the palette's own
    flex-grow exactly as before. #bottombar is itself `position: absolute` (src/style.css), so it
-   is already the containing block these three need. 56px tall (not 64px): #bottombar itself is
-   only 62px tall (src/style.css), so 56px centres with a few px to spare top/bottom instead of
-   overflowing the bar. */
+   is already the containing block these three need. 2026-10-05 stakeholder direction: "the DRIVE
+   and BUILD buttons are both a little too big" — shrunk from 220/56/24px to a 48px-tall button
+   (matching the 'big' tap pill's new BIG_PILL_H) with a 20px bold label and a 180px min-width,
+   still centred the same way. */
 #bottombar #play, #bottombar #stop, #bottombar #next {
   position: absolute; left: 50%; top: 50%; margin: 0; transform: translate(-50%, -50%);
-  min-width: 220px; height: 56px; padding: 0 32px; border-radius: 28px;
-  font-size: 24px; font-weight: 800;
+  min-width: 180px; height: 48px; padding: 0 28px; border-radius: 24px;
+  font-size: 20px; font-weight: 800;
 }
 #bottombar #undo, #bottombar #clear { border-radius: 23px; }
+
+/* ---- Creator styling pass (2026-10-05, stakeholder direction #2): "the BUILD pill and the
+   celebration still don't use Creator's styling: use simple, no-outline rounded box buttons with
+   a drop shadow." Every bottom-bar button (`#bottombar button`, src/style.css) is already
+   `border: none` with no box-shadow; this adds the drop shadow and makes the no-outline rule
+   explicit here too, so the whole family (play/stop/next/undo/clear/tool) reads the same way. */
+#bottombar button {
+  outline: none; box-shadow: 0 4px 0 rgba(11, 16, 48, 0.35);
+}
+#bottombar button:active { box-shadow: 0 2px 0 rgba(11, 16, 48, 0.35); transform: translateY(2px); }
+#bottombar #play:active, #bottombar #stop:active, #bottombar #next:active {
+  transform: translate(-50%, -50%) translateY(2px);
+}

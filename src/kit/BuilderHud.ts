@@ -43,6 +43,22 @@ const CALLOUT_W = 260;
 /** Stagger between the unlocked shelf buttons' pop-ins. */
 const UNLOCK_STAGGER_MS = 120;
 
+/** The coach's pointer hand (2026-10-05): the game's 3-frame glove, `public/ui/hand_0N.png`
+ * (310x360, white glove + black outline, index finger pointing up-left) — see `.coach-hand` in
+ * builder.css for its displayed size. Frame 1 is the finger fully extended, frame 3 the most
+ * curled; `fx`/`fy` are its fingertip (the topmost opaque point), measured with Pillow, as a
+ * fraction of the image — used to place that exact point (not the box's corner) on the target. */
+const COACH_HAND_W = 55;
+const COACH_HAND_H = 64;
+const COACH_FRAME_MS = 1000 / 8; // ~8 fps
+const COACH_HAND_FRAMES: { src: string; fx: number; fy: number }[] = [
+  { src: 'ui/hand_01.png', fx: 108 / 310, fy: 2 / 360 },
+  { src: 'ui/hand_02.png', fx: 76 / 310, fy: 18 / 360 },
+  { src: 'ui/hand_03.png', fx: 60.5 / 310, fy: 38 / 360 },
+];
+/** Index into `COACH_HAND_FRAMES` for each step of the 1 -> 2 -> 3 -> 2 loop. */
+const COACH_FRAME_SEQUENCE = [0, 1, 2, 1];
+
 function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
 }
@@ -198,6 +214,7 @@ export class BuilderHud<
 
   // ---- coach (HudState.coach): Bruno's line and the pointer hand over a DOM target ----
   private coachHandEl!: HTMLDivElement;
+  private coachHandImgEl!: HTMLImageElement;
   /** Step id + resolved target: the hand pops in again when it changes. */
   private coachHandKey = '';
   /** Property rows in the dash chip panel, by code (a coach 'drawer' target on a no-drawer course). */
@@ -717,18 +734,20 @@ export class BuilderHud<
   }
 
   /** The coach's pointer hand for DOM targets (shelf buttons, drawer rows/options, bottom-bar
-   * buttons): a bouncing 👆 with its fingertip on the target. Hidden while there is none. */
+   * buttons): the game's 3-frame glove (see COACH_HAND_FRAMES), its `src` cycled by
+   * `syncCoachHand` every frame. Hidden while there is none. */
   private buildCoachHand(): void {
     const hand = document.createElement('div');
     hand.className = 'coach-hand';
     hand.hidden = true;
     this.boolCache.set(hand, true);
-    const glyph = document.createElement('span');
-    glyph.className = 'coach-hand-glyph';
-    glyph.textContent = '👆';
-    hand.appendChild(glyph);
+    const img = document.createElement('img');
+    img.src = COACH_HAND_FRAMES[0]!.src;
+    img.alt = '';
+    hand.appendChild(img);
     this.root.appendChild(hand);
     this.coachHandEl = hand;
+    this.coachHandImgEl = img;
   }
 
   /** Restarts a one-shot CSS animation class on `el` (even mid-animation). */
@@ -851,8 +870,10 @@ export class BuilderHud<
     }
   }
 
-  /** Places the coach's hand on its DOM target (fingertip just above the target's centre),
-   * popping it in when the step or target changes; hidden when there is no DOM target on screen. */
+  /** Places the coach's hand on its DOM target (the current frame's measured fingertip exactly on
+   * the target point), popping it in when the step or target changes; hidden when there is no DOM
+   * target on screen. Cycles the glove's `src` through the 1 -> 2 -> 3 -> 2 loop every call (this
+   * runs once per app frame — see `App.frame` -> `hud.update`); reduced motion holds frame 1. */
   private syncCoachHand(state: HudState<K, M, O, L>): void {
     const step = state.coach;
     const el = step ? this.coachTargetEl(step.target) : null;
@@ -862,11 +883,17 @@ export class BuilderHud<
       this.coachHandKey = '';
       return;
     }
+    const frameIdx = prefersReducedMotion()
+      ? 0
+      : COACH_FRAME_SEQUENCE[Math.floor(performance.now() / COACH_FRAME_MS) % COACH_FRAME_SEQUENCE.length]!;
+    const frame = COACH_HAND_FRAMES[frameIdx]!;
+    if (this.coachHandImgEl.getAttribute('src') !== frame.src) this.coachHandImgEl.src = frame.src;
     const fx = rect.x + rect.w / 2;
     const fy = rect.y + rect.h * 0.45;
-    // The glyph box is 48 px square; the 👆 fingertip sits about (22, 5) inside it.
-    this.coachHandEl.style.left = `${(fx - 22).toFixed(1)}px`;
-    this.coachHandEl.style.top = `${(fy - 5).toFixed(1)}px`;
+    // The glove box is COACH_HAND_W x COACH_HAND_H; this frame's fingertip sits at
+    // (frame.fx, frame.fy) as a fraction of that box — place that exact point at the target.
+    this.coachHandEl.style.left = `${(fx - frame.fx * COACH_HAND_W).toFixed(1)}px`;
+    this.coachHandEl.style.top = `${(fy - frame.fy * COACH_HAND_H).toFixed(1)}px`;
     this.setHidden(this.coachHandEl, false);
     const key = `${step.id}|${JSON.stringify(step.target)}`;
     if (key !== this.coachHandKey) {

@@ -60,10 +60,12 @@ export interface BigPill {
 
 /** 'big' tap widgets: the pill's height (screen-constant stage px), its label font size, the
  * horizontal padding either side of the content, the icon/label gap, the minimum pill width, and
- * how far the hit area reaches past the pill on every side. */
-export const BIG_PILL_H = 64;
-export const BIG_FONT_PX = 24;
-export const BIG_PAD_X = 26;
+ * how far the hit area reaches past the pill on every side. 2026-10-05 stakeholder direction:
+ * "the DRIVE and BUILD buttons are both a little too big" — shrunk from 64/24/26 to 48/20/20 (pad
+ * scaled down by the same 48/64 ratio as the height), gap/min-width/hit-pad unchanged. */
+export const BIG_PILL_H = 48;
+export const BIG_FONT_PX = 20;
+export const BIG_PAD_X = 20;
 export const BIG_GAP = 10;
 export const BIG_MIN_W = 140;
 export const BIG_HIT_PAD = 8;
