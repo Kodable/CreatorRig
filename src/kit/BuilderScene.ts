@@ -144,13 +144,13 @@ const COACH_HAND_H_PX = 64;
 const COACH_HAND_ASPECT = 310 / 360; // hand_0N.png is 310x360
 const COACH_FRAME_MS = 1000 / 8; // ~8 fps
 const COACH_IN_MS = 300;
-/** hand_0N.png's fingertip (the topmost opaque point), as a fraction of the image — measured with
- * Pillow. Frame 1 is the finger fully extended, frame 3 the most curled; `setOrigin` to this
- * fraction so the fingertip (not the image's centre) lands exactly on the coach's target. */
+/** The coach glove's anchor, the SAME point for every frame (frame 1's extended fingertip,
+ * measured with Pillow) as a fraction of the image: the glove holds still and only the finger
+ * bends, which reads as a tap. Placed exactly on the coach's target. */
 const COACH_HAND_FRAMES: { key: string; fx: number; fy: number }[] = [
   { key: 'ui-hand-1', fx: 108 / 310, fy: 2 / 360 },
-  { key: 'ui-hand-2', fx: 76 / 310, fy: 18 / 360 },
-  { key: 'ui-hand-3', fx: 60.5 / 310, fy: 38 / 360 },
+  { key: 'ui-hand-2', fx: 108 / 310, fy: 2 / 360 },
+  { key: 'ui-hand-3', fx: 108 / 310, fy: 2 / 360 },
 ];
 /** Index into `COACH_HAND_FRAMES` for each step of the 1 -> 2 -> 3 -> 2 loop. */
 const COACH_FRAME_SEQUENCE = [0, 1, 2, 1];

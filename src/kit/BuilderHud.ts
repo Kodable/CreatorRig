@@ -46,15 +46,16 @@ const UNLOCK_STAGGER_MS = 120;
 /** The coach's pointer hand (2026-10-05): the game's 3-frame glove, `public/ui/hand_0N.png`
  * (310x360, white glove + black outline, index finger pointing up-left) — see `.coach-hand` in
  * builder.css for its displayed size. Frame 1 is the finger fully extended, frame 3 the most
- * curled; `fx`/`fy` are its fingertip (the topmost opaque point), measured with Pillow, as a
- * fraction of the image — used to place that exact point (not the box's corner) on the target. */
+ * curled. `fx`/`fy` is the anchor placed on the target, the SAME point for every frame (frame
+ * 1's extended fingertip, measured with Pillow): the glove holds still and only the finger
+ * bends, which reads as a tap (Gao, 2026-10-05: a hand that jumps around does not). */
 const COACH_HAND_W = 55;
 const COACH_HAND_H = 64;
 const COACH_FRAME_MS = 1000 / 8; // ~8 fps
 const COACH_HAND_FRAMES: { src: string; fx: number; fy: number }[] = [
   { src: 'ui/hand_01.png', fx: 108 / 310, fy: 2 / 360 },
-  { src: 'ui/hand_02.png', fx: 76 / 310, fy: 18 / 360 },
-  { src: 'ui/hand_03.png', fx: 60.5 / 310, fy: 38 / 360 },
+  { src: 'ui/hand_02.png', fx: 108 / 310, fy: 2 / 360 },
+  { src: 'ui/hand_03.png', fx: 108 / 310, fy: 2 / 360 },
 ];
 /** Index into `COACH_HAND_FRAMES` for each step of the 1 -> 2 -> 3 -> 2 loop. */
 const COACH_FRAME_SEQUENCE = [0, 1, 2, 1];
