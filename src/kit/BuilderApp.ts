@@ -20,7 +20,7 @@ import type {
   Widget,
   WidgetAction,
   WorldSpec,
- SimSnapshot } from './types';
+ SimSnapshot, TapWidget } from './types';
 import { gatedOptions, isKnown, isOptionKnown, knownConcepts } from './concepts';
 import { hasShelfKinds } from './shelf';
 import { allPass, evaluateGoals } from './goals';
@@ -590,7 +590,14 @@ export class BuilderApp<
     if (!part || part.locked) return;
     this.pushUndo();
     this.parts = this.parts.filter((p) => p.id !== part.id);
-    this.selectedId = null;
+    // Removing an attachment lands the selection on the machine's base (the part the course's
+    // idle BUILD button selects) instead of on nothing, so the drawer and its shelf stay open and
+    // the child can pick the next part at once (Gao, 2026-10-05).
+    const base = this.spec.idleWidgets?.(this.parts, this.level)
+      .find((w): w is TapWidget => w.kind === 'tap' && w.action === 'select' && w.partId !== undefined);
+    const baseId = base?.partId;
+    this.selectedId = baseId !== undefined && this.parts.some((p) => p.id === baseId) ? baseId : null;
+    this.scene.setSelected(this.selectedId);
     this.focusSelection();
     void this.rebuild();
   }
