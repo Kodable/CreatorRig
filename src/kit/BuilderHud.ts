@@ -39,11 +39,11 @@ const PANEL_W = 960;
 /** Level-start goals intro (`hud.goalsOverlay`): the panel pops up `GOALS_INTRO_SCALE` times its
  * size in the middle of the world panel (`GOALS_INTRO_RAISE` px above centre), holds, then glides
  * to its top-left spot; the offsets split the run into pop / hold / glide. */
-const GOALS_INTRO_MS = 2600;
+const GOALS_INTRO_MS = 1900; // 2026-10-06: 2.6 s felt slow (Gao) — 0.25 s pop, 1.1 s hold, 0.55 s glide
 const GOALS_INTRO_SCALE = 1.7;
 const GOALS_INTRO_RAISE = 40;
-const GOALS_INTRO_POP_AT = 0.12;
-const GOALS_INTRO_GLIDE_AT = 0.72;
+const GOALS_INTRO_POP_AT = 0.13;
+const GOALS_INTRO_GLIDE_AT = 0.71;
 
 /** Win banner confetti: pieces per burst, their colours, and how long until they are removed. */
 const CONFETTI_COUNT = 40;

@@ -87,7 +87,7 @@ export function stickOn(terrain: Vec2[], sticks: Stick[]): RoverPart[] {
   });
 }
 
-const REACH: VehicleLevel['goals'] = [{ metric: 'reachedFinish', op: '==', value: 1, label: 'Reach the beacon' }];
+const REACH: VehicleLevel['goals'] = [{ metric: 'reachedFinish', op: '==', value: 1, label: 'Get to the end' }];
 
 interface LevelDef {
   id: string;
