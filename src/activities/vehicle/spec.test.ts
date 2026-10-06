@@ -70,11 +70,11 @@ function clampToWorld(f: CameraFrame): CameraFrame {
 interface Box { x0: number; x1: number; y0: number; y1: number }
 
 /** The world rectangle the camera shows at a frame, left of the open drawer (340 of 960 px). The
- * world panel is 960 x 480 stage px (kit camera.ts STAGE_PANEL_H). */
+ * world panel is 960 x WORLD_H * 32 stage px (612 since 2026-10-06; kit view.ts panelTopY). */
 function uncoveredView(frame: { cx: number; cy: number; zoom: number }): Box {
   const f = clampToWorld(frame);
   const viewW = 960 / (32 * f.zoom);
-  const viewH = 480 / (32 * f.zoom);
+  const viewH = (WORLD_H * 32) / (32 * f.zoom);
   const x0 = f.cx - viewW / 2;
   return { x0, x1: x0 + (viewW * 620) / 960, y0: f.cy - viewH / 2, y1: f.cy + viewH / 2 };
 }
@@ -164,7 +164,7 @@ describe('vehicleSpec: wiring', () => {
     expect(vehicleSpec.world.groundBand).toBe(false);
     const sky = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('mars-sky'))!;
     expect(sky.y - sky.h / 2).toBeCloseTo(-GROUND_DEPTH, 9);
-    expect(sky.y + sky.h / 2).toBeCloseTo(15, 9);
+    expect(sky.y + sky.h / 2).toBeCloseTo(WORLD_H, 9);
   });
 
   it('a wide world (2026-10-05): 90 m at ppm 32, so the panel shows a 30 m window and scrolls', () => {
@@ -175,11 +175,11 @@ describe('vehicleSpec: wiring', () => {
     expect(vehicleSpec.world.worldH).toBe(WORLD_H);
   });
 
-  it('the Mars sky covers the whole world, unstretched (the wide picture has the rectangle\'s aspect); the planet hangs over the start', () => {
+  it('the Mars sky covers the whole world, unstretched (the wide picture keeps its aspect, running past the right end since the world grew taller); the planet hangs over the start', () => {
     const sky = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('mars-sky'))!;
     expect(sky.url).toBe('bg/mars-sky-wide.jpg');
     expect(sky.x - sky.w / 2).toBeCloseTo(0, 9);
-    expect(sky.x + sky.w / 2).toBeCloseTo(WORLD_W, 9);
+    expect(sky.x + sky.w / 2).toBeGreaterThanOrEqual(WORLD_W);
     expect(existsSync(resolve(PUBLIC, sky.url))).toBe(true);
     const aspect = 7200 / 1300; // public/bg/mars-sky-wide.jpg
     expect(Math.abs(sky.w / sky.h / aspect - 1)).toBeLessThan(0.03);
@@ -381,20 +381,31 @@ describe('vehicleSpec.idleWidgets: just the BUILD pill now (nothing selected)', 
     });
   }
 
-  it('on flat-start levels BUILD sits right over the dome; on the flip mesa both move beside the build', () => {
+  it('BUILD sits right over the dome on every level (the flip mesa too, since the 2026-10-06 taller view)', () => {
     for (const level of LEVELS) {
       const parts = buildOn(level, HUGE_BUILD);
       const ext = buildExtent(parts, level)!;
       const at = idleButtonsAt(parts, level)!;
       const build = pillBox(at.build, BUILD_SIZE, 1);
-      if (level.id === 'flip') {
-        expect(build.x0).toBeGreaterThan(ext.x1);
-      } else {
-        expect(build.x0).toBeLessThan(domeOf(level).x);
-        expect(build.x1).toBeGreaterThan(domeOf(level).x);
-        expect(build.y0).toBeGreaterThan(ext.y1);
-      }
+      expect(build.x0, level.id).toBeLessThan(domeOf(level).x);
+      expect(build.x1, level.id).toBeGreaterThan(domeOf(level).x);
+      expect(build.y0, level.id).toBeGreaterThan(ext.y1);
     }
+  });
+
+  it('a row that does not fit over the build moves both pills beside it, at the top of the view', () => {
+    // A mesa so high (13 m) that even the bare dome leaves no room for the row above it.
+    const flip = findLevel('flip')!;
+    const high: VehicleLevel = { ...flip, terrain: flip.terrain.map((p) => ({ x: p.x, y: p.y > 0 ? 13 : p.y })) };
+    const parts = buildOn(high, BUILDS.bare!);
+    const ext = buildExtent(parts, high)!;
+    const at = idleButtonsAt(parts, high)!;
+    const view = frameView(viewFrameAt(domeOf(high).x), false);
+    const build = pillBox(at.build, BUILD_SIZE, 1);
+    const drive = pillBox(at.drive, IDLE_DRIVE_SIZE, 1);
+    expect(build.x0).toBeGreaterThan(ext.x1);
+    expect(inside(build, view)).toBe(true);
+    expect(inside(drive, view)).toBe(true);
   });
 
   it('the fit comment\'s numbers: HUGE_BUILD on level 1', () => {

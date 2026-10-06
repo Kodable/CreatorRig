@@ -10,6 +10,7 @@ import {
   panelPxToStagePx,
   scrollToCx,
   viewWidth,
+  STAGE_PANEL_H,
   type CamLike,
 } from './camera';
 
@@ -314,6 +315,24 @@ describe('clampFrame / viewWidth / isWideWorld with an effective width smaller t
     const viewW = viewWidth(EFF_LONG); // 30
     expect(scrollToCx(1, viewW, EFF_LONG.worldW)).toBeCloseTo(35, 9); // 15 + 1 * (50 - 30), not 75
     expect(cxToScroll(35, viewW, EFF_LONG.worldW)).toBeCloseTo(1, 9);
+  });
+});
+
+describe('a world taller than the default 480 px panel (2026-10-06: the rover)', () => {
+  // 19.125 m at ppm 32 = 612 px: the panel grows upward (view.ts panelTopY); frames clamp to
+  // the world's own height, so nothing here knows the panel's pixel height.
+  const TALL = { worldW: 90, worldH: 19.125, groundDepth: 1.5, ppm: 32 };
+
+  it('the default stays 480 px; the zoom-1 frame shows the whole taller band', () => {
+    expect(STAGE_PANEL_H).toBe(480);
+    expect(fullFrame(TALL)).toEqual({ cx: 15, cy: 19.125 / 2 - 1.5, zoom: 1 });
+  });
+
+  it('a zoomed frame low on the ground clamps its bottom edge to -groundDepth, as on the 480 px panel', () => {
+    const f = clampFrame({ cx: 3, cy: 0, zoom: 2.8 }, TALL);
+    expect(f.cy - TALL.worldH / 2.8 / 2).toBeCloseTo(-1.5, 9);
+    const g = clampFrame({ cx: 3, cy: 40, zoom: 2.8 }, TALL);
+    expect(g.cy + TALL.worldH / 2.8 / 2).toBeCloseTo(TALL.worldH - 1.5, 9);
   });
 });
 

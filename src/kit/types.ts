@@ -441,8 +441,12 @@ export interface CoachContext<K extends string, L> {
 
 // ---- course spec -------------------------------------------------------------------------
 
-/** World size in meters. The panel is 960 x 480 stage px at origin x 32, ground y 690, so
- * ppm = 960 / worldW and worldH = 480 / ppm. */
+/** World size in meters. The panel is 960 stage px wide at origin x 32 with its bottom at y 690,
+ * so ppm = 960 / worldW (a single-screen world), and `worldH * ppm` px tall: 480 by default
+ * (worldH = 480 / ppm, the panel's top at y 210 under the dash). A course without the dash
+ * (`HudSpec.goalsOverlay`) may make it taller, so the panel grows upward to just under the top
+ * bar (2026-10-06: the rover, 19.125 m at ppm 32 = 612 px, top at y 78; see view.ts
+ * `panelTopY`). */
 export interface WorldSpec {
   /** World width in meters. The panel always shows a window of 960 / ppm meters (the "view
    * width"); a world WIDER than that scrolls: the camera (follow, focus, the edit-mode scrollbar)
@@ -538,6 +542,13 @@ export interface HudSpec<K extends string, M, O extends string> {
    * goals column then fills the dash whenever its right column is empty (the result card and the
    * stat bars still use it). Default false: the meters sit in the dash's right column. */
   metersOverlay?: boolean;
+  /** true: no dash at all. The goals show as a small translucent panel in the top-left corner of
+   * the world panel, in every mode, with the result card under them in done mode; the meters go
+   * to their own overlay (implies `metersOverlay`). Meant for a `drawer` course whose parts have
+   * no `stats`: the dash's chip panel and stat bars have nowhere to show without it. Pair it with
+   * a taller world (`WorldSpec`: worldH * ppm > 480) so the panel takes the dash's room. Default
+   * false: the dash under the top bar (2026-10-06: the rover uses it). */
+  goalsOverlay?: boolean;
 }
 
 /** One end of a link drag: an existing part, or a point in empty space. */

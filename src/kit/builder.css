@@ -91,9 +91,13 @@
 
 /* ---- Properties drawer (docked to the right edge of the world panel, x 652..992 stage px,
    y 210..690; shown instead of .prop-panel when spec.drawer is true). Slides in/out via
-   transform; JS flips visibility to hidden only once the slide-out finishes. ---- */
+   transform; JS flips visibility to hidden only once the slide-out finishes. The panel's top is
+   per course (2026-10-06): `--panel-top`, set on the HUD root by BuilderHud from view.ts
+   `panelTopY` (210px by default; the rover's taller panel starts at 78px), so the drawer and every
+   other rule over the panel below grow with it. ---- */
 .prop-drawer {
-  position: absolute; left: 652px; top: 210px; width: 340px; height: 480px;
+  position: absolute; left: 652px; top: var(--panel-top, 210px); width: 340px;
+  height: calc(690px - var(--panel-top, 210px));
   box-sizing: border-box; overflow: hidden; pointer-events: auto;
   background: rgba(23, 30, 58, 0.94);
   border-left: 2px solid #3d4a80;
@@ -153,7 +157,7 @@
   transition: max-height 160ms ease, transform 160ms ease, opacity 160ms ease;
 }
 .drawer-pinned-panel.open {
-  max-height: 216px; /* ~45% of the drawer's 480px height */
+  max-height: calc((690px - var(--panel-top, 210px)) * 0.45); /* ~45% of the drawer's height: 216px of 480 */
   overflow-y: auto;
   transform: translateY(0); opacity: 1;
 }
@@ -350,11 +354,11 @@
 .world-scroll-thumb.dragging .world-scroll-grip { background: #05aeed; border-color: #ffffff; }
 
 /* ---- Meters overlay (HudSpec.metersOverlay): the six meters as a small translucent panel over
-   the world panel's top-right corner (panel x 32..992, y 210..690), play/done mode only. It
-   never takes taps (pointer-events none). The dash's goals column fills the dash while its
+   the world panel's top-right corner (panel x 32..992, y --panel-top..690), play/done mode only.
+   It never takes taps (pointer-events none). The dash's goals column fills the dash while its
    right column is empty (#dash.goals-only). ---- */
 .meters-col.overlay {
-  position: absolute; left: auto; right: 44px; top: 222px; width: auto; max-width: 340px; z-index: 30;
+  position: absolute; left: auto; right: 44px; top: calc(var(--panel-top, 210px) + 12px); width: auto; max-width: 340px; z-index: 30;
   padding: 7px 12px 8px; box-sizing: border-box; border-radius: 10px; pointer-events: none;
   display: grid; grid-template-columns: repeat(3, auto); grid-template-rows: auto auto; gap: 4px 16px;
   background: rgba(11, 16, 48, 0.62); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
@@ -371,13 +375,47 @@
 .meters-col.overlay .meter.free .meter-value { font-size: 14px; font-variant-numeric: tabular-nums; }
 #dash.goals-only .goals-col { flex: 1 1 auto; border-right: 0; }
 
+/* ---- Goals overlay (HudSpec.goalsOverlay, 2026-10-06: the rover): no dash. The goals list (the
+   same .goals-col / #goalList rows) as a small translucent panel over the world panel's top-left
+   corner, the twin of .meters-col.overlay on the right, shown in every mode; in done mode the
+   result card sits under the goals. Never takes taps. Compact type: goal label 14px, value 13px,
+   check mark 18px, bar 5px. ---- */
+.goals-overlay {
+  position: absolute; left: 44px; top: calc(var(--panel-top, 210px) + 12px); z-index: 30;
+  min-width: 220px; max-width: 360px; box-sizing: border-box;
+  padding: 7px 12px 8px; border-radius: 10px; pointer-events: none;
+  display: flex; flex-direction: column; gap: 6px;
+  background: rgba(11, 16, 48, 0.62); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.goals-overlay .goals-col { flex: 0 0 auto; padding: 0; border-right: 0; overflow: visible; }
+.goals-overlay #goalList { height: auto; gap: 5px; overflow: visible; }
+.goals-overlay .goals-empty { font-size: 14px; }
+.goals-overlay li.goal { gap: 3px; }
+.goals-overlay .goal-top { gap: 7px; }
+.goals-overlay .goal-top .mark { width: 18px; height: 18px; }
+.goals-overlay .goal-top .mark .dot { width: 5px; height: 5px; }
+.goals-overlay .goal-top .mark.met::after { font-size: 11px; }
+.goals-overlay .goal-top .label { font-size: 14px; }
+.goals-overlay .goal-top .value { font-size: 13px; }
+.goals-overlay .goal-bar { height: 5px; }
+.goals-overlay .result-card {
+  flex: 0 0 auto; padding: 6px 0 0; gap: 3px; overflow: visible;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+.goals-overlay .result-card-title { font-size: 12px; color: #c8cde6; }
+.goals-overlay .result-rows { gap: 3px 6px; max-height: none; }
+.goals-overlay .result-row { height: 20px; padding: 0 8px; border-radius: 10px; background: rgba(44, 53, 96, 0.85); }
+.goals-overlay .result-outcome { font-size: 13px; }
+
 /* ======== Builder-kit UX for the first levels (2026-10-05 playtest review). Every rule below is
    for DOM that only shows on a course that opts in (HudSpec.winBanner, HudState.coach,
    HudState.unlocked / partInfo.blurb); other courses never render these elements. ======== */
 
-/* ---- Win banner (HudSpec.winBanner): over the world panel (x 32..992, y 210..690). ---- */
+/* ---- Win banner (HudSpec.winBanner): over the world panel (x 32..992, y --panel-top..690). ---- */
 .win-banner {
-  position: absolute; left: 32px; top: 210px; width: 960px; height: 480px; z-index: 40;
+  position: absolute; left: 32px; top: var(--panel-top, 210px); width: 960px;
+  height: calc(690px - var(--panel-top, 210px)); z-index: 40;
   display: flex; align-items: center; justify-content: center; overflow: hidden;
   border-radius: 12px; pointer-events: auto;
   background: radial-gradient(ellipse at 50% 45%, rgba(11, 16, 48, 0.3), rgba(11, 16, 48, 0.72));
@@ -556,7 +594,9 @@
    and BUILD buttons are both a little too big" — shrunk from 220/56/24px to a 48px-tall button
    (matching the 'big' tap pill's new BIG_PILL_H) with a 20px bold label and a 180px min-width,
    still centred the same way. */
-#bottombar #play, #bottombar #stop, #bottombar #next {
+/* Scoped to .kit-hud (set on #ui by BuilderHud): the coaster's bar (src/ui/hud.ts) lays its
+   Play out in the flex row, and an absolute centre would cover its Clear button. */
+.kit-hud #bottombar #play, .kit-hud #bottombar #stop, .kit-hud #bottombar #next {
   position: absolute; left: 50%; top: 50%; margin: 0; transform: translate(-50%, -50%);
   min-width: 180px; height: 48px; padding: 0 28px; border-radius: 24px;
   font-size: 20px; font-weight: 800;
@@ -572,6 +612,6 @@
   outline: none; box-shadow: 0 4px 0 rgba(11, 16, 48, 0.35);
 }
 #bottombar button:active { box-shadow: 0 2px 0 rgba(11, 16, 48, 0.35); transform: translateY(2px); }
-#bottombar #play:active, #bottombar #stop:active, #bottombar #next:active {
+.kit-hud #bottombar #play:active, .kit-hud #bottombar #stop:active, .kit-hud #bottombar #next:active {
   transform: translate(-50%, -50%) translateY(2px);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeView, PANEL_BOTTOM_Y } from './view';
+import { makeView, PANEL_BOTTOM_Y, STAGE_PANEL_H, panelTopY } from './view';
 import type { WorldSpec } from './types';
 
 const WORLD: WorldSpec = { worldW: 32, worldH: 16, ppm: 30 }; // worldH * ppm = 480, per WorldSpec
@@ -59,6 +59,30 @@ describe('makeView', () => {
     expect(view.viewH).toBe(15);
     expect(view.viewW * wide.ppm).toBe(960);
     expect(view.viewH * wide.ppm).toBe(480);
+  });
+
+  it('panelTopY: the default 480 px panel (every course but the rover) starts at y 210', () => {
+    expect(STAGE_PANEL_H).toBe(480);
+    expect(panelTopY(WORLD)).toBe(210);
+    expect(panelTopY({ worldW: 90, worldH: 15, ppm: 32 })).toBe(210);
+    expect(PANEL_BOTTOM_Y - STAGE_PANEL_H).toBe(210);
+  });
+
+  it('a taller world (2026-10-06: the rover, no dash) grows the panel upward from the same bottom edge', () => {
+    // Any height: worldH * ppm px tall, the top that much above y 690, the view the whole worldH.
+    for (const [px, top] of [[604, 86], [612, 78]] as const) {
+      const tall: WorldSpec = { worldW: 90, worldH: px / 32, ppm: 32 };
+      expect(makeView(tall).viewH).toBe(px / 32);
+      expect(makeView(tall).viewH * tall.ppm).toBe(px);
+      expect(panelTopY(tall)).toBe(top);
+    }
+    // The rover's: 19.125 m at ppm 32 over 1.5 m of ground. The ground line stays where the 480 px
+    // panel had it (only sky is added on top), and the visible band's top is the panel's top.
+    const rover: WorldSpec = { worldW: 90, worldH: 19.125, ppm: 32, groundDepth: 1.5 };
+    const view = makeView(rover);
+    expect(view.originY).toBe(makeView({ ...rover, worldH: 15 }).originY);
+    expect(view.toPx({ x: 0, y: rover.worldH - 1.5 }).y).toBe(panelTopY(rover));
+    expect(panelTopY(rover)).toBe(78);
   });
 
   it('a wide world maps world x past the view beyond the panel (the camera scrolls it in)', () => {

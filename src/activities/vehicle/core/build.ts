@@ -24,9 +24,13 @@ import type { PhysicsWorld } from '../../../physics/types';
 export { VEHICLE_FILTER };
 
 /** The world is WORLD_W (90 m, terrain.ts) wide since 2026-10-05; the panel shows a 30 m window
- * of it and the kit scrolls. 15 m tall. */
+ * of it and the kit scrolls. 19.125 m tall since 2026-10-06 (was 15): the course has no dash
+ * (spec.ts `hud.goalsOverlay`), so the kit's panel grows upward into its room. At ppm 32 that is
+ * 612 px, the panel's top at stage y 690 - 612 = 78 (where the dash started, 6 px under the top
+ * bar; kit view.ts `panelTopY`). Every level keeps its ground where it was: the extra height is
+ * all sky. */
 export { WORLD_W };
-export const WORLD_H = 15;
+export const WORLD_H = 19.125;
 /** Meters of ground the kit shows below world y = 0 (`WorldSpec.groundDepth` in spec.ts - keep
  * this in sync with that value). `buildTerrain`'s darker "under" layer closes at this depth
  * instead of the rust top layer's thin 0.3 m crust, so it covers the kit's whole ground band

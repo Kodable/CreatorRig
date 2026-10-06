@@ -6,7 +6,7 @@
 // the shelf's unlock callout for the parts it adds), then challenges, then free play.
 // Units are meters, y up, ground height from each level's `terrain` profile (terrain.ts), world
 // 90 x 15 m since 2026-10-05 (walls at x 0 and 90; the panel shows 30 m of it and the camera
-// scrolls). The first nine levels keep their 2026-10-02 content on x 0..30 and simply continue
+// scrolls), 19.125 m tall since 2026-10-06 (more sky over the same ground, build.ts WORLD_H). The first nine levels keep their 2026-10-02 content on x 0..30 and simply continue
 // flat to the right edge; the five long challenges added 2026-10-05 (Gao: "More challenge levels
 // with more varied terrain and a scrolling camera") run 75-90 m. levels.test.ts proves every
 // `solution` (and every `altSolutions` build) passes its goals within the budget and every

@@ -42,9 +42,12 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
     world = null;
   });
 
-  it('WORLD_W/H: 90 x 15 m since 2026-10-05 (wide worlds; the panel shows 30 m and scrolls)', () => {
+  it('WORLD_W/H: 90 m wide since 2026-10-05 (the panel shows 30 m and scrolls), 19.125 m tall since 2026-10-06', () => {
     expect(WORLD_W).toBe(90);
-    expect(WORLD_H).toBe(15);
+    // No dash (spec.ts hud.goalsOverlay): at ppm 32 the 612 px panel starts at stage y 78,
+    // 6 px under the 72 px top bar, where the dash used to start (kit view.ts panelTopY).
+    expect(WORLD_H).toBe(19.125);
+    expect(690 - WORLD_H * 32).toBe(78);
   });
 
   it('buildWalls creates two static bodies just past the play field', async () => {

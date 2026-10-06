@@ -3,7 +3,7 @@
 // Goldberg's hardcoded 'fuzz' / 'sensor' / 'door' checks. Moved from
 // activities/goldberg/game/GoldbergScene.ts.
 import Phaser from 'phaser';
-import { COLORS, STAGE_W, STAGE_H, RENDER_SCALE, makeView, PANEL_BOTTOM_Y } from './view';
+import { COLORS, STAGE_W, STAGE_H, RENDER_SCALE, makeView, PANEL_BOTTOM_Y, panelTopY } from './view';
 import {
   FOCUS_MS,
   approachFrame,
@@ -377,8 +377,8 @@ export class BuilderScene extends Phaser.Scene {
 
   private bruno: SpineGameObject | null = null;
 
-  // panel geometry: the fixed 960 x 480 (+ earth margin) stage-px window the world camera draws
-  // into. `panelX1` is the VIEW's right edge (originX + viewW * ppm); `worldX1` is the stage x of
+  // panel geometry: the 960 x (worldH * ppm: 480 for every course but the rover) stage-px window
+  // (+ earth margin) the world camera draws into. `panelX1` is the VIEW's right edge (originX + viewW * ppm); `worldX1` is the stage x of
   // world x = worldW, the right end of the world's own extent (the same as panelX1 unless the
   // world is wider than the view and scrolls).
   private readonly panelX0: number;
@@ -484,11 +484,12 @@ export class BuilderScene extends Phaser.Scene {
     super(key);
     this.view = makeView(world);
     // Fixed panel geometry (never shifts with `groundDepth` — only the world<->stage mapping
-    // inside `view` does that): worldH * ppm is always 480 and viewW * ppm 960 (see WorldSpec),
+    // inside `view` does that): viewW * ppm is always 960 and worldH * ppm 480 (see WorldSpec),
     // so this is the same 960x480 (plus the earth-bleed margin) rect for every course, wide
-    // (scrolling) worlds included.
+    // (scrolling) worlds included — except a taller world (2026-10-06: the rover, no dash), whose
+    // panel grows upward from the same bottom edge (view.ts `panelTopY`).
     this.panelX0 = this.view.originX;
-    this.panelY0 = PANEL_BOTTOM_Y - world.worldH * world.ppm;
+    this.panelY0 = panelTopY(world);
     this.panelX1 = this.view.originX + this.view.viewW * world.ppm;
     this.panelY1 = PANEL_BOTTOM_Y + PANEL_Y_MARGIN;
     this.worldX1 = this.view.originX + world.worldW * world.ppm;

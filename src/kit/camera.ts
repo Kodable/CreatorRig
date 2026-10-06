@@ -7,8 +7,10 @@
  * to the rest frame. */
 export const FOCUS_MS = 500;
 
-/** The world panel (the world camera's viewport) in stage px: fixed for every builder-kit course.
- * At zoom 1 it shows `STAGE_PANEL_W / ppm` x `STAGE_PANEL_H / ppm` meters of world. */
+/** The world panel (the world camera's viewport) in stage px: 960 wide for every builder-kit
+ * course, and `STAGE_PANEL_H` tall by default. The height is really the course's `worldH * ppm`
+ * (2026-10-06: the rover's taller world grows its panel upward, see view.ts `panelTopY`), so at
+ * zoom 1 the panel shows `STAGE_PANEL_W / ppm` x `worldH` meters of world. */
 export const STAGE_PANEL_W = 960;
 export const STAGE_PANEL_H = 480;
 

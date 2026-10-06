@@ -6,7 +6,7 @@ import { SpinePlugin } from '@esotericsoftware/spine-phaser-v4';
 import { BuilderScene } from './BuilderScene';
 import { BuilderHud } from './BuilderHud';
 import { BuilderApp } from './BuilderApp';
-import { STAGE_W, STAGE_H, COLORS, RENDER_SCALE } from './view';
+import { STAGE_W, STAGE_H, COLORS, RENDER_SCALE, panelTopY } from './view';
 import { viewWidth } from './camera';
 import type { ActivityHost, BootOptions, CourseSpec, Level } from './types';
 import type { ActivityHandle } from '../activities/types';
@@ -70,6 +70,8 @@ export function bootBuilderActivity<
     spec.tools,
     // The world scrollbar's thumb share: the view window over the whole world (1 = it fits).
     viewWidth(spec.world) / spec.world.worldW,
+    // The world panel's top edge (210 unless the world is taller than 480 px: the rover's).
+    panelTopY(spec.world),
   );
 
   game.events.once(Phaser.Core.Events.READY, () => {

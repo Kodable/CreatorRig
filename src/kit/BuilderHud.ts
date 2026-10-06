@@ -28,8 +28,10 @@ const SCROLL_RIGHT_DRAWER = 640;
 /** The thumb is never narrower than this (stage px), whatever the view/world ratio. */
 const SCROLL_THUMB_MIN = 88;
 
-/** The world panel's top/bottom edges in stage px (the drawer and the win banner cover it). */
-const PANEL_TOP = 210;
+/** The world panel's top/bottom edges in stage px (the drawer and the win banner cover it). The
+ * top is per course (`panelTop` constructor argument, view.ts `panelTopY`): 210 for the default
+ * 480 px panel, higher for a taller world (2026-10-06: the rover's, under `hud.goalsOverlay`). */
+const DEFAULT_PANEL_TOP = 210;
 const PANEL_BOTTOM = 690;
 
 /** Win banner confetti: pieces per burst, their colours, and how long until they are removed. */
@@ -158,7 +160,13 @@ export class BuilderHud<
   private parkBtn!: HTMLButtonElement;
 
   private metersColEl!: HTMLDivElement;
-  private dashEl!: HTMLDivElement;
+  /** The dash, or null with `hud.goalsOverlay` (no dash: the goals and the result card sit in
+   * `.goals-overlay` over the world panel instead). */
+  private dashEl: HTMLDivElement | null = null;
+  /** `hud.metersOverlay`, or implied by `hud.goalsOverlay` (the dash is gone, so are its meters). */
+  private readonly metersOverlay: boolean;
+  /** Stage y of the world panel's top edge (see DEFAULT_PANEL_TOP). */
+  private readonly panelTop: number;
   private allMeters: MeterEntry<M>[] = [];
 
   private propPanelEl!: HTMLDivElement;
@@ -308,6 +316,9 @@ export class BuilderHud<
     /** viewW / worldW (`WorldSpec`): the share of the world the panel shows, sizing the world
      * scrollbar's thumb. 1 (default) for a world that fits the view. */
     scrollView = 1,
+    /** Stage y of the world panel's top edge (view.ts `panelTopY`): 210 (default) for the 480 px
+     * panel; less for a taller world. */
+    panelTop = DEFAULT_PANEL_TOP,
   ) {
     this.root = root;
     this.canvas = canvas;
@@ -316,6 +327,14 @@ export class BuilderHud<
     this.drawerMode = drawer;
     this.tools = tools;
     this.scrollView = Math.max(0, Math.min(1, scrollView));
+    this.metersOverlay = !!hud.metersOverlay || !!hud.goalsOverlay;
+    this.panelTop = panelTop;
+    // Every rule anchored to the world panel's top in builder.css (the drawer, the win banner, the
+    // meters/goals overlays) reads it from here; their fallback is the default 210px.
+    root.style.setProperty('--panel-top', `${panelTop}px`);
+    // Marks the shared #ui root as a builder-kit HUD: builder.css scopes the rules that would
+    // break the coaster's own bar (src/ui/hud.ts) to it, e.g. the centred Play button.
+    root.classList.add('kit-hud');
 
     this.build();
 
@@ -343,6 +362,9 @@ export class BuilderHud<
       this.flight = null;
     }
     this.root.innerHTML = '';
+    // The root (#ui) is shared with the next activity (the coaster HUD among them).
+    this.root.style.removeProperty('--panel-top');
+    this.root.classList.remove('kit-hud');
   }
 
   private syncTransform(): void {
@@ -511,15 +533,21 @@ export class BuilderHud<
     this.root.appendChild(topbar);
 
     // ---- dashboard ----
+    // `hud.goalsOverlay` (2026-10-06, the rover): no dash on screen. The goals column (same
+    // DOM, same `setLevel`/`update` code) and the result card go into a small translucent panel
+    // over the world panel's top-left corner (builder.css .goals-overlay) instead; the dash is
+    // still built, detached, so its other refs (chip panel, stat bars) stay valid but never show.
     const dash = document.createElement('div');
     dash.id = 'dash';
+    const goalsOverlay = this.hud.goalsOverlay ? document.createElement('div') : null;
+    if (goalsOverlay) goalsOverlay.className = 'goals-overlay';
 
     const goalsCol = document.createElement('div');
     goalsCol.className = 'goals-col';
     const goalList = document.createElement('ul');
     goalList.id = 'goalList';
     goalsCol.appendChild(goalList);
-    dash.appendChild(goalsCol);
+    (goalsOverlay ?? dash).appendChild(goalsCol);
     this.goalsColEl = goalsCol;
     this.goalListEl = goalList;
 
@@ -542,7 +570,7 @@ export class BuilderHud<
       this.allMeters.push({ id: spec.id, metric: spec.metric, root: meter, main });
     }
     this.metersColEl = metersCol;
-    if (this.hud.metersOverlay) {
+    if (this.metersOverlay) {
       // Over the world panel's top-right corner (builder.css .meters-col.overlay); appended
       // after the dash so it sits above it in DOM order.
       metersCol.classList.add('overlay');
@@ -592,7 +620,8 @@ export class BuilderHud<
     this.propRowsEl = propRows;
     this.statBarsEl = statBars;
 
-    // ---- result card (shown instead of .meters-col / .prop-panel in done mode) ----
+    // ---- result card (shown instead of .meters-col / .prop-panel in done mode; under the goals
+    // in the goals overlay with `hud.goalsOverlay`) ----
     const resultCard = document.createElement('div');
     resultCard.className = 'result-card';
     resultCard.hidden = true;
@@ -603,15 +632,19 @@ export class BuilderHud<
     const resultOutcome = document.createElement('div');
     resultOutcome.className = 'result-outcome';
     resultCard.append(resultTitle, resultRows, resultOutcome);
-    dash.appendChild(resultCard);
+    (goalsOverlay ?? dash).appendChild(resultCard);
     this.resultCardEl = resultCard;
     this.resultTitleEl = resultTitle;
     this.resultRowsEl = resultRows;
     this.resultOutcomeEl = resultOutcome;
 
-    this.root.appendChild(dash);
-    this.dashEl = dash;
-    if (this.hud.metersOverlay) this.root.appendChild(metersCol);
+    if (goalsOverlay) {
+      this.root.appendChild(goalsOverlay);
+    } else {
+      this.root.appendChild(dash);
+      this.dashEl = dash;
+    }
+    if (this.metersOverlay) this.root.appendChild(metersCol);
 
     // ---- bottom bar ----
     const bottombar = document.createElement('div');
@@ -1016,7 +1049,7 @@ export class BuilderHud<
       top = rect.y - 16 - h;
       el.style.setProperty('--arrow-x', `${(rect.x + rect.w / 2 - left).toFixed(1)}px`);
     } else {
-      top = Math.max(PANEL_TOP + 4, Math.min(PANEL_BOTTOM - 4 - h, midY - h / 2));
+      top = Math.max(this.panelTop + 4, Math.min(PANEL_BOTTOM - 4 - h, midY - h / 2));
       el.style.setProperty('--arrow-y', `${(midY - top).toFixed(1)}px`);
     }
     el.classList.toggle('above', above);
@@ -2029,17 +2062,20 @@ export class BuilderHud<
     // the dash shows those stat bars in the .meters-col slot — freeing a whole section's worth
     // of room in the drawer itself. Otherwise (drawer closed, or open with nothing/no stats
     // selected) the rule collapses to result-card/meters as before.
-    const showPropPanel = !this.drawerMode && state.canTune && state.selected !== null;
-    const showDashStats = this.drawerMode && state.canTune && state.selected !== null && state.stats.length > 0;
+    // No dash (`hud.goalsOverlay`): no chip panel and no stat bars anywhere, so the result card
+    // (in the goals overlay) shows whenever there is one.
+    const dashOn = this.dashEl !== null;
+    const showPropPanel = dashOn && !this.drawerMode && state.canTune && state.selected !== null;
+    const showDashStats = dashOn && this.drawerMode && state.canTune && state.selected !== null && state.stats.length > 0;
     const showResultCard = !showPropPanel && !showDashStats && state.result !== null;
     this.setHidden(this.propPanelEl, !showPropPanel);
     this.setHidden(this.dashStatsEl, !showDashStats);
     this.setHidden(this.resultCardEl, !showResultCard);
-    if (this.hud.metersOverlay) {
+    if (this.metersOverlay) {
       // The overlay meters show only once the machine runs (play) and stay for the final numbers
       // (done); the dash's right column is then often empty, so the goals column fills it.
       this.setHidden(this.metersColEl, editMode);
-      this.dashEl.classList.toggle('goals-only', !showPropPanel && !showDashStats && !showResultCard);
+      this.dashEl?.classList.toggle('goals-only', !showPropPanel && !showDashStats && !showResultCard);
     } else {
       this.setHidden(this.metersColEl, showPropPanel || showDashStats || showResultCard);
     }

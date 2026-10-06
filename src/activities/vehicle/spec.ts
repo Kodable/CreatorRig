@@ -53,35 +53,38 @@ import { BUILD_WIDGET, roverCoach } from './coach';
 
 /** Building zooms in on the dome (`focusFrame`, the same frame for the dome and every attachment)
  * with the drawer open over the panel's right 340 px (src/kit/builder.css; BuilderHud opens it
- * only while a part is selected). The world panel is 960 x 480 stage px at ppm 32 (kit camera.ts
- * STAGE_PANEL_H; the 10 px earth margin under it is not world view).
+ * only while a part is selected). The world panel is 960 x 612 stage px at ppm 32 (WORLD_H *
+ * PPM since 2026-10-06, was the kit's default 480: the course has no dash, `hud.goalsOverlay`, so
+ * the panel grows upward to y 78; the 10 px earth margin under it is not world view).
  *
  * Fit arithmetic while a part is selected (spec.test.ts checks every level on HUGE_BUILD: a
  * square wheel on a spring under the dome (lifts it highest), a melon on a spring on top (the
  * tallest part), melons on springs at the front and back (the widest), two more sprung wheels):
- *  - At zoom z the view is 960/(32 z) x 480/(32 z) m: 10.714 x 5.357 m at 2.8. The drawer leaves
+ *  - At zoom z the view is 960/(32 z) x 612/(32 z) m: 10.714 x 6.830 m at 2.8. The drawer leaves
  *    620/960 of the width uncovered: 6.920 m at 2.8.
  *  - cx wants the dome mid-way across that strip, rover.x + 1.897, but the kit clamps cx >=
  *    15/zoom = 5.357 and every level places the dome at x 3 (levels.ts ROVER_X), so the strip
  *    always runs x 0..6.920. HUGE_BUILD spans rover.x -1.742..+1.742 (x 1.258..4.742).
- *  - cy = ground under the dome + FOCUS_CY_ABOVE_GROUND (1.9): the view runs ground - 0.779 ..
- *    ground + 4.579. HUGE_BUILD's dome rests at ground + 1.784 and its melon reaches ground +
- *    3.525, leaving 1.054 m of air for the DRIVE pill above it (raised from 1.7 on 2026-10-05:
- *    at 1.7 the 0.786 m pill had 0.068 m, 6 px, for its gap and margin); 0.779 m of ground
- *    still shows under the wheels. The flip level's mesa (ground 9) clamps cy to 10.821 (the
- *    view's top at the world's 13.5), which leaves 0.975 m.
+ *  - The view's bottom sits FOCUS_GROUND_BELOW (0.78 m) under the ground beneath the dome, so cy
+ *    = ground + 2.635 and the view runs ground - 0.78 .. ground + 6.050. Until 2026-10-06 (the
+ *    480 px panel) cy was ground + 1.9, the same bottom edge: the build sits where it always did
+ *    on screen and the taller panel only adds sky above it (where the goals overlay sits).
+ *    HUGE_BUILD's dome rests at ground + 1.784 and its melon reaches ground + 3.525, leaving
+ *    2.525 m of air above it. The flip level's mesa (ground 9) puts the view's top at 15.05,
+ *    under the world's 17.625 (no clamp).
  *  - The selected part's DRIVE pill (DRIVE_SIZE 64 px, budget 202 x 70 px with the pulse, see
  *    `bigPillPx`: 2.259 x 0.786 m at 2.8) sits over the dome: centre ext.y1 + DRIVE_GAP + 0.393 =
- *    ground + 3.998, top ground + 4.391 under the view's top minus FRAME_MARGIN (ground + 4.529),
+ *    ground + 3.998, top ground + 4.391 under the view's top minus FRAME_MARGIN (ground + 6.000),
  *    x 1.870..4.130 inside the strip. `driveButtonAt` falls back to the strip's top-right corner
  *    beside the build if a build ever outgrows that.
  *  - Zoom 2.8 is kept, above the 2.4 tactile-size floor: below it the 0.75 m dome and its
  *    attachments read too small for a child's finger (Jon's tactile-variables rule). */
 export const FOCUS_ZOOM = 2.8;
-const PANEL_W_PX = 960;
-const PANEL_H_PX = 480;
-const DRAWER_PX = 340;
 const PPM = 32;
+const PANEL_W_PX = 960;
+/** The world panel's height (stage px): the whole world's height, 612 (kit view.ts `panelTopY`). */
+const PANEL_H_PX = WORLD_H * PPM;
+const DRAWER_PX = 340;
 /** The selected part's DRIVE pill (stage px tall): smaller than the idle one, so the child can
  * drive straight from the drawer. */
 export const DRIVE_SIZE = 64;
@@ -94,8 +97,12 @@ export const DRIVE_GREEN = 0x61bb46;
 /** World meters between the build's top and the selected DRIVE pill. */
 const DRIVE_GAP = 0.08;
 const FRAME_MARGIN = 0.05;
-/** The focus frame's centre sits this high above the ground under the dome. */
-const FOCUS_CY_ABOVE_GROUND = 1.9;
+/** World meters of ground the focus frame shows under the dome (its view's bottom edge sits this
+ * far below the ground there): 0.78, what cy = ground + 1.9 showed on the 480 px panel. */
+const FOCUS_GROUND_BELOW = 0.78;
+/** The focus frame's centre sits this high above the ground under the dome: half the view's
+ * height at FOCUS_ZOOM, less FOCUS_GROUND_BELOW (2.635 m). */
+const FOCUS_CY_ABOVE_GROUND = PANEL_H_PX / (2 * PPM * FOCUS_ZOOM) - FOCUS_GROUND_BELOW;
 
 /** A 'big' tap widget is a pill `size` px tall with its icon and a 24 px bold label inside (kit
  * TapWidget.style). The kit sizes it to its content; this course budgets BIG_CONTENT_PX for the
@@ -124,9 +131,9 @@ function levelFinish(level: VehicleLevel): PlacedPart<PartKind> | undefined {
   return level.parts.find((p) => p.kind === 'finish');
 }
 
-/** A zoom-1 frame (the whole view: VIEW_W x 15 m, the full-panel height) centred on world x
- * `x`, kept inside the world the way the kit clamps it: cx in [VIEW_W / 2, WORLD_W - VIEW_W / 2];
- * cy shows the panel's full height (y -GROUND_DEPTH .. 15 - GROUND_DEPTH). */
+/** A zoom-1 frame (the whole view: VIEW_W x WORLD_H m, the full-panel height) centred on world
+ * x `x`, kept inside the world the way the kit clamps it: cx in [VIEW_W / 2, WORLD_W - VIEW_W /
+ * 2]; cy shows the panel's full height (y -GROUND_DEPTH .. WORLD_H - GROUND_DEPTH). */
 export function viewFrameAt(x: number): CameraFrame {
   return {
     cx: Math.max(VIEW_W / 2, Math.min(WORLD_W - VIEW_W / 2, x)),
@@ -156,7 +163,7 @@ function levelRover(level: VehicleLevel): PlacedPart<PartKind> | undefined {
 
 /** The camera frame for building: the same for the dome and every attachment (stable while the
  * child adds and drags parts), from the level's dome x and the ground under it. At zoom 2.8 the
- * view is 10.7 x 5.4 m; cx puts the dome mid-way across the part the drawer leaves uncovered
+ * view is 10.7 x 6.8 m; cx puts the dome mid-way across the part the drawer leaves uncovered
  * (the kit clamps cx >= 15 / zoom, so a dome at x 3 sits a little left of that); cy leaves
  * ~0.8 m of ground under the wheels and room for the DRIVE pill over a part on top. */
 export function buildFrame(level: VehicleLevel): { cx: number; cy: number; zoom: number } | null {
@@ -240,7 +247,7 @@ function groundTop(terrain: Vec2[], x0: number, x1: number): number {
 }
 
 /** Where the idle BUILD and DRIVE pills go (world centres), shown while NOTHING is selected. The
- * drawer is closed then and the camera rests on the zoom-1 view (x 0..30, y -1.5..13.5; kit
+ * drawer is closed then and the camera rests on the zoom-1 view (x 0..30, y -1.5..17.625; kit
  * `fullFrame`, or the intro pan's `to` frame, the same one), where a pill is big in world terms:
  * BUILD (84 px) budgets 224 x 92 px = 7.0 x 2.9 m, DRIVE (96 px) 238 x 106 px = 7.4 x 3.3 m.
  *  - One row, BUILD then DRIVE to its right (toward the beacon), IDLE_PILL_GAP apart. BUILD is
@@ -249,9 +256,10 @@ function groundTop(terrain: Vec2[], x0: number, x1: number): number {
  *  - The row's bottom sits IDLE_GAP over the build's top AND over the highest ground under the
  *    row (the power level's 2.5 m crater rim at x 10..16 is under DRIVE), so the pills never
  *    cover the build or the obstacle. HUGE_BUILD on flat ground: build top 3.525, row centre
- *    5.575, row top 7.225 of the view's 13.5.
- *  - When the row does not fit over the build (the flip level's 9 m mesa puts even the bare
- *    dome's top at 10.52), both pills move to the right of the build at the top of the view. */
+ *    5.575, row top 7.225 of the view's 17.625. On the flip level's 9 m mesa: build top 12.525,
+ *    row top 16.238 (it fitted only beside the build in the 13.5 m view before 2026-10-06).
+ *  - When the row does not fit over the build (no level's build does any more), both pills move
+ *    to the right of the build at the top of the view. */
 export function idleButtonsAt(parts: PlacedPart<PartKind>[], level: VehicleLevel): { build: Vec2; drive: Vec2 } | null {
   const rover = parts.find((p) => p.kind === 'rover');
   const ext = buildExtent(parts, level);
@@ -298,6 +306,11 @@ function buildRows(parts: PlacedPart<PartKind>[], level: VehicleLevel): { label:
 }
 
 const FILL = (item: RenderItem): { color: number; alpha: number } => ({ color: item.color, alpha: item.alpha ?? 1 });
+
+/** The Mars sky picture (public/bg/mars-sky-wide.jpg, 7200 x 1300 px): its aspect, and its height
+ * in world meters (the whole world's height plus the ground band under y = 0). */
+const SKY_ASPECT = 7200 / 1300;
+const SKY_H = WORLD_H + GROUND_DEPTH;
 
 /** Parts-shelf section each attachment kind is grouped under (`hud.partInfo.group`, kit/types.ts):
  * the three groups a build chooses from (Jon, huddle 2026-09-16: wheels, propulsion, weights). */
@@ -368,11 +381,13 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
     // terrain can dip below y = 0 (a jump's lower landing) or open into a pit.
     groundBand: false,
     backgrounds: [
-      // The whole world wide, extended down to -GROUND_DEPTH so the picture covers the sky below
+      // The whole world tall, extended down to -GROUND_DEPTH so the picture covers the sky below
       // y = 0 too. mars-sky-wide.jpg is mars-sky.jpg three times over (7200 x 1300 px, each copy
-      // cross-faded into the next over 300 px, so there is no seam and nothing is stretched: its
-      // aspect matches the 90 x 16.5 m rectangle).
-      { url: 'bg/mars-sky-wide.jpg', x: WORLD_W / 2, y: WORLD_H / 2 - GROUND_DEPTH / 2, w: WORLD_W, h: WORLD_H + GROUND_DEPTH },
+      // cross-faded into the next over 300 px, so there is no seam). Its aspect matched the old
+      // 90 x 16.5 m world; since the world grew to 19.125 m (2026-10-06) the picture keeps that
+      // aspect (SKY_ASPECT, nothing stretched, the round glows stay round) and so runs past the
+      // world's right end (x 0..114.2), which the camera never shows.
+      { url: 'bg/mars-sky-wide.jpg', x: (SKY_H * SKY_ASPECT) / 2, y: WORLD_H / 2 - GROUND_DEPTH / 2, w: SKY_H * SKY_ASPECT, h: SKY_H },
       // The planet hangs over the start, in the first view.
       { url: 'bg/mars-planet.png', x: 24, y: 11.5, w: 3.2, h: 3.2 },
     ],
@@ -513,6 +528,11 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
     winBanner: true,
     // The six meters as a small translucent panel over the scene's top-right, only while driving.
     metersOverlay: true,
+    // 2026-10-06: no dash. The goals sit in a small translucent panel over the scene's top-left
+    // (the result card under them once the run ends) and the world panel takes the dash's room
+    // (core/build.ts WORLD_H). Fine without the dash: the drawer holds every part's options and
+    // no part has stat bars.
+    goalsOverlay: true,
   },
 };
 

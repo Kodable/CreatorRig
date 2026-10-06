@@ -1,6 +1,7 @@
 // Marstopia Rover (Vehicle Obstacle Course): course-specific types instantiating the builder
-// kit's generics. Units are meters, y up. World is 90 x 15 m since 2026-10-05; the panel shows a
-// 30 m window of it and the kit scrolls (see terrain.ts WORLD_W / VIEW_W).
+// kit's generics. Units are meters, y up. World is 90 m wide since 2026-10-05 (the panel shows a
+// 30 m window of it and the kit scrolls, see terrain.ts WORLD_W / VIEW_W) and 19.125 m tall since
+// 2026-10-06 (build.ts WORLD_H).
 //
 // Stakeholder direction 2026-10-02: the child builds the rover. The level places the glass dome
 // (`rover`, Kevin inside); the child adds attachments from the palette (wheels, propulsion,
