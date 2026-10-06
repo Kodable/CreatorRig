@@ -189,7 +189,7 @@
 .shelf-btn:hover:not(:disabled) { border-color: #4a5690; filter: brightness(1.2); }
 .shelf-btn:active:not(:disabled) { filter: brightness(0.82); }
 .shelf-btn:disabled { cursor: default; }
-.shelf-btn img { width: 40px; height: 40px; object-fit: contain; pointer-events: none; }
+.shelf-btn img:not(.koin) { width: 40px; height: 40px; object-fit: contain; pointer-events: none; }
 .shelf-btn .label {
   font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; color: #c8cde6;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -223,7 +223,7 @@
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 .option-btn:disabled { cursor: default; }
-.option-btn img { width: 42px; height: 42px; object-fit: contain; pointer-events: none; }
+.option-btn img:not(.koin) { width: 42px; height: 42px; object-fit: contain; pointer-events: none; }
 .option-btn .caption { font-size: 12px; font-weight: 600; line-height: 1.1; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .option-btn .caption.solo { font-size: 13px; }
 .option-btn.active {

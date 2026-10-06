@@ -125,6 +125,10 @@ export function roverCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   if (ctx.mode === 'play') return null;
   if (ctx.level.id === 'wheels') return wheelsCoach(ctx);
   const after = AFTER_FIRST_RUN[ctx.level.id];
-  if (!after || ctx.passed || ctx.mode !== 'edit' || ctx.runs < 1) return null;
+  if (!after || ctx.passed || ctx.mode !== 'edit') return null;
+  // Levels 2, 4 and 5 coach only after the first run shows the problem (the trip, the boulder, the
+  // hill). Level 3 coaches at once: the spring is a NEW control the child must find (Gao,
+  // 2026-10-05), so the hand points at it as soon as a wheel is selected.
+  if (ctx.level.id !== 'mount' && ctx.runs < 1) return null;
   return after(ctx);
 }

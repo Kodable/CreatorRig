@@ -129,9 +129,9 @@ describe('roverCoach: levels 2-5 wait for the first run, then point at the one n
     expect(coach('shape', ROUND2, { runs: 1, mode: 'done' })).toBeNull();
   });
 
-  it('mount: bumpy -> tap a wheel (the hand on the first wheel), then the Spring in the drawer', () => {
-    expect(coach('mount', ROUND2)).toBeNull();
+  it('mount: bumpy -> tap a wheel (the hand on the first wheel), then the Spring in the drawer; unlike levels 2/4/5 it coaches BEFORE the first run (the spring is a new control)', () => {
     const tap = { id: 'tapwheel', text: 'Bumpy! Tap a wheel to change its mount.', target: { type: 'part', partId: 20 } };
+    expect(coach('mount', ROUND2)).toEqual(tap);
     expect(coach('mount', ROUND2, { runs: 1 })).toEqual(tap);
     expect(coach('mount', ROUND2, { runs: 1, selected: 'rover' })).toEqual(tap);
     expect(coach('mount', ROUND2, { runs: 1, selected: 1 })).toEqual({
