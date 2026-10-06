@@ -511,6 +511,8 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
     // bottom, but center it" — back to the kit's own bar Play button (now centred, see
     // kit/builder.css), no course-level override.
     winBanner: true,
+    // The six meters as a small translucent panel over the scene's top-right, only while driving.
+    metersOverlay: true,
   },
 };
 

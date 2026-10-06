@@ -158,6 +158,7 @@ export class BuilderHud<
   private parkBtn!: HTMLButtonElement;
 
   private metersColEl!: HTMLDivElement;
+  private dashEl!: HTMLDivElement;
   private allMeters: MeterEntry<M>[] = [];
 
   private propPanelEl!: HTMLDivElement;
@@ -541,7 +542,14 @@ export class BuilderHud<
       this.allMeters.push({ id: spec.id, metric: spec.metric, root: meter, main });
     }
     this.metersColEl = metersCol;
-    dash.appendChild(metersCol);
+    if (this.hud.metersOverlay) {
+      // Over the world panel's top-right corner (builder.css .meters-col.overlay); appended
+      // after the dash so it sits above it in DOM order.
+      metersCol.classList.add('overlay');
+      metersCol.hidden = true;
+    } else {
+      dash.appendChild(metersCol);
+    }
 
     // ---- dash stat bars (shown instead of .meters-col while the drawer is open and the
     // selected part has stat bars; see the three-way rule in update()) ----
@@ -602,6 +610,8 @@ export class BuilderHud<
     this.resultOutcomeEl = resultOutcome;
 
     this.root.appendChild(dash);
+    this.dashEl = dash;
+    if (this.hud.metersOverlay) this.root.appendChild(metersCol);
 
     // ---- bottom bar ----
     const bottombar = document.createElement('div');
@@ -2025,7 +2035,14 @@ export class BuilderHud<
     this.setHidden(this.propPanelEl, !showPropPanel);
     this.setHidden(this.dashStatsEl, !showDashStats);
     this.setHidden(this.resultCardEl, !showResultCard);
-    this.setHidden(this.metersColEl, showPropPanel || showDashStats || showResultCard);
+    if (this.hud.metersOverlay) {
+      // The overlay meters show only once the machine runs (play) and stay for the final numbers
+      // (done); the dash's right column is then often empty, so the goals column fills it.
+      this.setHidden(this.metersColEl, editMode);
+      this.dashEl.classList.toggle('goals-only', !showPropPanel && !showDashStats && !showResultCard);
+    } else {
+      this.setHidden(this.metersColEl, showPropPanel || showDashStats || showResultCard);
+    }
     // Coins left for the child's own parts (null without a budget): drives the `.unaffordable`
     // dimming on option chips/buttons below (the app already refuses the change; this is cosmetic).
     const remaining = state.budget ? state.budget.total - state.budget.used : null;

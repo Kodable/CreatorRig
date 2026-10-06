@@ -349,6 +349,28 @@
 }
 .world-scroll-thumb.dragging .world-scroll-grip { background: #05aeed; border-color: #ffffff; }
 
+/* ---- Meters overlay (HudSpec.metersOverlay): the six meters as a small translucent panel over
+   the world panel's top-right corner (panel x 32..992, y 210..690), play/done mode only. It
+   never takes taps (pointer-events none). The dash's goals column fills the dash while its
+   right column is empty (#dash.goals-only). ---- */
+.meters-col.overlay {
+  position: absolute; left: auto; right: 44px; top: 222px; width: auto; max-width: 340px; z-index: 30;
+  padding: 7px 12px 8px; box-sizing: border-box; border-radius: 10px; pointer-events: none;
+  display: grid; grid-template-columns: repeat(3, auto); grid-template-rows: auto auto; gap: 4px 16px;
+  background: rgba(11, 16, 48, 0.62); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.meters-col.overlay .meter { gap: 1px; }
+.meters-col.overlay .meter-label,
+.meters-col.overlay .meter.focused .meter-label,
+.meters-col.overlay .meter.dim .meter-label,
+.meters-col.overlay .meter.free .meter-label { font-size: 11px; }
+.meters-col.overlay .meter-value,
+.meters-col.overlay .meter.focused .meter-value,
+.meters-col.overlay .meter.dim .meter-value,
+.meters-col.overlay .meter.free .meter-value { font-size: 14px; font-variant-numeric: tabular-nums; }
+#dash.goals-only .goals-col { flex: 1 1 auto; border-right: 0; }
+
 /* ======== Builder-kit UX for the first levels (2026-10-05 playtest review). Every rule below is
    for DOM that only shows on a course that opts in (HudSpec.winBanner, HudState.coach,
    HudState.unlocked / partInfo.blurb); other courses never render these elements. ======== */

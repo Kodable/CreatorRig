@@ -533,6 +533,11 @@ export interface HudSpec<K extends string, M, O extends string> {
    * outcome line, a big "Next level ▶" button and "Try again"). Default false: today's behaviour
    * (Bruno waves, the dash shows the result card). */
   winBanner?: boolean;
+  /** true: the meters leave the dash and show as a small translucent panel in the top-right
+   * corner of the world panel, in play and done mode only (hidden while the child builds). The
+   * goals column then fills the dash whenever its right column is empty (the result card and the
+   * stat bars still use it). Default false: the meters sit in the dash's right column. */
+  metersOverlay?: boolean;
 }
 
 /** One end of a link drag: an existing part, or a point in empty space. */
