@@ -33,6 +33,17 @@ const SCROLL_THUMB_MIN = 88;
  * 480 px panel, higher for a taller world (2026-10-06: the rover's, under `hud.goalsOverlay`). */
 const DEFAULT_PANEL_TOP = 210;
 const PANEL_BOTTOM = 690;
+/** Stage x of the world panel's left edge and its width (view.ts: x 32..992). */
+const PANEL_LEFT = 32;
+const PANEL_W = 960;
+/** Level-start goals intro (`hud.goalsOverlay`): the panel pops up `GOALS_INTRO_SCALE` times its
+ * size in the middle of the world panel (`GOALS_INTRO_RAISE` px above centre), holds, then glides
+ * to its top-left spot; the offsets split the run into pop / hold / glide. */
+const GOALS_INTRO_MS = 2600;
+const GOALS_INTRO_SCALE = 1.7;
+const GOALS_INTRO_RAISE = 40;
+const GOALS_INTRO_POP_AT = 0.12;
+const GOALS_INTRO_GLIDE_AT = 0.72;
 
 /** Win banner confetti: pieces per burst, their colours, and how long until they are removed. */
 const CONFETTI_COUNT = 40;
@@ -163,6 +174,10 @@ export class BuilderHud<
   /** The dash, or null with `hud.goalsOverlay` (no dash: the goals and the result card sit in
    * `.goals-overlay` over the world panel instead). */
   private dashEl: HTMLDivElement | null = null;
+  /** `.goals-overlay` with `hud.goalsOverlay`, else null. */
+  private goalsOverlayEl: HTMLDivElement | null = null;
+  /** The level-start goals intro in flight (see `playGoalsIntro`), cancelled by the next level. */
+  private goalsIntroAnim: Animation | null = null;
   /** `hud.metersOverlay`, or implied by `hud.goalsOverlay` (the dash is gone, so are its meters). */
   private readonly metersOverlay: boolean;
   /** Stage y of the world panel's top edge (see DEFAULT_PANEL_TOP). */
@@ -346,6 +361,8 @@ export class BuilderHud<
   destroy(): void {
     if (this.intervalId !== undefined) clearInterval(this.intervalId);
     clearTimeout(this.confettiTimer);
+    this.goalsIntroAnim?.cancel();
+    this.goalsIntroAnim = null;
     this.hideCallout();
     window.removeEventListener('resize', this.syncHandler);
     window.removeEventListener('orientationchange', this.syncHandler);
@@ -633,6 +650,7 @@ export class BuilderHud<
 
     if (goalsOverlay) {
       this.root.appendChild(goalsOverlay);
+      this.goalsOverlayEl = goalsOverlay;
     } else {
       this.root.appendChild(dash);
       this.dashEl = dash;
@@ -1334,6 +1352,8 @@ export class BuilderHud<
       });
     }
 
+    this.playGoalsIntro();
+
     // ---- meter focus/dim styling (depends only on the level's goals) ----
     const freePlay = level.goals.length === 0;
     const focused = new Set<string>(level.goals.map((g) => g.metric));
@@ -1425,6 +1445,39 @@ export class BuilderHud<
         chip.classList.toggle('unaffordable', unaffordable);
       }
     }
+  }
+
+  /** Level start with `hud.goalsOverlay` (2026-10-06, Gao: "show the goals more front and
+   * center, then animate it to the top left"): the goal panel pops up big in the middle of the
+   * world panel, holds so the child reads it, then glides and shrinks into its top-left spot.
+   * Layout px inside the HUD root are stage px (the root is scaled as a whole), so the offsets
+   * are plain differences of stage coordinates. Skipped under prefers-reduced-motion. */
+  private playGoalsIntro(): void {
+    const el = this.goalsOverlayEl;
+    if (!el) return;
+    this.goalsIntroAnim?.cancel();
+    this.goalsIntroAnim = null;
+    if (prefersReducedMotion() || typeof el.animate !== 'function') return;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    if (w === 0 || h === 0) return;
+    const dx = PANEL_LEFT + PANEL_W / 2 - (el.offsetLeft + w / 2);
+    const dy = (this.panelTop + PANEL_BOTTOM) / 2 - GOALS_INTRO_RAISE - (el.offsetTop + h / 2);
+    const big = `translate(${dx}px, ${dy}px) scale(${GOALS_INTRO_SCALE})`;
+    const small = `translate(${dx}px, ${dy}px) scale(${GOALS_INTRO_SCALE * 0.8})`;
+    const anim = el.animate(
+      [
+        { opacity: 0, transform: small, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.3)' },
+        { opacity: 1, transform: big, offset: GOALS_INTRO_POP_AT, easing: 'linear' },
+        { opacity: 1, transform: big, offset: GOALS_INTRO_GLIDE_AT, easing: 'cubic-bezier(0.5, 0, 0.2, 1)' },
+        { opacity: 1, transform: 'none' },
+      ],
+      { duration: GOALS_INTRO_MS, fill: 'backwards' },
+    );
+    anim.onfinish = (): void => {
+      if (this.goalsIntroAnim === anim) this.goalsIntroAnim = null;
+    };
+    this.goalsIntroAnim = anim;
   }
 
   /** Stat bars (Speed, Grip, ...) rendered into `container` — either the prop panel's `.stat-bars`
