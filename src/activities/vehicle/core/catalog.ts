@@ -189,9 +189,10 @@ export const SQUARE_HALF = 0.27;
 export const STAR_HUB = 0.12;
 
 /** Thrust (N) each propulsion part pushes the rover with while driving, away from itself: a jet
- * on the back pushes forward, one under the dome lifts. */
+ * on the back pushes forward, one under the dome lifts. All three push constantly; the stove's
+ * 7 N used to come in puffs (average 4.2 N, barely more than the fan), now it is a steady 7 N. */
 export const POWER_FORCE: Record<PowerKind, number> = { fan: 4, stove: 7, jet: 12 };
-/** The stove puffs: on for STOVE_ON s of every STOVE_PERIOD s. */
+/** The stove's smoke puffs (visual only): a puff every STOVE_PERIOD s, rising for STOVE_ON s. */
 export const STOVE_ON = 0.6;
 export const STOVE_PERIOD = 1.0;
 /** Propulsion bodies are light boxes about their picture's size. */

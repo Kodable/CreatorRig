@@ -492,7 +492,9 @@ export const LEVELS: VehicleLevel[] = [
   // a 40 degree wall 3 m tall (x 62-65.6) up to the plateau and the beacon at x 78. Every
   // wheels-only build stalls on the wall except two round wheels on springs; round wheels with a
   // fan, a stove or a jet on the back push up it, and a jet hauls star or square wheels up too
-  // (33 of 989 builds pass; square and star wheels without a jet stall on the hills or the wall).
+  // (35 of 989 builds pass; square and star wheels without a jet stall on the hills or the wall).
+  // The stove's constant 7 N push (2026-10-05) flips a cup-mounted build on the steep wall; on
+  // springs it still climbs straight through.
   level({
     id: 'canyon',
     title: 'Canyon climb',
@@ -519,7 +521,7 @@ export const LEVELS: VehicleLevel[] = [
       ['fan', 180],
     ],
     altSolutions: [
-      [['wheelCircle', -45], ['wheelCircle', -135], ['stove', 180]],
+      [['wheelCircle', -45, 'spring'], ['wheelCircle', -135, 'spring'], ['stove', 180]],
       [['wheelCircle', -45, 'spring'], ['wheelCircle', -135, 'spring']],
       [['wheelCircle', -45], ['wheelCircle', -135], ['jet', 180]],
       [['wheelStar', -45], ['wheelStar', -135], ['jet', 180]],
@@ -610,8 +612,9 @@ export const LEVELS: VehicleLevel[] = [
   // Everything, across the whole world: a hill, bumps, three rock stairs, a 2.5 m jump, a big
   // hill, a 1 m drop, more bumps, a rise and the beacon at x 87, under 18 s. Springs get through
   // the bumps and stairs; plain springs take ~18.8 s, so they also need a push (a fan or a stove
-  // on the back) or a jet. The hardest level: 12 of 1457 builds pass (round wheels only; stars and
-  // squares are too slow for the jump and fall in).
+  // on the back) or a jet. The hardest level: 11 of 1457 builds pass (round wheels only; stars and
+  // squares are too slow for the jump and fall in). The stove's constant 7 N (2026-10-05) tips a
+  // bare two-wheeler over on the jump; a feather on top settles it back down in time (16.97 s).
   level({
     id: 'marathon',
     title: 'Marstopia marathon',
@@ -629,7 +632,7 @@ export const LEVELS: VehicleLevel[] = [
     hints: [
       'Bumps and stairs? Springs. A jump? Speed. The clock? A push!',
       'Round wheels on springs make it all the way, just a little too slowly.',
-      'Two round wheels on springs and a stove on the back. Go, Kevin, go!',
+      'Two round wheels on springs, a feather on top, and a stove on the back. Go, Kevin, go!',
     ],
     failHints: {
       stuck: 'Stuck! Springs soak up the bumps and the stairs.',
@@ -639,6 +642,7 @@ export const LEVELS: VehicleLevel[] = [
     solution: [
       ['wheelCircle', -45, 'spring'],
       ['wheelCircle', -135, 'spring'],
+      ['feather', 90],
       ['stove', 180],
     ],
     altSolutions: [

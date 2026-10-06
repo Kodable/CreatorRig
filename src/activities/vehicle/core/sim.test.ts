@@ -161,14 +161,14 @@ describe('vehicle sim', () => {
     expect(f.y).toBeCloseTo(POWER_FORCE.fan, 6);
   });
 
-  it('the stove puffs: on for 0.6 s of every second', async () => {
+  it('the stove pushes constantly; stoveOn only times its smoke puff', async () => {
     expect([0, 0.3, 0.59, 1.0, 1.5].map(stoveOn)).toEqual([true, true, true, true, true]);
     expect([0.6, 0.8, 0.99, 1.7].map(stoveOn)).toEqual([false, false, false, false]);
     const sim = await make(flat(), [...TWO, ['stove', 180]]);
     sim.play();
     expect(sim.thrustForce().x).toBeCloseTo(POWER_FORCE.stove, 6);
-    runFor(sim, 0.7);
-    expect(sim.thrustForce().x).toBe(0);
+    runFor(sim, 0.7); // past STOVE_ON: the puff would be off, but the push does not let up
+    expect(sim.thrustForce().x).toBeCloseTo(POWER_FORCE.stove, 6);
   });
 
   it('pushes stop when the run ends', async () => {

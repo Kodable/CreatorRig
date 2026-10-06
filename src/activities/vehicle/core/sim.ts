@@ -260,7 +260,7 @@ export class VehicleSim implements CourseSim<Metrics, Outcome> {
   /** Whether propulsion part `a` pushes at this moment of the run. */
   private thrusting(a: AttachmentHandle): boolean {
     if (!this.playing || this.currentOutcome !== 'running') return false;
-    if (a.kind === 'stove') return stoveOn(this.timeValue);
+    // The stove pushes CONSTANTLY (Gao, 2026-10-05); `stoveOn` only times its smoke puffs now.
     return isPower(a.kind);
   }
 
@@ -407,7 +407,9 @@ export class VehicleSim implements CourseSim<Metrics, Outcome> {
           angle: dir - Math.PI,
         });
       } else if (a.kind === 'stove') {
-        // One puff per stove cycle, rising and fading from the chimney.
+        // One puff per stove cycle, rising and fading from the chimney (visual only: the stove's
+        // push is constant, `stoveOn` only times this sprite).
+        if (!stoveOn(this.timeValue)) continue;
         const phase = (this.timeValue % STOVE_PERIOD) / STOVE_ON;
         const size = POOF_W * (0.8 + 0.6 * phase);
         const attachToCentre = (PICS.poof.h / 2 - POOF_ART.attach.y) / PART_PPM;
