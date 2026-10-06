@@ -15,12 +15,14 @@ import type {
   PlacedPart,
   PropertyDescriptor,
   ResultCard,
+  SimSnapshot,
   StatBar,
+  TapWidget,
   Vec2,
   Widget,
   WidgetAction,
   WorldSpec,
- SimSnapshot, TapWidget } from './types';
+} from './types';
 import { gatedOptions, isKnown, isOptionKnown, knownConcepts } from './concepts';
 import { hasShelfKinds } from './shelf';
 import { allPass, evaluateGoals } from './goals';
