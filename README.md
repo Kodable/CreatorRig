@@ -43,7 +43,7 @@ Most levels lock the station (and, where the start matters, a second lead-in poi
 
 ## Floof Goldberg Machines
 
-A chain-reaction course where you place and tune parts, press Play, and a fuzz must reach the gate. Tap a palette chip to add a part in the middle of the scene, drag it to move, tap to select and change its properties with chips. Remove, Undo, and Clear let you edit freely. Locked parts placed by the level cannot move or delete (Clear keeps them); they carry no padlock mark. The Hint button cycles through three escalating hints shown in Bruno's bubble.
+A chain-reaction course where you place and tune parts, press Play, and a fuzz must reach the gate. Tap a palette chip to add a part in the middle of the scene, drag it to move, tap to select and change its properties with chips. A delete badge on the selected part's box, plus Undo and Clear, let you edit freely. Locked parts placed by the level cannot move or delete (Clear keeps them); they carry no padlock mark. The Hint button cycles through three escalating hints shown in Bruno's bubble.
 
 Seven part kinds build the machine: **Fuzz** (the rolling ball, tunable size); **Platform** (a solid surface, length and rotation); **Ramp** (a slope, angle 15–45°, flip direction, size); **Domino run** (a falling chain, 1–6 pieces); **Seesaw** (pivot point and hook options); **Lever** (rotate around a fulcrum to launch); **Gate** (the goal, with openTime 0–8 seconds). A fuzz arriving before the gate opens fails; once open, reaching it passes the level.
 

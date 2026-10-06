@@ -172,7 +172,6 @@ export class BuilderHud<
   private propPanelEl!: HTMLDivElement;
   private propTitleIconEl!: HTMLSpanElement;
   private propTitleLabelEl!: HTMLSpanElement;
-  private removeBtn!: HTMLButtonElement;
   private propRowsEl!: HTMLDivElement;
   private propPanelKey: string | null = null;
   private propChipsByCode = new Map<string, Map<string, HTMLButtonElement>>();
@@ -191,7 +190,6 @@ export class BuilderHud<
   private drawerHeaderIconEl!: HTMLSpanElement;
   private drawerHeaderLabelEl!: HTMLSpanElement;
   private drawerHeaderRightEl!: HTMLDivElement;
-  private drawerRemoveBtn!: HTMLButtonElement;
   /** "[koin] used / total", shown in the drawer header (right side) for shelf courses instead of
    * the bottom-bar pill (see `budgetPillEl`). */
   private drawerBudgetPillEl!: HTMLDivElement;
@@ -600,12 +598,8 @@ export class BuilderHud<
     const propLabel = document.createElement('span');
     propLabel.className = 'label';
     propTitle.append(propIcon, propLabel);
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'remove-btn';
-    removeBtn.textContent = 'Remove';
-    removeBtn.addEventListener('click', () => this.cb.removeSelected());
-    propHeader.append(propTitle, removeBtn);
+    // No Remove button here: the delete badge on the part's selection box does that (scene).
+    propHeader.append(propTitle);
     const statBars = document.createElement('div');
     statBars.className = 'stat-bars';
     statBars.hidden = true;
@@ -616,7 +610,6 @@ export class BuilderHud<
     this.propPanelEl = propPanel;
     this.propTitleIconEl = propIcon;
     this.propTitleLabelEl = propLabel;
-    this.removeBtn = removeBtn;
     this.propRowsEl = propRows;
     this.statBarsEl = statBars;
 
@@ -1215,7 +1208,8 @@ export class BuilderHud<
     label.className = 'label';
     title.append(icon, label);
 
-    // Right side: the coin pill (shelf courses only) and the Remove button (selection only).
+    // Right side: the coin pill (shelf courses only). Removing a part is the delete badge on its
+    // selection box in the scene (2026-10-06), not a button here.
     const headerRight = document.createElement('div');
     headerRight.className = 'prop-drawer-header-right';
     const budgetPill = document.createElement('div');
@@ -1223,12 +1217,7 @@ export class BuilderHud<
     budgetPill.hidden = true;
     const budgetPillText = document.createElement('span');
     budgetPill.append(this.makeKoinImg(), budgetPillText);
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'prop-drawer-remove';
-    removeBtn.textContent = 'Remove';
-    removeBtn.addEventListener('click', () => this.cb.removeSelected());
-    headerRight.append(budgetPill, removeBtn);
+    headerRight.append(budgetPill);
     header.append(title, headerRight);
 
     const body = document.createElement('div');
@@ -1262,7 +1251,6 @@ export class BuilderHud<
     this.drawerHeaderIconEl = icon;
     this.drawerHeaderLabelEl = label;
     this.drawerHeaderRightEl = headerRight;
-    this.drawerRemoveBtn = removeBtn;
     this.drawerBudgetPillEl = budgetPill;
     this.drawerBudgetPillTextEl = budgetPillText;
     this.drawerRowsEl = rows;
@@ -1378,7 +1366,6 @@ export class BuilderHud<
     this.textCache.delete(this.propTitleLabelEl);
     this.textCache.delete(this.propTitleIconEl);
 
-    this.setHidden(this.removeBtn, !!sel.part.locked);
 
     const lockedProps = sel.part.lockedProps ?? [];
     for (const descriptor of sel.descriptors) {
@@ -1533,7 +1520,6 @@ export class BuilderHud<
     this.setHidden(this.drawerHeaderIconEl, false);
     this.setText(this.drawerHeaderIconEl, info.icon);
     this.setText(this.drawerHeaderLabelEl, info.label);
-    this.setHidden(this.drawerRemoveBtn, !!sel.part.locked);
 
     for (const descriptor of sel.descriptors) {
       const locked = lockedProps.includes(descriptor.code);
@@ -2145,7 +2131,6 @@ export class BuilderHud<
       if (!state.selected) {
         this.setHidden(this.drawerHeaderIconEl, true);
         this.setText(this.drawerHeaderLabelEl, 'Parts');
-        this.setHidden(this.drawerRemoveBtn, true);
       }
       this.syncShelf(state, shelfOn);
       // The pinned panel only exists for shelf courses, slid up while a part WITH rows is selected

@@ -111,6 +111,10 @@ const DEPTH_GRID = 1.5; // above the panel backdrop (ground), below items
 const DEPTH_ITEMS = 2;
 const DEPTH_TEXTURE = 3; // role items rendered as a Phaser Image (e.g. the fuzz)
 const DEPTH_MARKS = 3.5; // padlocks, selection ring, markers/overlay
+/** The delete badge on a selection box: disc radius (screen px) and the hit reach as a multiple
+ * of it (a thumb target of ~39 px across). */
+const REMOVE_BADGE_R = 15;
+const REMOVE_BADGE_HIT = 1.3;
 const DEPTH_MARKS_TEXT = 3.6; // hline labels, icons
 const DEPTH_BRUNO_SHADOW = 3.4;
 const DEPTH_BRUNO = 3.6;
@@ -315,6 +319,9 @@ export class BuilderScene extends Phaser.Scene {
   onWidgetAction?: (id: string, value?: string, live?: boolean) => void;
   /** A locked widget was tapped. */
   onWidgetBlocked?: (id: string) => void;
+  /** The delete badge on the selected part's selection box was tapped (2026-10-06: it replaces
+   * the HUD's Remove button). Only an unlocked selected part shows the badge. */
+  onRemoveTapped?: () => void;
   /** A pull widget is being dragged; `t` is live 0..1. */
   onWidgetDrag?: (id: string, t: number) => void;
   /** `CourseSpec.dragSnap`, resolved by the controller: while part `partId` is dragged with the
@@ -327,6 +334,11 @@ export class BuilderScene extends Phaser.Scene {
 
   private items: RenderItem[] = [];
   private boundsList: { partId: number; bounds: Bounds }[] = [];
+  /** The delete badge drawn at the top-right corner of the selected part's selection box (stage
+   * px, this frame); null while nothing removable is selected. Hit-tested on pointerdown. */
+  private removeBadge: { x: number; y: number; r: number } | null = null;
+  /** A pointer went down on the delete badge; `onRemoveTapped` fires on its release. */
+  private removeTap = false;
   private boundsByPart = new Map<number, Bounds>();
   private regionByPart = new Map<number, Bounds>();
   private itemsByPart = new Map<number, RenderItem[]>();
@@ -1168,18 +1180,23 @@ export class BuilderScene extends Phaser.Scene {
 
     // Padlocks and the selection ring are edit-mode chrome: in play mode parts move away from
     // their rest bounds, and a mark left behind at the old position reads as a rendering bug.
+    this.removeBadge = null;
     if (this.editable) {
       for (const { partId, bounds } of this.boundsList) {
         const extra = partId === this.dragPartId ? this.dragOffset : { x: 0, y: 0 };
         const seg = this.segmentByPart.get(partId);
+        const selected = partId === this.selectedPartId;
+        const b = { x: bounds.x + extra.x, y: bounds.y + extra.y, w: bounds.w, h: bounds.h };
         if (seg) {
           // Segment parts (rods) get a line-shaped selection ring and no padlock.
-          if (partId === this.selectedPartId) this.drawSegmentSelectionRing(seg, extra);
-          continue;
+          if (selected) this.drawSegmentSelectionRing(seg, extra);
+        } else if (selected && this.widgetGeoms.length === 0) {
+          // Level-placed (locked) parts no longer carry a padlock mark: too distracting (2026-10-01).
+          this.drawSelectionRing(b); // widgets replace the box
         }
-        const b = { x: bounds.x + extra.x, y: bounds.y + extra.y, w: bounds.w, h: bounds.h };
-        // Level-placed (locked) parts no longer carry a padlock mark: too distracting (2026-10-01).
-        if (partId === this.selectedPartId && this.widgetGeoms.length === 0) this.drawSelectionRing(b); // widgets replace the box
+        // The delete badge sits on the top-right corner of the selected part's box (a segment's
+        // box is the one around its ends), unless the level locked the part. Not while dragging.
+        if (selected && !this.lockedParts.has(partId) && partId !== this.dragPartId) this.drawRemoveBadge(b);
       }
 
       if (this.linking && this.linkFrom && this.linkCurrentWorld) {
@@ -1268,6 +1285,8 @@ export class BuilderScene extends Phaser.Scene {
     if (!on) {
       this.gesture = null;
       this.activePointerId = null;
+      this.removeTap = false;
+      this.removeBadge = null;
       this.dragPartId = null;
       this.dragOffset = { x: 0, y: 0 };
       this.linking = false;
@@ -1483,6 +1502,33 @@ export class BuilderScene extends Phaser.Scene {
     const s = this.pxScale;
     g.lineStyle(2 * s, COLORS.white, 0.9);
     g.strokeRoundedRect(topLeft.x, topLeft.y, w, h, 4 * s);
+  }
+
+  /** The delete badge: a pink disc with a white bin glyph, centred on the top-right corner of the
+   * selected part's bounds box (`b`, world meters). Screen-sized (counter-scaled by pxScale) so it
+   * stays a thumb target at every zoom. Records its hit disc for `handlePointerDown`. */
+  private drawRemoveBadge(b: Bounds): void {
+    const corner = this.view.toPx({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    const s = this.pxScale;
+    const r = REMOVE_BADGE_R * s;
+    const cx = corner.x;
+    const cy = corner.y;
+    const g = this.marksGfx;
+    g.fillStyle(0x0b1030, 0.25);
+    g.fillCircle(cx + 1 * s, cy + 2 * s, r);
+    g.fillStyle(COLORS.pink, 1);
+    g.fillCircle(cx, cy, r);
+    g.lineStyle(2 * s, COLORS.white, 1);
+    g.strokeCircle(cx, cy, r);
+    // Bin glyph: handle, lid, body, two pink slots.
+    g.fillStyle(COLORS.white, 1);
+    g.fillRect(cx - 2 * s, cy - 7 * s, 4 * s, 2 * s);
+    g.fillRect(cx - 6 * s, cy - 5 * s, 12 * s, 2 * s);
+    g.fillRoundedRect(cx - 4.5 * s, cy - 2 * s, 9 * s, 8.5 * s, 1.5 * s);
+    g.fillStyle(COLORS.pink, 1);
+    g.fillRect(cx - 2 * s, cy - 0.5 * s, 1 * s, 5.5 * s);
+    g.fillRect(cx + 1 * s, cy - 0.5 * s, 1 * s, 5.5 * s);
+    this.removeBadge = { x: cx, y: cy, r };
   }
 
   /** A thick translucent line along a segment part's (a, b), used as its selection ring instead
@@ -2575,6 +2621,18 @@ export class BuilderScene extends Phaser.Scene {
     const sy = stage.y;
     if (!this.insidePanel(sx, sy, pointer.x)) return;
 
+    // The delete badge wins over everything under it (it overlaps the selected part's corner).
+    if (this.removeBadge) {
+      const dx = sx - this.removeBadge.x;
+      const dy = sy - this.removeBadge.y;
+      const reach = this.removeBadge.r * REMOVE_BADGE_HIT;
+      if (dx * dx + dy * dy <= reach * reach) {
+        this.activePointerId = pointer.id;
+        this.removeTap = true;
+        return;
+      }
+    }
+
     if (this.widgetGeoms.length > 0) {
       const hit = hitWidget(this.widgetGeoms, sx, sy);
       if (hit) {
@@ -2706,6 +2764,13 @@ export class BuilderScene extends Phaser.Scene {
 
   private handlePointerUp(pointer: Phaser.Input.Pointer): void {
     if (pointer.id !== this.activePointerId) return;
+
+    if (this.removeTap) {
+      this.removeTap = false;
+      this.activePointerId = null;
+      this.onRemoveTapped?.();
+      return;
+    }
 
     if (this.widgetDrag) {
       const drag = this.widgetDrag;

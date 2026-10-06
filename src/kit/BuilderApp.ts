@@ -164,6 +164,7 @@ export class BuilderApp<
     this.scene.onUpdate = (dt: number): void => this.frame(dt);
     this.scene.onPartTapped = (id: number): void => this.onPartTapped(id);
     this.scene.onPartMoved = (id: number, dx: number, dy: number): void => this.onPartMoved(id, dx, dy);
+    this.scene.onRemoveTapped = (): void => this.removeSelected();
     this.scene.onEmptyTapped = (at: Vec2): void => this.onEmptyTapped(at);
     this.scene.onLinkDrawn = (from: LinkEnd, to: LinkEnd): void => this.onLinkDrawn(from, to);
     this.scene.onWidgetAction = (id: string, value?: string, live?: boolean): void => this.onWidgetAction(id, value, live);
@@ -1121,6 +1122,7 @@ export class BuilderApp<
     this.scene.onUpdate = undefined;
     this.scene.onPartTapped = undefined;
     this.scene.onPartMoved = undefined;
+    this.scene.onRemoveTapped = undefined;
     this.scene.onEmptyTapped = undefined;
     this.scene.onLinkDrawn = undefined;
     this.scene.onWidgetAction = undefined;
