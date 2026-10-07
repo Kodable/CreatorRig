@@ -4,7 +4,12 @@ import type { BodyId, Bounds, Material, OverlayItem, PartHandle, PlacedPart, Ren
 import type { PhysicsWorld } from '../../../physics/types';
 
 export const WORLD_W = 30;
-export const WORLD_H = 15;
+/** 19.125 m tall since 2026-10-07 (was 15), like the rover's (2026-10-06): the course has no dash
+ * (spec.ts `hud.goalsOverlay`), so the kit's panel grows upward into its room. At ppm 32 that is
+ * 612 px, the panel's top at stage y 690 - 612 = 78 (where the dash started, 6 px under the top
+ * bar; kit view.ts `panelTopY`). The panel's bottom edge is fixed, so every level keeps its ground
+ * where it was on screen: the extra 4.125 m is all sky. */
+export const WORLD_H = 19.125;
 
 /** Pivot offset from the part anchor (x, y): the pivot sits above and slightly ahead of the
  * base, at the apex of the A-frame. */
@@ -216,7 +221,9 @@ export interface GroundAndWalls {
   walls: BodyId[];
 }
 
-/** Static ground (top at y = 0) + two static walls just past the play field. */
+/** Static ground (top at y = 0) + two static walls just past the play field, the world's whole
+ * height (WORLD_H: 19.125 m since 2026-10-07, so a fuzz flung higher than the old 15 m near
+ * either end still bounces back in rather than sailing over). */
 export function buildGround(world: PhysicsWorld): GroundAndWalls {
   const groundHalfH = 0.5;
   const ground = world.createBody({ type: 'static', position: { x: WORLD_W / 2, y: -groundHalfH } });

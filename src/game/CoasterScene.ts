@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { COLORS, ORIGIN_X, GROUND_Y, PPM, WORLD_W, WORLD_H, STAGE_W, STAGE_H, RENDER_SCALE, toPx, toWorld } from './view';
+import { COLORS, ORIGIN_X, GROUND_Y, PANEL_TOP_Y, PPM, WORLD_W, WORLD_H, STAGE_W, STAGE_H, RENDER_SCALE, toPx, toWorld } from './view';
 import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, EditTool } from '../core/types';
-import { insertionIndex, clonePoints } from '../core/trackPoints';
+import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
 import type { SpineGameObject } from '@esotericsoftware/spine-phaser-v4';
 
 interface Gesture {
@@ -13,8 +13,17 @@ interface Gesture {
 
 const WORLD_X0 = ORIGIN_X;
 const WORLD_X1 = ORIGIN_X + WORLD_W * PPM;
-const WORLD_Y0 = GROUND_Y - WORLD_H * PPM;
+const WORLD_Y0 = PANEL_TOP_Y; // GROUND_Y - WORLD_H * PPM: stage y 78
 const WORLD_Y1 = GROUND_Y;
+
+/** Points stay this far (m) inside the world's edges. A loop point is the loop's bottom and the
+ * loop rises 2 radii above it, so its point stops lower: the whole loop stays in the sky
+ * (2026-10-07: with the 38.25 m world a loop point may sit at 29.75 m, still above the 29.5 m
+ * every point had in the 30 m world, and the loop no longer leaves the picture at the top). */
+const EDGE = 0.5;
+const POINT_X_MAX = WORLD_W - EDGE;
+const POINT_Y_MAX = WORLD_H - EDGE;
+const LOOP_Y_MAX = WORLD_H - EDGE - 2 * LOOP_RADIUS;
 
 const HIT_RADIUS = 20;
 const MOVE_THRESHOLD = 6;
@@ -34,9 +43,10 @@ const DEPTH_BRUNO = 3.5;
 const BRUNO_SLOT = { x: 70, y: 66 };
 const DEPTH_FUZZ = 4;
 
-// world panel: a single rounded sky/ground panel, x 32..992, y 210..700
+// world panel: a single rounded sky/ground panel, x 32..992, y 78..700 (2026-10-07: was 210..700;
+// the top follows WORLD_H, view.ts)
 const PANEL_X0 = 32;
-const PANEL_Y0 = 210;
+const PANEL_Y0 = WORLD_Y0;
 const PANEL_X1 = 992;
 const PANEL_Y1 = 700;
 const PANEL_RADIUS = 12;
@@ -203,7 +213,8 @@ export class CoasterScene extends Phaser.Scene {
   // ---------------- setup helpers ----------------
 
   /**
-   * The world panel: a rounded sky/ground shape, x 32..992, y 210..700, radius 12.
+   * The world panel: a rounded sky/ground shape, x 32..992, y 78..700, radius 12. The sky gradient
+   * spans the whole panel height (SKY_TOP at the panel top, SKY_BOTTOM at the grass).
    *
    * Phaser 4 has no WebGL geometry mask (GeometryMask is Canvas-only) and `fillGradientStyle`
    * only maps correctly onto `fillRect`. So the panel is built from plain rectangles: one gradient
@@ -463,8 +474,8 @@ export class CoasterScene extends Phaser.Scene {
     }
 
     const w = toWorld({ x: sx, y: sy });
-    const wx = clamp(w.x, 0.5, 59.5);
-    const wy = clamp(w.y, 0.5, 29.5);
+    const wx = clamp(w.x, EDGE, POINT_X_MAX);
+    const wy = clamp(w.y, EDGE, this.toolKind() === 'loop' ? LOOP_Y_MAX : POINT_Y_MAX);
 
     if (this.track) {
       const i = insertionIndex(this.points, { x: wx, y: wy }, HIT_RADIUS / PPM);
@@ -509,12 +520,12 @@ export class CoasterScene extends Phaser.Scene {
     const dist = Math.hypot(sx - this.gesture.startPx.x, sy - this.gesture.startPx.y);
     if (dist > MOVE_THRESHOLD) this.gesture.moved = true;
 
-    const w = toWorld({ x: sx, y: sy });
-    const wx = clamp(w.x, 0.5, 59.5);
-    const wy = clamp(w.y, 0.5, 29.5);
     // Dragging a loop point moves the whole loop: the loop shape is expanded from this single
     // point (its bottom) by the app before buildTrack, so moving the point is all that's needed.
     const prevKind = this.points[this.gesture.index]!.kind;
+    const w = toWorld({ x: sx, y: sy });
+    const wx = clamp(w.x, EDGE, POINT_X_MAX);
+    const wy = clamp(w.y, EDGE, prevKind === 'loop' ? LOOP_Y_MAX : POINT_Y_MAX);
     this.points[this.gesture.index] = { x: wx, y: wy, kind: prevKind };
     this.pointsDirty = true;
     this.emitPointsChanged();

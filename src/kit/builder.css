@@ -340,52 +340,12 @@
 }
 .world-scroll-thumb.dragging .world-scroll-grip { background: #05aeed; border-color: #ffffff; }
 
-/* ---- Meters overlay (HudSpec.metersOverlay): the six meters as a small translucent panel over
-   the world panel's top-right corner (panel x 32..992, y --panel-top..690), play/done mode only.
-   It never takes taps (pointer-events none). The dash's goals column fills the dash while its
-   right column is empty (#dash.goals-only). ---- */
-.meters-col.overlay {
-  position: absolute; left: auto; right: 44px; top: calc(var(--panel-top, 210px) + 12px); width: auto; max-width: 340px; z-index: 30;
-  padding: 7px 12px 8px; box-sizing: border-box; border-radius: 10px; pointer-events: none;
-  display: grid; grid-template-columns: repeat(3, auto); grid-template-rows: auto auto; gap: 4px 16px;
-  background: rgba(11, 16, 48, 0.62); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-}
-.meters-col.overlay .meter { gap: 1px; }
-.meters-col.overlay .meter-label,
-.meters-col.overlay .meter.focused .meter-label,
-.meters-col.overlay .meter.dim .meter-label,
-.meters-col.overlay .meter.free .meter-label { font-size: 11px; }
-.meters-col.overlay .meter-value,
-.meters-col.overlay .meter.focused .meter-value,
-.meters-col.overlay .meter.dim .meter-value,
-.meters-col.overlay .meter.free .meter-value { font-size: 14px; font-variant-numeric: tabular-nums; }
+/* ---- Meters and goals overlays (HudSpec.metersOverlay / goalsOverlay): the translucent panels
+   over the world panel's top corners (`.meters-col.overlay` top-right, `.goals-overlay` top-left)
+   moved to the global src/style.css on 2026-10-07, since the coaster HUD (src/ui/hud.ts) shows
+   them too. Kit-only bits stay here: the dash's goals column filling the dash while its right
+   column is empty (#dash.goals-only), and the result card under the goals in done mode. ---- */
 #dash.goals-only .goals-col { flex: 1 1 auto; border-right: 0; }
-
-/* ---- Goals overlay (HudSpec.goalsOverlay, 2026-10-06: the rover): no dash. The goals list (the
-   same .goals-col / #goalList rows) as a small translucent panel over the world panel's top-left
-   corner, the twin of .meters-col.overlay on the right, shown in every mode; in done mode the
-   result card sits under the goals. Never takes taps. Compact type: goal label 14px, value 13px,
-   check mark 18px, bar 5px. ---- */
-.goals-overlay {
-  position: absolute; left: 44px; top: calc(var(--panel-top, 210px) + 12px); z-index: 30;
-  min-width: 220px; max-width: 360px; box-sizing: border-box;
-  padding: 7px 12px 8px; border-radius: 10px; pointer-events: none;
-  display: flex; flex-direction: column; gap: 6px;
-  background: rgba(11, 16, 48, 0.62); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-}
-.goals-overlay .goals-col { flex: 0 0 auto; padding: 0; border-right: 0; overflow: visible; }
-.goals-overlay #goalList { height: auto; gap: 5px; overflow: visible; }
-.goals-overlay .goals-empty { font-size: 14px; }
-.goals-overlay li.goal { gap: 3px; }
-.goals-overlay .goal-top { gap: 7px; }
-.goals-overlay .goal-top .mark { width: 18px; height: 18px; }
-.goals-overlay .goal-top .mark .dot { width: 5px; height: 5px; }
-.goals-overlay .goal-top .mark.met::after { font-size: 11px; }
-.goals-overlay .goal-top .label { font-size: 14px; }
-.goals-overlay .goal-top .value { font-size: 13px; }
-.goals-overlay .goal-bar { height: 5px; }
 .goals-overlay .result-card {
   flex: 0 0 auto; padding: 6px 0 0; gap: 3px; overflow: visible;
   border-top: 1px solid rgba(255, 255, 255, 0.16);
@@ -574,20 +534,10 @@
    square-edged-on-the-right card look stays as today regardless (docked flush to the panel's
    right edge, so a rounded shape there would have read wrong anyway). ======== */
 
-/* ---- Bottom bar: Play/Stop/Next centred (absolute, over the flex row) and the biggest buttons
-   in the bar; Undo/Clear stay in normal flex flow, pushed to the right edge by the palette's own
-   flex-grow exactly as before. #bottombar is itself `position: absolute` (src/style.css), so it
-   is already the containing block these three need. 2026-10-05 stakeholder direction: "the DRIVE
-   and BUILD buttons are both a little too big" — shrunk from 220/56/24px to a 48px-tall button
-   (matching the 'big' tap pill's new BIG_PILL_H) with a 20px bold label and a 180px min-width,
-   still centred the same way. */
-/* Scoped to .kit-hud (set on #ui by BuilderHud): the coaster's bar (src/ui/hud.ts) lays its
-   Play out in the flex row, and an absolute centre would cover its Clear button. */
-.kit-hud #bottombar #play, .kit-hud #bottombar #stop, .kit-hud #bottombar #next {
-  position: absolute; left: 50%; top: 50%; margin: 0; transform: translate(-50%, -50%);
-  min-width: 180px; height: 48px; padding: 0 28px; border-radius: 24px;
-  font-size: 20px; font-weight: 800;
-}
+/* ---- Bottom bar: Play/Stop/Next sit centred over the flex row and Undo/Clear stay in normal flex
+   flow, pushed to the right edge by the palette's own flex-grow. 2026-10-07: the centring rules
+   (2026-10-05, then scoped to a .kit-hud class on #ui) moved to the global src/style.css, since the
+   coaster's bar (src/ui/hud.ts) is now laid out the same way. ---- */
 #bottombar #undo, #bottombar #clear { border-radius: 23px; }
 
 /* ---- Creator styling pass (2026-10-05, stakeholder direction #2): "the BUILD pill and the
@@ -599,6 +549,3 @@
   outline: none; box-shadow: 0 4px 0 rgba(11, 16, 48, 0.35);
 }
 #bottombar button:active { box-shadow: 0 2px 0 rgba(11, 16, 48, 0.35); transform: translateY(2px); }
-.kit-hud #bottombar #play:active, .kit-hud #bottombar #stop:active, .kit-hud #bottombar #next:active {
-  transform: translate(-50%, -50%) translateY(2px);
-}

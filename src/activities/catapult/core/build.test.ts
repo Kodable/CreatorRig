@@ -71,9 +71,12 @@ describe('catapult build', () => {
     world = null;
   });
 
-  it('WORLD_W/H match the plan (30 x 15 m)', () => {
+  it('WORLD_W/H: 30 m wide (the plan), 19.125 m tall since 2026-10-07 (was 15)', () => {
     expect(WORLD_W).toBe(30);
-    expect(WORLD_H).toBe(15);
+    // No dash (spec.ts hud.goalsOverlay): at ppm 32 the 612 px panel starts at stage y 78, 6 px
+    // under the 72 px top bar, where the dash used to start (kit view.ts panelTopY), like the rover.
+    expect(WORLD_H).toBe(19.125);
+    expect(690 - WORLD_H * 32).toBe(78);
   });
 
   it('rest geometry constants match the plan (rear-facing arm)', () => {
@@ -420,6 +423,8 @@ describe('catapult build', () => {
     const xs = walls.map((wallId) => w.getTransform(wallId).position.x).sort((a, b) => a - b);
     expect(xs[0]).toBeCloseTo(-0.5, 5);
     expect(xs[1]).toBeCloseTo(WORLD_W + 0.5, 5);
+    // The walls stand the world's whole height (centred at WORLD_H / 2).
+    for (const wallId of walls) expect(w.getTransform(wallId).position.y).toBeCloseTo(WORLD_H / 2, 5);
   });
 
   it('bullseye builds a sensor disc and a solid post as two distinct bodies', async () => {

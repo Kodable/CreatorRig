@@ -1,4 +1,6 @@
 import type { EditTool, Goal, GoalResult, HudState, Level, Metric } from '../core/types';
+import { GROUND_Y, PANEL_TOP_Y } from '../game/view';
+import { playGoalsIntro } from './goalsIntro';
 
 export interface HudCallbacks {
   play(): void;
@@ -13,6 +15,14 @@ export interface HudCallbacks {
 
 const STAGE_W = 1024;
 const G_MAX = 6; // g value that maps to a full (100%) intense-o-meter gauge
+
+/* 2026-10-07 (Gao: "put the same treatment of the goal, the stats, and the bottom for the coaster"):
+   the rover's layout. No dash any more: the goals sit in a translucent panel over the world panel's
+   top-left corner (`.goals-overlay`, which pops up big in the middle at every level start:
+   goalsIntro.ts), the meters in its twin over the top-right corner (`.meters-col.overlay`, play and
+   done mode only), and the scene grows up into the dash's old room (view.ts PANEL_TOP_Y, 78). The
+   bar: Point/Loop on the left, the big Play / Stop / Next level buttons centred (side by side when
+   two show), Undo and Clear on the right. */
 
 function fmt1(v: number): string {
   return v.toFixed(1);
@@ -35,7 +45,7 @@ const GOAL_UNIT: Partial<Record<Metric, string>> = {
   maxG: 'g',
 };
 
-// Which dashboard meter a goal's metric "belongs" to, for focus/dim styling.
+// Which meter a goal's metric "belongs" to, for focus/dim styling.
 // reachedEnd has no meter of its own.
 const METER_FOR_METRIC: Partial<Record<Metric, string>> = {
   maxDrop: 'meter-drop',
@@ -107,8 +117,11 @@ export class Hud {
 
   private titleEl!: HTMLDivElement;
   private brunoTextEl!: HTMLDivElement;
+  private goalsOverlayEl!: HTMLDivElement;
   private goalsColEl!: HTMLDivElement;
   private goalListEl!: HTMLUListElement;
+  /** The level-start goals intro in flight (goalsIntro.ts), cancelled by the next level. */
+  private goalsIntroAnim: Animation | null = null;
 
   private pickerLabelEl!: HTMLSpanElement;
   private pickerPrevBtn!: HTMLButtonElement;
@@ -122,6 +135,7 @@ export class Hud {
   private meterLoops!: MeterEntry;
   private meterIntense!: MeterEntry;
   private allMeters: MeterEntry[] = [];
+  private metersColEl!: HTMLDivElement;
   private gaugeFillEl!: HTMLDivElement;
   private gaugeNeedleEl!: HTMLDivElement;
 
@@ -141,6 +155,9 @@ export class Hud {
     this.root = root;
     this.canvas = canvas;
     this.cb = cb;
+    // The world panel's top edge for every style.css rule anchored to it (the goals and meters
+    // overlays); the builder kit sets the same variable for its courses (BuilderHud).
+    root.style.setProperty('--panel-top', `${PANEL_TOP_Y}px`);
 
     this.build();
 
@@ -153,10 +170,14 @@ export class Hud {
 
   destroy(): void {
     if (this.intervalId !== undefined) clearInterval(this.intervalId);
+    this.goalsIntroAnim?.cancel();
+    this.goalsIntroAnim = null;
     window.removeEventListener('resize', this.syncHandler);
     window.removeEventListener('orientationchange', this.syncHandler);
     window.visualViewport?.removeEventListener('resize', this.syncHandler);
     this.root.innerHTML = '';
+    // The root (#ui) is shared with the next activity.
+    this.root.style.removeProperty('--panel-top');
   }
 
   private syncTransform(): void {
@@ -224,21 +245,25 @@ export class Hud {
     topbar.append(topbarMain, picker, parkBtn);
     this.root.appendChild(topbar);
 
-    // ---- dashboard ----
-    const dash = document.createElement('div');
-    dash.id = 'dash';
-
+    // ---- goals overlay (over the world panel's top-left corner, every mode) ----
+    // The outcome of a run needs no result card here: Bruno's bubble says it (update()).
+    const goalsOverlay = document.createElement('div');
+    goalsOverlay.className = 'goals-overlay';
     const goalsCol = document.createElement('div');
     goalsCol.className = 'goals-col';
     const goalList = document.createElement('ul');
     goalList.id = 'goalList';
     goalsCol.appendChild(goalList);
-    dash.appendChild(goalsCol);
+    goalsOverlay.appendChild(goalsCol);
+    this.root.appendChild(goalsOverlay);
+    this.goalsOverlayEl = goalsOverlay;
     this.goalsColEl = goalsCol;
     this.goalListEl = goalList;
 
+    // ---- meters overlay (over the world panel's top-right corner, play and done mode) ----
+    // `with-gauge`: the intense-o-meter's gauge needs a wider panel than the kit's six plain meters.
     const metersCol = document.createElement('div');
-    metersCol.className = 'meters-col';
+    metersCol.className = 'meters-col overlay with-gauge';
 
     const makeMeter = (id: string, label: string): MeterEntry => {
       const meter = document.createElement('div');
@@ -305,26 +330,36 @@ export class Hud {
       this.meterIntense,
     ];
 
-    dash.appendChild(metersCol);
-    this.root.appendChild(dash);
+    this.root.appendChild(metersCol);
+    this.metersColEl = metersCol;
 
     // ---- bottom bar ----
+    // Point/Loop on the left; Play, Stop and Next level in `.bar-centre`, centred over the row
+    // (style.css, the same rules as the builder kit's bar); Undo and Clear in `.bar-end`, pushed
+    // to the right edge.
     const bottombar = document.createElement('div');
     bottombar.id = 'bottombar';
 
-    const makeBtn = (id: string, text: string, kind: string, onClick: () => void): HTMLButtonElement => {
+    const makeBtn = (
+      id: string,
+      text: string,
+      kind: string,
+      onClick: () => void,
+      parent: HTMLElement = bottombar,
+    ): HTMLButtonElement => {
       const btn = document.createElement('button');
       btn.id = id;
       btn.type = 'button';
       btn.className = kind;
       btn.textContent = text;
       btn.addEventListener('click', onClick);
-      bottombar.appendChild(btn);
+      parent.appendChild(btn);
       return btn;
     };
 
     const toolGroup = document.createElement('div');
-    toolGroup.className = 'tool-group';
+    // `rounded`: a pill-ended segmented control, matching Undo/Clear's 23px corners (style.css).
+    toolGroup.className = 'tool-group rounded';
     const toolPointBtn = document.createElement('button');
     toolPointBtn.id = 'tool-point';
     toolPointBtn.type = 'button';
@@ -343,11 +378,19 @@ export class Hud {
     this.toolPointBtn = toolPointBtn;
     this.toolLoopBtn = toolLoopBtn;
 
-    this.playBtn = makeBtn('play', '▶ Play', 'primary', () => this.cb.play());
-    this.stopBtn = makeBtn('stop', '■ Stop', 'stop', () => this.cb.stop());
-    this.undoBtn = makeBtn('undo', '↶ Undo', 'secondary', () => this.cb.undo());
-    this.clearBtn = makeBtn('clear', 'Clear', 'secondary', () => this.cb.clear());
-    this.nextBtn = makeBtn('next', 'Next level ▶', 'primary', () => this.cb.next());
+    // Play, Stop and Next level share one centred box, side by side whichever of them show (after
+    // a passed run: Stop and Next level).
+    const barCentre = document.createElement('div');
+    barCentre.className = 'bar-centre';
+    bottombar.appendChild(barCentre);
+    const barEnd = document.createElement('div');
+    barEnd.className = 'bar-end';
+    bottombar.appendChild(barEnd);
+    this.playBtn = makeBtn('play', '▶ Play', 'primary', () => this.cb.play(), barCentre);
+    this.stopBtn = makeBtn('stop', '■ Stop', 'stop', () => this.cb.stop(), barCentre);
+    this.undoBtn = makeBtn('undo', '↶ Undo', 'secondary', () => this.cb.undo(), barEnd);
+    this.clearBtn = makeBtn('clear', 'Clear', 'secondary', () => this.cb.clear(), barEnd);
+    this.nextBtn = makeBtn('next', 'Next level ▶', 'primary', () => this.cb.next(), barCentre);
 
     this.root.appendChild(bottombar);
   }
@@ -417,6 +460,16 @@ export class Hud {
       });
     }
 
+    // ---- goals intro: the panel pops up big in the middle of the scene, then glides home ----
+    this.goalsIntroAnim?.cancel();
+    const anim = playGoalsIntro(this.goalsOverlayEl, PANEL_TOP_Y, GROUND_Y);
+    this.goalsIntroAnim = anim;
+    if (anim) {
+      anim.onfinish = (): void => {
+        if (this.goalsIntroAnim === anim) this.goalsIntroAnim = null;
+      };
+    }
+
     // ---- meter focus/dim styling (depends only on the level's goals) ----
     const freePlay = level.goals.length === 0;
     const focused = new Set<string>();
@@ -472,7 +525,8 @@ export class Hud {
     this.brunoTextEl.classList.toggle('pass', isPass);
     this.brunoTextEl.classList.toggle('fail', isFail);
 
-    // ---- meters ----
+    // ---- meters (the overlay shows once the fuzz rolls and keeps the final numbers) ----
+    this.setHidden(this.metersColEl, editMode);
     this.setText(this.meterDrop.main, `${fmt1(m.maxDrop)} m`);
 
     const speedVal = playMode ? state.live.speed : m.maxSpeed;

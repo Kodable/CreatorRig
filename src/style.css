@@ -58,7 +58,10 @@ html, body { margin: 0; height: 100%; background: #192661; overflow: hidden; }
 }
 .park-btn:disabled { color: #6b7190; cursor: default; }
 
-/* ================= Dashboard: y 78..204, x 32..992 ================= */
+/* ================= Dashboard: y 78..204, x 32..992 =================
+   The builder kit's dash (courses without HudSpec.goalsOverlay). The coaster has none since
+   2026-10-07: its goals and meters use the overlays below the meter rules. The goal-row and meter
+   rules here are shared by the dash and the overlays. */
 
 #dash {
   position: absolute; left: 32px; top: 78px; width: 960px; height: 126px;
@@ -145,6 +148,68 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 .gauge-labels { display: flex; justify-content: space-between; line-height: 1; }
 .gauge-labels span { font-size: 10px; color: #9aa1c0; }
 
+/* ================= Overlays over the world panel's top corners =================
+   The world panel spans x 32..992, y --panel-top..690. --panel-top is set on #ui by each HUD: the
+   coaster (src/ui/hud.ts, view.ts PANEL_TOP_Y: 78px) and the builder kit (BuilderHud, view.ts
+   panelTopY); 210px is the fallback for the 480 px panel under a dash. Both panels never take taps
+   (pointer-events none). 2026-10-07: moved here from src/kit/builder.css (the rover's, 2026-10-06)
+   so the coaster uses the very same rules. */
+
+/* ---- Meters overlay: the meters as a small translucent panel over the top-right corner, play and
+   done mode only (HudSpec.metersOverlay; the coaster always). ---- */
+.meters-col.overlay {
+  position: absolute; left: auto; right: 44px; top: calc(var(--panel-top, 210px) + 12px); width: auto; max-width: 340px; z-index: 30;
+  padding: 7px 12px 8px; box-sizing: border-box; border-radius: 10px; pointer-events: none;
+  display: grid; grid-template-columns: repeat(3, auto); grid-template-rows: auto auto; gap: 4px 16px;
+  background: rgba(11, 16, 48, 0.62); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.meters-col.overlay .meter { gap: 1px; }
+.meters-col.overlay .meter-label,
+.meters-col.overlay .meter.focused .meter-label,
+.meters-col.overlay .meter.dim .meter-label,
+.meters-col.overlay .meter.free .meter-label { font-size: 11px; }
+.meters-col.overlay .meter-value,
+.meters-col.overlay .meter.focused .meter-value,
+.meters-col.overlay .meter.dim .meter-value,
+.meters-col.overlay .meter.free .meter-value { font-size: 14px; font-variant-numeric: tabular-nums; }
+.meters-col.overlay .meter-value .km { font-size: 11px; }
+/* The coaster's intense-o-meter (`.with-gauge`): its gauge shrinks to a 120px track with the
+   0 / 2 g / 4 g / 6 g ticks kept, and the panel may grow past the kit's 340px to fit it next to
+   "Speed 12.3 m/s (44 km/h)". */
+.meters-col.overlay.with-gauge { max-width: 420px; }
+.meters-col.overlay .meter-intense { gap: 2px; }
+.meters-col.overlay .gauge-bar { width: 120px; height: 8px; border-radius: 4px; margin-top: 1px; }
+.meters-col.overlay .gauge-needle { top: -1px; bottom: -1px; width: 2px; margin-left: -1px; }
+.meters-col.overlay .gauge-labels { width: 120px; }
+.meters-col.overlay .gauge-labels span { font-size: 9px; }
+
+/* ---- Goals overlay: the goals list (the same .goals-col / #goalList rows) as a small translucent
+   panel over the top-left corner, the twin of .meters-col.overlay, shown in every mode
+   (HudSpec.goalsOverlay; the coaster always). In the kit the result card sits under the goals in
+   done mode (builder.css); the coaster tells the outcome in Bruno's bubble. Compact type: goal
+   label 14px, value 13px, check mark 18px, bar 5px. At level start it pops up big in the middle
+   of the panel and glides here (src/ui/goalsIntro.ts). ---- */
+.goals-overlay {
+  position: absolute; left: 44px; top: calc(var(--panel-top, 210px) + 12px); z-index: 30;
+  min-width: 220px; max-width: 360px; box-sizing: border-box;
+  padding: 7px 12px 8px; border-radius: 10px; pointer-events: none;
+  display: flex; flex-direction: column; gap: 6px;
+  background: rgba(11, 16, 48, 0.62); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.goals-overlay .goals-col { flex: 0 0 auto; padding: 0; border-right: 0; overflow: visible; }
+.goals-overlay #goalList { height: auto; gap: 5px; overflow: visible; }
+.goals-overlay .goals-empty { font-size: 14px; }
+.goals-overlay li.goal { gap: 3px; }
+.goals-overlay .goal-top { gap: 7px; }
+.goals-overlay .goal-top .mark { width: 18px; height: 18px; }
+.goals-overlay .goal-top .mark .dot { width: 5px; height: 5px; }
+.goals-overlay .goal-top .mark.met::after { font-size: 11px; }
+.goals-overlay .goal-top .label { font-size: 14px; }
+.goals-overlay .goal-top .value { font-size: 13px; }
+.goals-overlay .goal-bar { height: 5px; }
+
 /* ================= Bottom bar: y 706..768, x 32..992 ================= */
 
 #bottombar {
@@ -161,7 +226,30 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 #bottombar button.stop { background: #c32f96; color: #fff; }
 #bottombar button.secondary { background: #2c3560; color: #fff; min-width: 100px; }
 #bottombar button:disabled { background: #2c3560; color: #6b7190; opacity: 1; cursor: default; }
-#next { margin-left: auto; }
+
+/* ---- Play/Stop/Next: one `.bar-centre` box centred over the flex row (absolute), holding
+   whichever of the three show side by side; the biggest buttons in the bar. The rest stays in
+   normal flex flow (kit: Undo/Clear pushed to the right edge by the palette's own flex-grow;
+   coaster: by `.bar-end`). #bottombar is itself `position: absolute`, so it is the containing
+   block. 2026-10-05 stakeholder direction: "the DRIVE and BUILD buttons are both a little too big"
+   — a 48px-tall button (matching the kit's 'big' tap pill, BIG_PILL_H) with a 20px bold label and
+   a 180px min-width. 2026-10-07: moved here from src/kit/builder.css (where they were scoped to the
+   kit's HUD) now that the coaster's bar is laid out the same way; and one shared box instead of
+   each button centred on its own, which stacked them when two or three showed at once (done mode:
+   Run it again + Reset + Next level). ---- */
+#bottombar .bar-centre {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 10px; pointer-events: none;
+}
+#bottombar .bar-centre button {
+  pointer-events: auto; margin: 0;
+  min-width: 180px; height: 48px; padding: 0 28px; border-radius: 24px;
+  font-size: 20px; font-weight: 800;
+}
+#bottombar .bar-centre button:active { transform: translateY(2px); }
+
+/* ---- Coaster bar (src/ui/hud.ts): Undo and Clear at the right end. ---- */
+.bar-end { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
 .tool-group { flex: 0 0 auto; display: flex; gap: 1px; }
 #bottombar button.tool {
@@ -171,3 +259,7 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 .tool-group button:first-child { border-radius: 12px 0 0 12px; }
 .tool-group button:last-child { border-radius: 0 12px 12px 0; }
 #bottombar button.tool.active { background: #05aeed; color: #1a2142; }
+/* 2026-10-07: the coaster's Point/Loop pair gets pill ends like Undo/Clear (23px). The plain
+   first/last-child radii above lose to `#bottombar button.tool`'s 0, so this needs the id too. */
+#bottombar .tool-group.rounded button:first-child { border-radius: 23px 0 0 23px; }
+#bottombar .tool-group.rounded button:last-child { border-radius: 0 23px 23px 0; }

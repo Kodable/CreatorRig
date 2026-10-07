@@ -22,9 +22,38 @@ import {
   PIVOT_DX,
   PIVOT_DY,
   REST_ANGLE,
+  WORLD_H,
 } from './core/build';
 import { createCatapultSim } from './core/sim';
 import { LEVELS } from './core/levels';
+
+/** Stage px per world meter (`world.ppm`). */
+const PPM = 32;
+/** The world camera's viewport height (stage px): the world panel, WORLD_H * PPM = 612 since
+ * 2026-10-07 (no dash, `hud.goalsOverlay`: the panel grows up to y 78), plus the kit's 10 px earth
+ * margin under it (BuilderScene PANEL_Y_MARGIN), which the camera's viewport includes: 622. */
+const VIEWPORT_H_PX = WORLD_H * PPM + 10;
+/** The same viewport before 2026-10-07 (the 480 px panel under the dash, plus the margin). */
+const OLD_VIEWPORT_H_PX = 490;
+/** World meters a camera frame at `zoom` rises so the view's bottom edge, and everything on the
+ * ground with it, stays where it was on screen: half the viewport's growth (66 px) at that zoom.
+ * The viewport keeps its bottom edge (stage y 700) and grew upward, so its centre moved 66 px up;
+ * a frame centred that much higher puts every world point back on its old stage y and the taller
+ * panel only adds sky above. */
+function riseFor(zoom: number): number {
+  return (VIEWPORT_H_PX - OLD_VIEWPORT_H_PX) / 2 / (PPM * zoom);
+}
+/** Building: the machine's zoom, and the frame centre's height over the catapult's anchor: 1.5 m in
+ * the 490 px viewport, + riseFor(3.6) = 0.573 m since 2026-10-07 (2.073 m; see `focusFrame`). */
+const FOCUS_ZOOM = 3.6;
+const FOCUS_CY_ABOVE = 1.5 + riseFor(FOCUS_ZOOM);
+/** The run: the follow camera's zoom, and how far over the followed point it centres: 0.5 m in the
+ * 490 px viewport, + riseFor(1.6) = 1.289 m since 2026-10-07 (1.789 m; see `follow`). */
+const FOLLOW_ZOOM = 1.6;
+const FOLLOW_DY = 0.5 + riseFor(FOLLOW_ZOOM);
+/** park.jpg's own sky (158, 190, 249): the picture's top 650 of its 1678 px rows are this one flat
+ * blue, so a kit sky of exactly it carries the picture on up past its top edge without a seam. */
+const PARK_SKY = 0x9ebef9;
 
 /** Where the part a property value swaps in sits on the machine (world meters, centre + width),
  * for the drawer's "part flies to the machine" animation. Only the catapult part has targets. */
@@ -219,14 +248,22 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
   // unchanged); groundStrip's colours are sampled from public/bg/park.jpg's own bottom edge
   // (a grass green around #05-0a8f3d there) over a warm earth brown matching the old
   // catapult-drawn ground fill (0x5a3d1e), so the thicker band reads as more of the same ground,
-  // not a different material. The park backdrop covers the whole world; `world.sky` (unset here
-  // => the kit's default daytime sky) still shows at the very top edge the picture doesn't reach.
+  // not a different material.
+  //
+  // 2026-10-07: the world is WORLD_H = 19.125 m tall (was 15; core/build.ts): no dash
+  // (`hud.goalsOverlay`), so the 612 px panel starts at stage y 78 and shows y -1.5 .. 17.625. The
+  // park picture keeps its 30 x 15 m rectangle over y 0 .. 15: its own 2:1 aspect (3356 x 1678 px,
+  // nothing stretched) and its horizon, trees and grass exactly where they were on screen. The
+  // 2.625 m of panel above its top edge (the 480 px panel's top at y 13.5 used to cut its top 1.5 m
+  // off) is the kit's sky set to the picture's own flat top colour (PARK_SKY), so the sky simply
+  // runs on up behind the goals and meters overlays.
   world: {
     worldW: 30,
-    worldH: 15,
-    ppm: 32,
+    worldH: WORLD_H,
+    ppm: PPM,
     groundDepth: 1.5,
     groundStrip: { top: 0x0d8f3d, bottom: 0x5a3d1e },
+    sky: { top: PARK_SKY, bottom: PARK_SKY },
     backgrounds: [{ url: 'bg/park.jpg', x: 15, y: 7.5, w: 30, h: 15 }],
   },
 
@@ -255,11 +292,12 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
 
   // Stakeholder feedback 2026-09-22: "make the ground thicker so we can zoom in better to the
   // catapult (it's really low on the screen)." zoom 3.6. The world camera's viewport is the 960 x
-  // 490 px panel, so at zoom z the view is 960 / (32 z) x 490 / (32 z) m: 8.333 x 4.253 m at 3.6.
-  // The open drawer (src/kit/builder.css: 340 px wide, from x 652 of the panel's 32..992) covers
-  // the right 340 of the 960 px, leaving 620 / 960 of the width, 5.382 m: x in [cx - 4.167,
-  // cx + 1.215], y in [cy - 2.127, cy + 2.127]. (The old note here said 300 px; the drawer has been
-  // 340 px wide since the kit's drawer pass.)
+  // 622 px panel (VIEWPORT_H_PX: 490 until 2026-10-07, when the world grew to 19.125 m), so at zoom
+  // z the view is 960 / (32 z) x 622 / (32 z) m: 8.333 x 5.399 m at 3.6. The open drawer
+  // (src/kit/builder.css: 340 px wide, from x 652 of the panel's 32..992) covers the right 340 of
+  // the 960 px, leaving 620 / 960 of the width, 5.382 m: x in [cx - 4.167, cx + 1.215], y in
+  // [cy - 2.700, cy + 2.700]. (The old note here said 300 px; the drawer has been 340 px wide since
+  // the kit's drawer pass.)
   //
   // Re-fit for the real art (2026-10-01), measured on the prepared pictures' opaque pixels
   // (relative to the part's anchor):
@@ -273,20 +311,33 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
   // (that would take zoom 3.4); the picture edges get about 0.16 m instead, the parts the child
   // touches far more: cx = x + 0.7 leaves (x - 3.31) - (x + 0.7 - 4.167) = 0.16 m left of the Long
   // cup's rim and (x + 0.7 + 1.215) - (x + 1.74) = 0.18 m right of the plank, and >= 0.36 m round
-  // the loaded fuzz's body, the knob and FIRE. Vertical span 3.72 m of the 4.253 m: cy = y + 1.5 leaves
-  // (y + 1.5 + 2.127) - (y + 3.38) = 0.25 m over the pad (0.58 m over the knob) and
-  // (y - 0.34) - (y + 1.5 - 2.127) = 0.29 m under the caption.
+  // the loaded fuzz's body, the knob and FIRE.
+  //
+  // Vertical (2026-10-07, the 622 px viewport): the view's bottom edge stays 0.627 m under the
+  // anchor, where cy = y + 1.5 put it in the 490 px one (1.5 - 490 / (2 * 32 * 3.6)), so cy =
+  // y + FOCUS_CY_ABOVE = y + 2.073 and the view runs y - 0.627 .. y + 4.773. The machine, its
+  // lever and FIRE sit exactly where they did on screen (the anchor at stage y 627.8 either way)
+  // and the taller panel only adds 1.146 m of sky over the lever, where the goals overlay sits.
+  // Vertical span 3.72 m of the 5.399 m: 1.39 m over the pad (1.72 m over the knob) and
+  // (y - 0.34) - (y - 0.627) = 0.29 m under the caption. The kit clamps cy >= -1.5 + 19.125 /
+  // 3.6 / 2 = 1.156, well under every level's y + 2.073 (every catapult stands on y = 0).
   //
   // Left clamp: the kit clamps cx to >= 15/zoom = 4.167 (`clampFrame`, src/kit/camera.ts). The
   // 'move' level starts its catapult at x = 3.5, the lowest x any level ever places one at: cx =
   // 4.2, just clear of the clamp.
-  focusFrame: (part) => (part.kind === 'catapult' ? { cx: part.x + 0.7, cy: part.y + 1.5, zoom: 3.6 } : null),
+  focusFrame: (part) =>
+    part.kind === 'catapult' ? { cx: part.x + 0.7, cy: part.y + FOCUS_CY_ABOVE, zoom: FOCUS_ZOOM } : null,
 
   // 'impact' first: from the fuzz's first hit on a target the sim adds an invisible item on that
   // target, so the camera swings to the collapse and stays there (huddle 2026-09-22: "lean into
-  // the chain reactions"); before the hit there is none and the fuzz is followed.
+  // the chain reactions"); before the hit there is none and the fuzz is followed. 2026-10-07: the
+  // centre sits FOLLOW_DY (1.789 m, was 0.5) over the followed point, so in the taller 622 px
+  // viewport (12.15 m at 1.6, was 9.57) the point keeps its old height over the view's bottom edge:
+  // the flight and the collapse show where they did, with 2.58 m more sky over them.
   follow: (_level, outcome) =>
-    outcome === 'running' ? { roles: ['impact', 'fuzz'], zoom: 1.6, lerp: 0.08, offset: { x: 1, y: 0.5 } } : null,
+    outcome === 'running'
+      ? { roles: ['impact', 'fuzz'], zoom: FOLLOW_ZOOM, lerp: 0.08, offset: { x: 1, y: FOLLOW_DY } }
+      : null,
 
   widgets: catapultWidgets,
 
@@ -440,5 +491,11 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
       locked: 'That one is bolted down for this experiment!',
     },
     failOutcomes: ['outOfShots'],
+    // 2026-10-07: no dash, like the rover (2026-10-06). The goals sit in a small translucent panel
+    // over the scene's top-left (the result card under them once a shot ends), the five meters in
+    // a twin over its top-right during and after a shot only, and the world panel takes the dash's
+    // room (core/build.ts WORLD_H). Fine without the dash: the drawer holds every catapult
+    // property and no part has stat bars (this course defines no `stats`).
+    goalsOverlay: true,
   },
 };

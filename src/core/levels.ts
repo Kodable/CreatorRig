@@ -172,7 +172,7 @@ export const LEVELS: Level[] = [
   {
     id: 'express',
     title: 'Fuzz express',
-    bruno: "Challenge! The express starts at the very top. Hit 20 meters per second on a track at least 100 meters long, and get the fuzz to the end.",
+    bruno: "Challenge! The express starts way up high. Hit 20 meters per second on a track at least 100 meters long, and get the fuzz to the end.",
     goals: [
       { metric: 'maxSpeed', op: '>=', value: 20, label: 'Reach 20 m/s' },
       { metric: 'length', op: '>=', value: 100, label: 'Track at least 100 m long' },

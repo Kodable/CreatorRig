@@ -7,6 +7,7 @@ import { LEVELS, findLevel } from './levels';
 import { FIXED_DT } from './stepper';
 import { LOOP_RADIUS, expandTrackPoints } from './trackPoints';
 import type { Level, Metrics, Outcome, TrackPoint } from './types';
+import { WORLD_H, WORLD_W } from '../game/view';
 
 // The same path the App takes: expand the points, build the track, step the sim at FIXED_DT with
 // the run meters observing every tick, then score the goals with the level's finish zone. A level
@@ -184,10 +185,11 @@ describe('levels', () => {
         expect(sol.solution.slice(0, locked.length)).toEqual(locked);
         for (const p of sol.solution) {
           expect(p.x).toBeGreaterThanOrEqual(0.5);
-          expect(p.x).toBeLessThanOrEqual(59.5);
+          expect(p.x).toBeLessThanOrEqual(WORLD_W - 0.5);
           expect(p.y).toBeGreaterThanOrEqual(0.5);
-          // a loop's top (2 radii above its point) must stay in the 30 m sky
-          expect(p.y + (p.kind === 'loop' ? 2 * LOOP_RADIUS : 0)).toBeLessThanOrEqual(29.5);
+          // a loop's top (2 radii above its point) must stay in the sky (WORLD_H: 38.25 m since
+          // 2026-10-07, 30 m before; CoasterScene clamps points the same way)
+          expect(p.y + (p.kind === 'loop' ? 2 * LOOP_RADIUS : 0)).toBeLessThanOrEqual(WORLD_H - 0.5);
         }
       });
 

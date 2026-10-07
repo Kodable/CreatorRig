@@ -16,6 +16,7 @@ import type {
   ToolSpec,
 } from './types';
 import { hasShelfKinds, nonShelfKinds, shelfGroups } from './shelf';
+import { playGoalsIntro as animateGoalsIntro, prefersReducedMotion } from '../ui/goalsIntro';
 import './builder.css';
 
 const STAGE_W = 1024;
@@ -33,17 +34,8 @@ const SCROLL_THUMB_MIN = 88;
  * 480 px panel, higher for a taller world (2026-10-06: the rover's, under `hud.goalsOverlay`). */
 const DEFAULT_PANEL_TOP = 210;
 const PANEL_BOTTOM = 690;
-/** Stage x of the world panel's left edge and its width (view.ts: x 32..992). */
-const PANEL_LEFT = 32;
-const PANEL_W = 960;
-/** Level-start goals intro (`hud.goalsOverlay`): the panel pops up `GOALS_INTRO_SCALE` times its
- * size in the middle of the world panel (`GOALS_INTRO_RAISE` px above centre), holds, then glides
- * to its top-left spot; the offsets split the run into pop / hold / glide. */
-const GOALS_INTRO_MS = 1900; // 2026-10-06: 2.6 s felt slow (Gao) — 0.25 s pop, 1.1 s hold, 0.55 s glide
-const GOALS_INTRO_SCALE = 1.7;
-const GOALS_INTRO_RAISE = 40;
-const GOALS_INTRO_POP_AT = 0.13;
-const GOALS_INTRO_GLIDE_AT = 0.71;
+/* The level-start goals intro's geometry and timing live in src/ui/goalsIntro.ts (2026-10-07: shared
+   with the coaster HUD). */
 
 /** Win banner confetti: pieces per burst, their colours, and how long until they are removed. */
 const CONFETTI_COUNT = 40;
@@ -72,10 +64,6 @@ const COACH_HAND_FRAMES: { src: string; fx: number; fy: number }[] = [
 ];
 /** Index into `COACH_HAND_FRAMES` for each step of the 1 -> 2 -> 3 -> 2 loop. */
 const COACH_FRAME_SEQUENCE = [0, 1, 2, 1];
-
-function prefersReducedMotion(): boolean {
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
-}
 
 function fmt1(v: number): string {
   return v.toFixed(1);
@@ -342,12 +330,9 @@ export class BuilderHud<
     this.scrollView = Math.max(0, Math.min(1, scrollView));
     this.metersOverlay = !!hud.metersOverlay || !!hud.goalsOverlay;
     this.panelTop = panelTop;
-    // Every rule anchored to the world panel's top in builder.css (the drawer, the win banner, the
-    // meters/goals overlays) reads it from here; their fallback is the default 210px.
+    // Every rule anchored to the world panel's top (builder.css: the drawer, the win banner;
+    // style.css: the meters/goals overlays) reads it from here; their fallback is the default 210px.
     root.style.setProperty('--panel-top', `${panelTop}px`);
-    // Marks the shared #ui root as a builder-kit HUD: builder.css scopes the rules that would
-    // break the coaster's own bar (src/ui/hud.ts) to it, e.g. the centred Play button.
-    root.classList.add('kit-hud');
 
     this.build();
 
@@ -379,7 +364,6 @@ export class BuilderHud<
     this.root.innerHTML = '';
     // The root (#ui) is shared with the next activity (the coaster HUD among them).
     this.root.style.removeProperty('--panel-top');
-    this.root.classList.remove('kit-hud');
   }
 
   private syncTransform(): void {
@@ -689,22 +673,34 @@ export class BuilderHud<
     bottombar.appendChild(palette);
     this.paletteEl = palette;
 
-    const makeBtn = (id: string, text: string, kind: string, onClick: () => void): HTMLButtonElement => {
+    const makeBtn = (
+      id: string,
+      text: string,
+      kind: string,
+      onClick: () => void,
+      parent: HTMLElement = bottombar,
+    ): HTMLButtonElement => {
       const btn = document.createElement('button');
       btn.id = id;
       btn.type = 'button';
       btn.className = kind;
       btn.textContent = text;
       btn.addEventListener('click', onClick);
-      bottombar.appendChild(btn);
+      parent.appendChild(btn);
       return btn;
     };
 
-    this.playBtn = makeBtn('play', '▶ Play', 'primary', () => this.cb.play());
-    this.stopBtn = makeBtn('stop', '■ Stop', 'stop', () => this.cb.stop());
+    // Play/Run it again, Stop/Reset and Next level share one box centred over the bar (style.css
+    // .bar-centre), side by side whichever of them show (2026-10-07: each was centred on its own
+    // and they stacked in done mode, e.g. the catapult's passed shot with shots left).
+    const barCentre = document.createElement('div');
+    barCentre.className = 'bar-centre';
+    bottombar.appendChild(barCentre);
+    this.playBtn = makeBtn('play', '▶ Play', 'primary', () => this.cb.play(), barCentre);
+    this.stopBtn = makeBtn('stop', '■ Stop', 'stop', () => this.cb.stop(), barCentre);
     this.undoBtn = makeBtn('undo', '↶ Undo', 'secondary', () => this.cb.undo());
     this.clearBtn = makeBtn('clear', 'Clear', 'secondary', () => this.cb.clear());
-    this.nextBtn = makeBtn('next', 'Next level ▶', 'primary', () => this.cb.next());
+    this.nextBtn = makeBtn('next', 'Next level ▶', 'primary', () => this.cb.next(), barCentre);
 
     this.root.appendChild(bottombar);
 
@@ -1449,31 +1445,15 @@ export class BuilderHud<
 
   /** Level start with `hud.goalsOverlay` (2026-10-06, Gao: "show the goals more front and
    * center, then animate it to the top left"): the goal panel pops up big in the middle of the
-   * world panel, holds so the child reads it, then glides and shrinks into its top-left spot.
-   * Layout px inside the HUD root are stage px (the root is scaled as a whole), so the offsets
-   * are plain differences of stage coordinates. Skipped under prefers-reduced-motion. */
+   * world panel, holds so the child reads it, then glides and shrinks into its top-left spot
+   * (src/ui/goalsIntro.ts, shared with the coaster HUD). Skipped under prefers-reduced-motion. */
   private playGoalsIntro(): void {
     const el = this.goalsOverlayEl;
     if (!el) return;
     this.goalsIntroAnim?.cancel();
     this.goalsIntroAnim = null;
-    if (prefersReducedMotion() || typeof el.animate !== 'function') return;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    if (w === 0 || h === 0) return;
-    const dx = PANEL_LEFT + PANEL_W / 2 - (el.offsetLeft + w / 2);
-    const dy = (this.panelTop + PANEL_BOTTOM) / 2 - GOALS_INTRO_RAISE - (el.offsetTop + h / 2);
-    const big = `translate(${dx}px, ${dy}px) scale(${GOALS_INTRO_SCALE})`;
-    const small = `translate(${dx}px, ${dy}px) scale(${GOALS_INTRO_SCALE * 0.8})`;
-    const anim = el.animate(
-      [
-        { opacity: 0, transform: small, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.3)' },
-        { opacity: 1, transform: big, offset: GOALS_INTRO_POP_AT, easing: 'linear' },
-        { opacity: 1, transform: big, offset: GOALS_INTRO_GLIDE_AT, easing: 'cubic-bezier(0.5, 0, 0.2, 1)' },
-        { opacity: 1, transform: 'none' },
-      ],
-      { duration: GOALS_INTRO_MS, fill: 'backwards' },
-    );
+    const anim = animateGoalsIntro(el, this.panelTop, PANEL_BOTTOM);
+    if (!anim) return;
     anim.onfinish = (): void => {
       if (this.goalsIntroAnim === anim) this.goalsIntroAnim = null;
     };

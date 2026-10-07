@@ -1,5 +1,5 @@
 // Fuzz Fling (Catapults): course-specific types instantiating the builder kit's generics.
-// Units are meters, y up. World is 30 x 15 m (see build.ts).
+// Units are meters, y up. World is 30 x 19.125 m (see build.ts WORLD_H; 15 m until 2026-10-07).
 import type {
   Bounds,
   BodyId,

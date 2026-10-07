@@ -189,6 +189,32 @@ describe('catapultSpec.world: thicker ground', () => {
   });
 });
 
+// 2026-10-07: the rover's treatment (2026-10-06). No dash; the scene grows up to the top bar.
+describe('catapultSpec: no dash, a 612 px scene', () => {
+  it('hud.goalsOverlay, and no part stat bars (the kit would never show them under it)', () => {
+    expect(catapultSpec.hud.goalsOverlay).toBe(true);
+    expect(catapultSpec.stats).toBeUndefined();
+  });
+
+  it('world: 30 x WORLD_H m at ppm 32, so the panel is 612 px tall from stage y 78 to 690', () => {
+    expect(catapultSpec.world.worldW).toBe(30);
+    expect(catapultSpec.world.worldH).toBe(WORLD_H);
+    expect(catapultSpec.world.ppm).toBe(32);
+    expect(WORLD_H * 32).toBe(612);
+    expect(690 - catapultSpec.world.worldH * catapultSpec.world.ppm).toBe(78);
+  });
+
+  it('the park picture keeps its 30 x 15 m rectangle over y 0..15 at its own 2:1 aspect (3356 x 1678 ' +
+    'px), and the sky above it is the picture\'s own flat top colour', () => {
+    const [park, ...rest] = catapultSpec.world.backgrounds!;
+    expect(rest).toEqual([]);
+    expect(park).toEqual({ url: 'bg/park.jpg', x: 15, y: 7.5, w: 30, h: 15 });
+    expect(park!.w / park!.h).toBeCloseTo(3356 / 1678, 9);
+    // park.jpg's top rows are one flat (158, 190, 249): no seam where the picture ends at y 15.
+    expect(catapultSpec.world.sky).toEqual({ top: 0x9ebef9, bottom: 0x9ebef9 });
+  });
+});
+
 /** World corners of a body-local box (w x h, centred at local (cx, cy)) on a body at `pos`, `angle`. */
 function boxCorners(pos: { x: number; y: number }, angle: number, b: { w: number; h: number; cx: number; cy: number }) {
   const c = Math.cos(angle);
@@ -208,21 +234,35 @@ describe('catapultSpec.focusFrame: the machine framed left of the drawer', () =>
     expect(catapultSpec.focusFrame!(shelf, {} as never)).toBeNull();
   });
 
-  it('zoom 3.6, centred at (x + 0.7, y + 1.5)', () => {
+  it('zoom 3.6, centred at (x + 0.7, y + 2.073): y + 1.5 plus half the 132 px the viewport grew ' +
+    '(2026-10-07)', () => {
     const part = catapultPart(15, 0);
     const frame = catapultSpec.focusFrame!(part, {} as never)!;
     expect(frame.zoom).toBe(3.6);
     expect(frame.cx).toBeCloseTo(part.x + 0.7, 9);
-    expect(frame.cy).toBeCloseTo(part.y + 1.5, 9);
+    expect(frame.cy).toBeCloseTo(part.y + 1.5 + 66 / (32 * 3.6), 9);
   });
 
-  it('the uncovered view (the 960 x 490 px panel at 32 px/m, minus the open drawer\'s 340 px on the ' +
+  it('the machine stays where it sat on screen before the world grew (2026-10-07): the anchor lands ' +
+    'on the same stage y in the 622 px viewport (top 78) as in the 490 px one (top 210)', () => {
+    const part = catapultPart(15, 0);
+    const frame = catapultSpec.focusFrame!(part, {} as never)!;
+    // The world camera centres the frame in its viewport (BuilderScene: panel top .. 690 + 10).
+    const stageY = (viewTop: number, cy: number) => (viewTop + 700) / 2 + (cy - part.y) * 32 * frame.zoom;
+    expect(stageY(78, frame.cy)).toBeCloseTo(stageY(210, part.y + 1.5), 6);
+    expect(stageY(78, frame.cy)).toBeCloseTo(627.8, 6);
+    // Inside the kit's clamp (clampFrame: cy >= -groundDepth + worldH / zoom / 2), so it holds.
+    expect(frame.cy).toBeGreaterThan(-1.5 + WORLD_H / frame.zoom / 2);
+  });
+
+  it('the uncovered view (the 960 x 622 px viewport at 32 px/m, minus the open drawer\'s 340 px on the ' +
     'right) holds the whole machine - the arm, cup and base pictures with >= 0.1 m to spare (whole ' +
     'boxes, transparent corners included) - and the loaded Metal fuzz\'s body, the lever knob at ' +
     'every angle and the FIRE button with >= 0.3 m, the lever\'s pad with >= 0.1 m, for both arms', () => {
       const zoom = 3.6;
       const viewW = 960 / 32 / zoom;
-      const viewH = 490 / 32 / zoom;
+      // The 612 px panel (WORLD_H * 32) plus the kit's 10 px earth margin (490 before 2026-10-07).
+      const viewH = (WORLD_H * 32 + 10) / 32 / zoom;
       const uncoveredW = viewW * (620 / 960);
 
       for (const arm of ['Short', 'Long']) {
@@ -308,6 +348,12 @@ describe('catapultSpec: the fuzzes, the real art, the collapse payoff and the li
     const f = catapultSpec.follow!({} as never, 'running', 0)!;
     expect(f.roles).toEqual(['impact', 'fuzz']);
     expect(f.zoom).toBe(1.6);
+    // 2026-10-07: 0.5 m over the point plus half the 132 px the viewport grew, so the point keeps
+    // its height over the view's bottom edge (the taller view only adds sky on top).
+    expect(f.offset!.x).toBe(1);
+    expect(f.offset!.y).toBeCloseTo(0.5 + 66 / (32 * 1.6), 9);
+    const bottomUnder = (viewH: number, dy: number) => viewH / 32 / 1.6 / 2 - dy;
+    expect(bottomUnder(622, f.offset!.y)).toBeCloseTo(bottomUnder(490, 0.5), 9);
     expect(catapultSpec.follow!({} as never, 'shot', 0)).toBeNull();
   });
 
