@@ -102,7 +102,7 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
 
   it('over a pit, the under layer clips to its own closing depth (degenerates to zero height ' +
     'there), and the crust draws no polygon at all across the gap (there is no real surface for ' +
-    'it to follow; the chasm shows through instead)', async () => {
+    'it to follow; the sky shows through instead)', async () => {
     world = await createWorld({ gravity: { x: 0, y: -10 } });
     const profile = withGap(flat(), 10, 12);
     const { items } = buildTerrain(world, profile);
@@ -146,57 +146,30 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
     }
   });
 
-  it('buildTerrain emits one dark chasm visual per gap, spanning exactly the gap\'s x-range from ' +
-    'its lip(s) down to -GROUND_FILL_DEPTH, with no collider (it reuses the terrain\'s own static ' +
-    'body and adds no shape)', async () => {
-    world = await createWorld({ gravity: { x: 0, y: -10 } });
-    const profile = withGap(flat(), 10, 12);
-    const { body, items } = buildTerrain(world, profile);
-    const chasms = items.filter((it) => it.color === 0x1a0d14);
-    expect(chasms).toHaveLength(1);
-    const chasm = chasms[0]!;
-    expect(chasm.role).toBe('terrain');
-    expect(chasm.locked).toBe(true);
-    expect(chasm.lockPosition).toBe(true);
-    expect(chasm.body).toBe(body); // no new/separate body - no new collider
-    expect(world.getMass(body)).toBe(0); // still static, unaffected
-    expect(chasm.shape.kind).toBe('polygon');
-    if (chasm.shape.kind === 'polygon') {
-      const xs = chasm.shape.vertices.map((v) => v.x);
-      const ys = chasm.shape.vertices.map((v) => v.y);
-      expect(Math.min(...xs)).toBeCloseTo(10, 6); // exactly the gap's x-range, no more
-      expect(Math.max(...xs)).toBeCloseTo(12, 6);
-      expect(Math.max(...ys)).toBeCloseTo(0, 6); // the lip
-      expect(Math.min(...ys)).toBeCloseTo(-GROUND_FILL_DEPTH, 6); // the panel bottom, and the margin under it
-    }
-  });
+  // 2026-10-09: gaps are see-through (Gao: "instead of pure black, just make it transparent so we
+  // can see the bg"): no item paints anything inside a gap, so the sky and backdrop show.
+  for (const [name, profile, x0, x1] of [
+    ['a flat pit', withGap(flat(), 10, 12), 10, 12],
+    ["a ramp's jump to a lower landing", withRampToLip(flat(), 10, 15, 1, 2.5, -0.5), 10 + 1 / Math.tan((15 * Math.PI) / 180), 10 + 1 / Math.tan((15 * Math.PI) / 180) + 2.5],
+  ] as const) {
+    it(`buildTerrain paints nothing inside ${name}: the gap shows the sky behind it`, async () => {
+      world = await createWorld({ gravity: { x: 0, y: -10 } });
+      const { items } = buildTerrain(world, [...profile]);
+      for (const it of items) {
+        if (it.shape.kind !== 'polygon') continue;
+        // A vertex strictly inside the gap may only sit on the under layer's closing depth (it
+        // degenerates to zero height there and covers nothing).
+        for (const v of it.shape.vertices) {
+          if (v.x > x0 + 1e-3 && v.x < x1 - 1e-3) expect(v.y).toBeCloseTo(-GROUND_FILL_DEPTH, 6);
+        }
+      }
+    });
+  }
 
-  it("buildTerrain's chasm top is flat at the LOWER lip when the lips differ (a ramp's takeoff " +
-    'lip vs. a lower landing): the space above it is open air', async () => {
-    world = await createWorld({ gravity: { x: 0, y: -10 } });
-    const profile = withRampToLip(flat(), 10, 15, 1, 2.5, -0.5);
-    const { items } = buildTerrain(world, profile);
-    const chasm = items.find((it) => it.color === 0x1a0d14)!;
-    expect(chasm).toBeDefined();
-    if (chasm.shape.kind === 'polygon') {
-      const rampLength = 1 / Math.tan((15 * Math.PI) / 180);
-      const lipX = 10 + rampLength;
-      const left = chasm.shape.vertices.find((v) => Math.abs(v.x - lipX) < 1e-6 && v.y > -GROUND_FILL_DEPTH);
-      const right = chasm.shape.vertices.find(
-        (v) => Math.abs(v.x - (lipX + 2.5)) < 1e-6 && v.y > -GROUND_FILL_DEPTH,
-      );
-      expect(left?.y).toBeCloseTo(-0.5, 6); // not the 1 m takeoff lip: air above the landing
-      expect(right?.y).toBeCloseTo(-0.5, 6); // the lower landing
-      for (const v of chasm.shape.vertices) expect(v.y).toBeGreaterThanOrEqual(-GROUND_FILL_DEPTH - 1e-9);
-    }
-  });
-
-  it('buildTerrain emits no chasm visual for a gap-free profile (flat ground: still just the two ' +
-    'terrain layers)', async () => {
+  it('buildTerrain draws just the two terrain layers for flat ground', async () => {
     world = await createWorld({ gravity: { x: 0, y: -10 } });
     const { items } = buildTerrain(world, flat());
     expect(items).toHaveLength(2);
-    expect(items.some((it) => it.color === 0x1a0d14)).toBe(false);
   });
 
 });

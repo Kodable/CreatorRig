@@ -1,6 +1,6 @@
 // Turns placed parts into Rapier bodies, joints and the RenderItems the scene draws: the level's
-// terrain (kept from 2026-09-22: the under layer, the rust crust that hugs the surface, a dark
-// chasm per gap), the walls, the rover (the dome with Kevin inside plus every attachment the
+// terrain (kept from 2026-09-22: the under layer, the crust that hugs the surface; gaps are
+// see-through since 2026-10-09), the walls, the rover (the dome with Kevin inside plus every attachment the
 // child stuck on it), the boulder and the finish beacon. The old two-wheel buggy lives on in
 // buggy.ts for the Bridge course, which builds it through `buildPart`.
 import { PICS, ROVER_R } from './art';
@@ -20,7 +20,7 @@ import type { AttachmentGeometry, PictureItem } from './geometry';
 import { GROUND_DIR, ROCK_PICS, groundPictures } from './art';
 import { SURFACES, surfaceRuns } from './surfaces';
 import type { Rock, SurfaceKind, SurfaceRange } from './surfaces';
-import { WORLD_W, bandPolygons, clipProfile, crustPolygons, findGaps, heightAt, nearGap, terrainPolygon, withoutRocks } from './terrain';
+import { WORLD_W, bandPolygons, clipProfile, crustPolygons, heightAt, nearGap, terrainPolygon, withoutRocks } from './terrain';
 import type { BodyId, Bounds, JointId, PartHandle, PlacedPart, RenderItem, RoverPart, Shape, Transform, Vec2 } from './types';
 import type { PhysicsWorld } from '../../../physics/types';
 
@@ -39,7 +39,7 @@ export const WORLD_H = 19.125;
  * instead of the rust top layer's thin 0.3 m crust, so it covers the kit's whole ground band
  * (see `terrainPolygon`'s doc comment for why that also keeps a pit reading as a real hole). */
 export const GROUND_DEPTH = 1.5;
-/** How deep (m) the drawn ground (the under layer and the chasms) actually reaches: past
+/** How deep (m) the drawn ground (the under layer) actually reaches: past
  * GROUND_DEPTH, through the 10 px earth margin the kit's panel keeps under the world view
  * (`PANEL_Y_MARGIN`, 0.31 m at ppm 32). 2026-10-09: the planets' skies are light at the horizon
  * (Flooftopia's pale blue, Mars's tan), and a ground that stopped at GROUND_DEPTH let that sky show
@@ -48,10 +48,6 @@ export const GROUND_FILL_DEPTH = GROUND_DEPTH + 0.5;
 
 const TERRAIN_COLOR = 0xb5532e; // rust
 const TERRAIN_UNDER_COLOR = 0x8a3c1f; // darker rock layer, filling down to GROUND_FILL_DEPTH
-// Deep shadow fill for a gap/pit's chasm (see `findGaps`): drawn over the kit's own ground band
-// (`WorldSpec.groundDepth`) so a hole still reads as an open hole where the top/under layers
-// above degenerate to zero height across it (see `terrainPolygon`'s doc comment).
-const CHASM_COLOR = 0x1a0d14;
 const FINISH_COLOR = 0x05aeed; // beacon
 const BOULDER_COLOR = 0x8a6a5a;
 // Fallback fills, used only if a picture failed to load.
@@ -262,22 +258,17 @@ export function groundTextures(): Record<string, { url: string }> {
  * `terrainPolygon`'s doc comment) painted first, then the rust top "crust" (one 0.3 m-thick
  * polygon per contiguous run of real terrain, `crustPolygons` - it hugs the surface everywhere,
  * including below y = 0, e.g. a jump's lower landing, instead of closing at a fixed absolute
- * depth), then one chasm visual per gap (`findGaps`): the under layer and the crust both draw
- * NOTHING across a gap's x-range (there is no real surface there for either to follow/close
- * against), which would otherwise let the kit's own ground band show through and hide the hole -
- * except the kit draws no band at all here (`WorldSpec.groundBand: false`), so without the chasm
- * the hole would show bare sky instead. Each chasm visual is a dark quad from the gap's own lips
- * (its real height just outside the gap on each side, which may differ - e.g. a ramp's takeoff
- * lip vs. a lower landing) down past the panel bottom (`-GROUND_FILL_DEPTH`), so it fills the gap without
- * covering any real terrain on either side. It carries no collider: it reuses this same static
- * body purely for its RenderItem, adding no shape, so physics/colliders are unchanged.
+ * depth). The under layer and the crust both draw NOTHING across a gap's x-range (there is no
+ * real surface there for either to follow/close against), and the kit draws no ground band here
+ * (`WorldSpec.groundBand: false`), so a gap is see-through: the planet's sky and backdrop show
+ * through the hole. (Until 2026-10-09 a dark chasm quad filled each gap.)
  *
  * 2026-10-09 (planets and surfaces): `ground.runs` splits the ground into stretches of grass,
  * rock, sand and ice (surfaces.ts). Each run gets its own chain collider (with that surface's
  * ground friction; neighbouring chains share their end point) and its own under/crust colours
  * (`GROUND_COLORS`) plus surface detail; `ground.rocks` adds a rock picture per rock. Without runs
  * (or with one rock run, e.g. any Mars level without `surfaces`) the colliders and items are
- * exactly the old ones: one chain at friction 0.8, the under layer, the rust crust, the chasms. */
+ * exactly the old ones: one chain at friction 0.8, the under layer, the rust crust. */
 export function buildTerrain(world: PhysicsWorld, profile: Vec2[], ground: GroundOptions = {}): { body: BodyId; items: RenderItem[] } {
   const body = world.createBody({ type: 'static', position: { x: 0, y: 0 } });
   const first = profile[0]!.x;
@@ -310,21 +301,10 @@ export function buildTerrain(world: PhysicsWorld, profile: Vec2[], ground: Groun
   const topItems = drawn.flatMap(({ run, sub }) => crustPolygons(sub).map((v) => terrainItem(body, v, GROUND_COLORS[run.kind].crust)));
   const detailItems = drawn.flatMap(({ run, sub }) => surfaceDetail(body, run.kind, sub, drawProfile, run.from, run.to));
   const rockItems = rocks.map((r, i) => rockItem(body, drawProfile, r, i));
-  // The chasm's top is flat at the LOWER lip: above it, between a ramp's takeoff lip and a lower
-  // landing, is open air the rover flies through, not rock in shadow.
-  const chasmItems: RenderItem[] = findGaps(profile).map((gap) =>
-    terrainItem(
-      body,
-      [
-        { x: gap.x0, y: Math.min(gap.y0, gap.y1) },
-        { x: gap.x1, y: Math.min(gap.y0, gap.y1) },
-        { x: gap.x1, y: -GROUND_FILL_DEPTH },
-        { x: gap.x0, y: -GROUND_FILL_DEPTH },
-      ],
-      CHASM_COLOR,
-    ),
-  );
-  return { body, items: [...underItems, ...topItems, ...detailItems, ...rockItems, ...chasmItems] };
+  // No chasm fill (2026-10-09, Gao: "instead of pure black, just make it transparent so we can see
+  // the bg"): the under layer and the crust draw nothing across a gap, so the planet's sky and
+  // backdrop show through the hole.
+  return { body, items: [...underItems, ...topItems, ...detailItems, ...rockItems] };
 }
 
 /** The ground of a level, for `buildTerrain`: its `surfaces` over its planet's ground, across the

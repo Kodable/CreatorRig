@@ -46,7 +46,7 @@ import {
   partCost,
 } from './core/catalog';
 import { ART_DIR } from './core/art';
-import { GROUND_DEPTH, WORLD_H, groundTextures } from './core/build';
+import { GROUND_DEPTH, GROUND_FILL_DEPTH, WORLD_H, groundTextures } from './core/build';
 import { PLANETS } from './core/planets';
 import type { PlanetId } from './core/planets';
 import { ROVER_R, SPAWN, layoutRover, normalizeRoverParts, rotate, roverTextures, thetaOf } from './core/geometry';
@@ -319,10 +319,13 @@ function strip(url: string, w: number, y0: number, h: number, copies: number): B
   return Array.from({ length: copies }, (_, i) => ({ url, x: w / 2 + i * w, y: y0 + h / 2, w, h }));
 }
 
-/** The far scenery strips (60 x 8 m: 3840 x 512 px) stand on the panel's bottom edge, so their
- * opaque bottom 1.5 m is behind the ground and their silhouettes rise from the horizon. */
+/** The far scenery strips (60 x 8 m: 3840 x 512 px) stand at FAR_Y0, below the panel's bottom
+ * edge (the 10 px earth margin included), so their opaque bottom is behind the ground and their
+ * silhouettes rise from the horizon. Since gaps are see-through (2026-10-09), a hole shows this
+ * strip all the way down; standing at -GROUND_DEPTH left a band of bare sky under it. */
 const FAR_W = 60;
 const FAR_H = 8;
+const FAR_Y0 = -GROUND_FILL_DEPTH;
 
 /** 2026-10-09 (Gao: "i want to introduce more planets"): one sky per planet, picked by each
  * level's `look` (levels/shared.ts sets it from the planet; the kit redraws the sky gradient and
@@ -338,7 +341,7 @@ export const PLANET_LOOKS: Record<PlanetId, { sky: NonNullable<WorldSpec['sky']>
     sky: { top: 0x4fa9ec, bottom: 0xd4f0ff, stars: false },
     backgrounds: [
       ...strip('bg/flooftopia-clouds.png', 60, 3, 14, 2),
-      ...strip('bg/flooftopia-hills.png', FAR_W, -GROUND_DEPTH, FAR_H, 2),
+      ...strip('bg/flooftopia-hills.png', FAR_W, FAR_Y0, FAR_H, 2),
     ],
   },
   mars: {
@@ -346,7 +349,7 @@ export const PLANET_LOOKS: Record<PlanetId, { sky: NonNullable<WorldSpec['sky']>
     backgrounds: [
       { url: 'bg/mars-phobos.png', x: 8, y: 14, w: 1.1, h: (1.1 * 183) / 256 },
       { url: 'bg/mars-deimos.png', x: 21, y: 15.5, w: 0.6, h: (0.6 * 142) / 160 },
-      ...strip('bg/mars-far.png', FAR_W, -GROUND_DEPTH, FAR_H, 2),
+      ...strip('bg/mars-far.png', FAR_W, FAR_Y0, FAR_H, 2),
     ],
   },
   europa: {
@@ -354,7 +357,7 @@ export const PLANET_LOOKS: Record<PlanetId, { sky: NonNullable<WorldSpec['sky']>
     backgrounds: [
       ...strip('bg/europa-stars.png', 30, -1.45, 20.5, 3),
       { url: 'bg/jupiter.png', x: 19, y: 4, w: 10, h: 10 },
-      ...strip('bg/europa-far.png', FAR_W, -GROUND_DEPTH, FAR_H, 2),
+      ...strip('bg/europa-far.png', FAR_W, FAR_Y0, FAR_H, 2),
     ],
   },
 };
@@ -424,8 +427,8 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
     // Lets a focus/follow frame centre lower; GROUND_DEPTH (core/build.ts) is the same number
     // buildTerrain's darker "under" layer closes at (see terrainPolygon's doc comment).
     groundDepth: GROUND_DEPTH,
-    // The course draws its own ground (buildTerrain's under/crust/chasm layers, coloured by
-    // surface): a level's terrain can dip below y = 0 (a jump's lower landing) or open into a pit.
+    // The course draws its own ground (buildTerrain's under/crust layers, coloured by
+    // surface; a gap is see-through): a level's terrain can dip below y = 0 (a jump's lower landing) or open into a pit.
     groundBand: false,
     backgrounds: PLANET_LOOKS.mars.backgrounds,
     looks: Object.fromEntries((Object.keys(PLANET_LOOKS) as PlanetId[]).map((id) => [PLANETS[id].look, PLANET_LOOKS[id]])),

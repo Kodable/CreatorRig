@@ -25,7 +25,7 @@ import { PLANETS, PLANET_IDS } from './core/planets';
 import { resolveLook } from '../../kit/looks';
 import { roverCoach } from './coach';
 import { PICS, ROVER_R, groundPictures } from './core/art';
-import { GROUND_DEPTH, WORLD_H } from './core/build';
+import { GROUND_DEPTH, GROUND_FILL_DEPTH, WORLD_H } from './core/build';
 import { VIEW_W, WORLD_W, heightAt } from './core/terrain';
 import { ATTACHMENT_KINDS, BLURBS, CATALOG, MOUNT_DESCRIPTOR, partCost } from './core/catalog';
 import { SPAWN, THETA_STEP, normalizeRoverParts, rimPoint } from './core/geometry';
@@ -206,7 +206,8 @@ describe('vehicleSpec: wiring', () => {
       expect(far.length, id).toBeGreaterThan(0);
       expect(Math.min(...far.map((b) => b.x - b.w / 2))).toBeCloseTo(0, 9);
       expect(Math.max(...far.map((b) => b.x + b.w / 2))).toBeGreaterThanOrEqual(WORLD_W);
-      for (const b of far) expect(b.y - b.h / 2).toBeCloseTo(-GROUND_DEPTH, 9);
+      // Below the panel edge and its earth margin: a see-through gap shows the strip to the bottom.
+      for (const b of far) expect(b.y - b.h / 2).toBeCloseTo(-GROUND_FILL_DEPTH, 9);
     }
   });
 
