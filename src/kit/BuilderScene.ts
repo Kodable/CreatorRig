@@ -4,6 +4,7 @@
 // activities/goldberg/game/GoldbergScene.ts.
 import Phaser from 'phaser';
 import { COLORS, STAGE_W, STAGE_H, RENDER_SCALE, makeView, PANEL_BOTTOM_Y, panelTopY } from './view';
+import { lookImageUrls, resolveLook } from './looks';
 import {
   FOCUS_MS,
   approachFrame,
@@ -377,6 +378,18 @@ export class BuilderScene extends Phaser.Scene {
 
   private itemsGfx!: Phaser.GameObjects.Graphics;
   private marksGfx!: Phaser.GameObjects.Graphics;
+  /** 2026-10-09: the sky gradient + stars graphics, kept so `setLook` can clear and redraw it
+   * instead of `createPanel` owning a local one-shot variable. Ground band geometry (constant,
+   * independent of `Level.look`) stays in `createPanel`'s own local `ground` graphics. */
+  private skyGfx?: Phaser.GameObjects.Graphics;
+  /** Panel geometry the sky needs to redraw (set once by `createPanel`; independent of look). */
+  private skyGeom!: { x0: number; w: number; h: number; r: number; band: boolean; grassTopY: number };
+  /** The currently drawn look's resolved sky/backgrounds (see `looks.ts`), or null before the
+   * first draw. `setLook` compares against this to skip a no-op redraw. */
+  private drawnLook: ReturnType<typeof resolveLook> | null = null;
+  /** One Image per drawn background layer (see `redrawBackgrounds`); destroyed and replaced
+   * whenever `setLook` picks a different look. */
+  private bgImages: Phaser.GameObjects.Image[] = [];
   /** Texture-backed items, keyed by the item's index in `items` (NOT by body: one body can carry
    * several items, e.g. a frame polygon plus a textured power pack riding the same body). */
   private roleImages = new Map<number, Phaser.GameObjects.Image>();
@@ -541,9 +554,10 @@ export class BuilderScene extends Phaser.Scene {
     for (const [key, tex] of Object.entries(this.textureDefs)) {
       this.load.image(key, tex.url);
     }
-    // `world.backgrounds`: picture layers behind the panel content (a scenery backdrop, a
-    // planet). Keyed by index since a course may reuse the same URL twice at different sizes.
-    (this.world.backgrounds ?? []).forEach((bg, i) => this.load.image(`bg-${i}`, bg.url));
+    // `world.backgrounds` / `world.looks[*].backgrounds`: picture layers behind the panel content
+    // (a scenery backdrop, a planet). Keyed by URL (2026-10-09), not index: several looks (or a
+    // look and the world's own backgrounds) may reuse the same picture, and this loads it once.
+    for (const url of lookImageUrls(this.world)) this.load.image(`bg:${url}`, url);
   }
 
   create(): void {
@@ -570,8 +584,12 @@ export class BuilderScene extends Phaser.Scene {
     this.uiCam.centerOn(STAGE_W / 2, STAGE_H / 2);
     this.uiCam.inputEnabled = false;
 
-    this.createPanel();
-    this.createBackgrounds();
+    // The world's own look (no `Level.look` yet set) — a course that never calls `setLook` (or
+    // has no `WorldSpec.looks`) renders exactly this, same as before 2026-10-09.
+    const initialLook = resolveLook(this.world, undefined);
+    this.createPanel(initialLook);
+    this.redrawBackgrounds(initialLook.backgrounds);
+    this.drawnLook = initialLook;
     if (this.wide) this.createCornerCaps();
 
     this.itemsGfx = this.onWorld(this.add.graphics());
@@ -629,8 +647,12 @@ export class BuilderScene extends Phaser.Scene {
    * 0 the grass/earth boundary moves up to world y = 0 (`view.originY`) and earth fills the rest
    * of the band down to the panel's (fixed) bottom edge; at depth 0 this is today's fixed-pixel
    * strip, kept byte for byte.
+   *
+   * 2026-10-09: the sky gradient/stars are drawn by `redrawSky` (called here with the world's own
+   * look, and again by `setLook` for a level that names one); the ground band below is constant
+   * geometry (never affected by a look) and stays here.
    */
-  private createPanel(): void {
+  private createPanel(resolved: ReturnType<typeof resolveLook>): void {
     // World objects under the scrolling camera: the sky and ground band span the whole world
     // (world x 0..worldW), not just the first view window.
     const x0 = this.panelX0;
@@ -646,33 +668,13 @@ export class BuilderScene extends Phaser.Scene {
       depth > 0
         ? Math.min(this.view.originY + GROUND_GRASS_M * this.world.ppm, this.panelY1)
         : this.panelY1 - EARTH_INSET;
-    const skyTop = this.world.sky?.top ?? SKY_TOP;
-    const skyBottom = this.world.sky?.bottom ?? SKY_BOTTOM;
-    const skyAt = (y: number): number => lerpColor(skyTop, skyBottom, (y - this.panelY0) / h);
+
+    this.skyGeom = { x0, w, h, r, band, grassTopY };
+    this.redrawSky(resolved);
+
+    if (!band) return;
+
     const insetAt = (d: number): number => r - Math.sqrt(Math.max(0, r * r - (r - d) * (r - d)));
-
-    const sky = this.onWorld(this.add.graphics());
-    sky.setDepth(DEPTH_SKY);
-    for (let y = this.panelY0; y < this.panelY0 + r; y++) {
-      const inset = insetAt(y - this.panelY0 + 0.5);
-      sky.fillStyle(skyAt(y), 1);
-      sky.fillRect(x0 + inset, y, w - 2 * inset, 1);
-    }
-    sky.fillGradientStyle(skyAt(this.panelY0 + r), skyAt(this.panelY0 + r), skyAt(grassTopY), skyAt(grassTopY), 1);
-    sky.fillRect(x0, this.panelY0 + r, w, Math.max(0, grassTopY - (this.panelY0 + r)));
-
-    // A picture backdrop carries its own sky detail; the procedural stars would show through/over it.
-    if (this.world.sky?.stars && !this.world.backgrounds?.length) this.drawStars(sky, x0, w, grassTopY);
-
-    if (!band) {
-      for (let y = this.panelY1 - r; y < this.panelY1; y++) {
-        const inset = insetAt(this.panelY1 - y - 0.5);
-        sky.fillStyle(skyAt(y), 1);
-        sky.fillRect(x0 + inset, y, w - 2 * inset, 1);
-      }
-      return;
-    }
-
     const ground = this.onWorld(this.add.graphics());
     ground.setDepth(DEPTH_GROUND);
     const stripTop = this.world.groundStrip?.top ?? COLORS.green;
@@ -703,15 +705,58 @@ export class BuilderScene extends Phaser.Scene {
     }
   }
 
-  /** `world.backgrounds`: static picture layers over the sky and under the ground strip/items
-   * (depth 0.2 + i*0.01, between DEPTH_SKY and DEPTH_GROUND). World objects (drawn via
-   * `onWorld`), positioned/sized in world meters, so they pan and zoom with the world camera —
-   * never counter-scaled. A texture that failed to load is skipped with one warning. */
-  private createBackgrounds(): void {
-    const bgs = this.world.backgrounds ?? [];
-    for (let i = 0; i < bgs.length; i++) {
-      const bg = bgs[i]!;
-      const key = `bg-${i}`;
+  /** (Re)draws the sky gradient into `this.skyGfx` (created on first use) from `resolved` — the
+   * world's own sky/backgrounds (`create`), or a level's look (`setLook`). Same geometry as the
+   * original single-look drawing: rounded top rows, a gradient rect down to the grass line, and —
+   * with `groundBand: false` — the rounded BOTTOM rows too (the ground band graphics draws no
+   * corners in that case, see `createPanel`). Stars draw only when the RESOLVED sky asks for them
+   * and the RESOLVED backgrounds are empty (a picture backdrop carries its own sky detail; the
+   * procedural stars would show through/over it). 2026-10-09. */
+  private redrawSky(resolved: ReturnType<typeof resolveLook>): void {
+    const { x0, w, h, r, band, grassTopY } = this.skyGeom;
+    const skyTop = resolved.sky?.top ?? SKY_TOP;
+    const skyBottom = resolved.sky?.bottom ?? SKY_BOTTOM;
+    const skyAt = (y: number): number => lerpColor(skyTop, skyBottom, (y - this.panelY0) / h);
+    const insetAt = (d: number): number => r - Math.sqrt(Math.max(0, r * r - (r - d) * (r - d)));
+
+    if (this.skyGfx) {
+      this.skyGfx.clear();
+    } else {
+      this.skyGfx = this.onWorld(this.add.graphics());
+      this.skyGfx.setDepth(DEPTH_SKY);
+    }
+    const sky = this.skyGfx;
+
+    for (let y = this.panelY0; y < this.panelY0 + r; y++) {
+      const inset = insetAt(y - this.panelY0 + 0.5);
+      sky.fillStyle(skyAt(y), 1);
+      sky.fillRect(x0 + inset, y, w - 2 * inset, 1);
+    }
+    sky.fillGradientStyle(skyAt(this.panelY0 + r), skyAt(this.panelY0 + r), skyAt(grassTopY), skyAt(grassTopY), 1);
+    sky.fillRect(x0, this.panelY0 + r, w, Math.max(0, grassTopY - (this.panelY0 + r)));
+
+    if (resolved.sky?.stars && resolved.backgrounds.length === 0) this.drawStars(sky, x0, w, grassTopY);
+
+    if (!band) {
+      for (let y = this.panelY1 - r; y < this.panelY1; y++) {
+        const inset = insetAt(this.panelY1 - y - 0.5);
+        sky.fillStyle(skyAt(y), 1);
+        sky.fillRect(x0 + inset, y, w - 2 * inset, 1);
+      }
+    }
+  }
+
+  /** `world.backgrounds`, or a level's look (`setLook`): static picture layers over the sky and
+   * under the ground strip/items (depth 0.2 + i*0.01, between DEPTH_SKY and DEPTH_GROUND). World
+   * objects (drawn via `onWorld`), positioned/sized in world meters, so they pan and zoom with the
+   * world camera — never counter-scaled. A texture that failed to load is skipped with one
+   * warning. Destroys and replaces whatever was drawn before (see `bgImages`). */
+  private redrawBackgrounds(backgrounds: NonNullable<WorldSpec['backgrounds']>): void {
+    for (const img of this.bgImages) img.destroy();
+    this.bgImages = [];
+    for (let i = 0; i < backgrounds.length; i++) {
+      const bg = backgrounds[i]!;
+      const key = `bg:${bg.url}`;
       if (!this.textures.exists(key)) {
         console.warn(`BuilderScene: background "${bg.url}" failed to load; skipping.`);
         continue;
@@ -722,7 +767,21 @@ export class BuilderScene extends Phaser.Scene {
       img.setDisplaySize(bg.w * this.world.ppm, bg.h * this.world.ppm);
       img.setAlpha(bg.alpha ?? 1);
       img.setDepth(0.2 + i * 0.01);
+      this.bgImages.push(img);
     }
+  }
+
+  /** 2026-10-09: draws the level's sky look (`Level.look`, a rover level on Mars vs. the Moon).
+   * Resolves it (`resolveLook`: the look's sky/backgrounds, each falling back to the world's own)
+   * and, only when that differs from what's currently drawn, redraws the sky gradient/stars and
+   * replaces the background images. A no-op call (same look as last time, including two courses
+   * that never set one) touches nothing. */
+  setLook(look: string | undefined): void {
+    const resolved = resolveLook(this.world, look);
+    if (this.drawnLook && JSON.stringify(resolved) === JSON.stringify(this.drawnLook)) return;
+    this.drawnLook = resolved;
+    this.redrawSky(resolved);
+    this.redrawBackgrounds(resolved.backgrounds);
   }
 
   /** Wide worlds only: the world camera scrolls, so the panel's rounded corners (drawn into the

@@ -330,6 +330,14 @@ export interface Level<K extends string, M, O extends string> {
    * the edit-mode scrollbar use min(`WorldSpec.worldW`, `extentW`): a short level in a wide
    * course shows no scrollbar and never scrolls into its empty tail. Absent = the whole world. */
   extentW?: number;
+  /** 2026-10-09: the `WorldSpec.looks` key this level is drawn with (a rover level on Mars).
+   * Absent or unknown = the world's own sky/backgrounds. See `BuilderScene.setLook`. */
+  look?: string;
+  /** 2026-10-09: a chapter name (e.g. 'Mars'). When set, the HUD's level picker reads
+   * "Mars · 3 of 12" (this level's position among the levels of that chapter, in
+   * `CourseSpec.levels` order, and that chapter's level count) instead of "Level N of M". See
+   * `levelPickerLabel` in chapters.ts. */
+  chapter?: string;
 }
 // `Level.introduces` may also list `part:<kind>` entries: those kinds get the shelf unlock
 // callout on that level (`HudState.unlocked`); they must also be in the level's `palette`.
@@ -475,6 +483,11 @@ export interface WorldSpec {
    * zooms and pans with the world camera. A scenery backdrop is typically the whole world
    * (x 15, y 7.5, w 30, h 15); a planet hanging in the sky is a small rectangle. */
   backgrounds?: { url: string; x: number; y: number; w: number; h: number; alpha?: number }[];
+  /** 2026-10-09: named sky looks a level can pick via `Level.look` (a rover course visiting
+   * several planets: 'mars', 'moon', ...). A look's `sky` / `backgrounds` REPLACE the world's own
+   * for a level that names it; a field the look omits falls back to the world's. Absent/unknown
+   * look = the world's own sky/backgrounds (today's behaviour, see `resolveLook` in looks.ts). */
+  looks?: Record<string, { sky?: WorldSpec['sky']; backgrounds?: WorldSpec['backgrounds'] }>;
 }
 
 /** How the scene draws one body role. A role with `texture` is drawn as a Phaser Image scaled

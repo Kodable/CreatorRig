@@ -85,3 +85,26 @@ describe('physics: spring stiffness override', () => {
     world.destroy();
   });
 });
+
+describe('physics: setFriction (2026-10-09)', () => {
+  it('a box sliding on a slippery floor: friction set after it starts touching takes effect on the next step', async () => {
+    const slide = async (boxFriction: number | null): Promise<number> => {
+      const world = await createWorld({ gravity: { x: 0, y: -10 } });
+      const floor = world.createBody({ type: 'static', position: { x: 0, y: -0.5 } });
+      world.addShape(floor, { kind: 'box', halfWidth: 50, halfHeight: 0.5 }, { friction: 0 });
+      const box = world.createBody({ position: { x: 0, y: 0.25 }, canSleep: false });
+      world.addShape(box, { kind: 'box', halfWidth: 0.25, halfHeight: 0.25 }, { friction: 1 });
+      for (let i = 0; i < 30; i++) world.step(FIXED_DT, FIXED_SUBSTEPS); // settled and touching
+      if (boxFriction !== null) world.setFriction(box, boxFriction);
+      world.setLinearVelocity(box, { x: 4, y: 0 });
+      for (let i = 0; i < 60; i++) world.step(FIXED_DT, FIXED_SUBSTEPS);
+      const x = world.getTransform(box).position.x;
+      world.destroy();
+      return x;
+    };
+    const grippy = await slide(null); // average(1, 0) = 0.5: stops within ~1.6 m
+    const icy = await slide(0); // average(0, 0) = 0: slides on at 4 m/s
+    expect(grippy).toBeLessThan(2);
+    expect(icy).toBeGreaterThan(3.8);
+  });
+});

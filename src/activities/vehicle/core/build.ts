@@ -17,7 +17,10 @@ import {
 } from './catalog';
 import { layoutRover, roverPictures } from './geometry';
 import type { AttachmentGeometry, PictureItem } from './geometry';
-import { WORLD_W, crustPolygons, findGaps, heightAt, terrainPolygon } from './terrain';
+import { GROUND_DIR, ROCK_PICS, groundPictures } from './art';
+import { SURFACES, surfaceRuns } from './surfaces';
+import type { Rock, SurfaceKind, SurfaceRange } from './surfaces';
+import { WORLD_W, bandPolygons, clipProfile, crustPolygons, findGaps, heightAt, nearGap, terrainPolygon, withoutRocks } from './terrain';
 import type { BodyId, Bounds, JointId, PartHandle, PlacedPart, RenderItem, RoverPart, Shape, Transform, Vec2 } from './types';
 import type { PhysicsWorld } from '../../../physics/types';
 
@@ -36,9 +39,15 @@ export const WORLD_H = 19.125;
  * instead of the rust top layer's thin 0.3 m crust, so it covers the kit's whole ground band
  * (see `terrainPolygon`'s doc comment for why that also keeps a pit reading as a real hole). */
 export const GROUND_DEPTH = 1.5;
+/** How deep (m) the drawn ground (the under layer and the chasms) actually reaches: past
+ * GROUND_DEPTH, through the 10 px earth margin the kit's panel keeps under the world view
+ * (`PANEL_Y_MARGIN`, 0.31 m at ppm 32). 2026-10-09: the planets' skies are light at the horizon
+ * (Flooftopia's pale blue, Mars's tan), and a ground that stopped at GROUND_DEPTH let that sky show
+ * as a light strip along the panel's bottom edge (the old night sky hid it). */
+export const GROUND_FILL_DEPTH = GROUND_DEPTH + 0.5;
 
 const TERRAIN_COLOR = 0xb5532e; // rust
-const TERRAIN_UNDER_COLOR = 0x8a3c1f; // darker rock layer, filling down to GROUND_DEPTH
+const TERRAIN_UNDER_COLOR = 0x8a3c1f; // darker rock layer, filling down to GROUND_FILL_DEPTH
 // Deep shadow fill for a gap/pit's chasm (see `findGaps`): drawn over the kit's own ground band
 // (`WorldSpec.groundDepth`) so a hole still reads as an open hole where the top/under layers
 // above degenerate to zero height across it (see `terrainPolygon`'s doc comment).
@@ -65,9 +74,190 @@ function boxBounds(x: number, y: number, w: number, h: number): Bounds {
 
 // ---- terrain and walls ------------------------------------------------------------------
 
+/** What each kind of ground looks like (2026-10-09): the 0.3 m crust along the surface and the
+ * darker under layer down to GROUND_FILL_DEPTH. Rock is the course's old rust (Mars); grass is green
+ * turf (`GRASS_BAND` of it) over brown soil; sand is pale tan-orange with ripples; ice is pale
+ * blue-white with a glossy line and cracks over a deep blue. */
+export const GROUND_COLORS: Record<SurfaceKind, { crust: number; under: number }> = {
+  grass: { crust: 0x8d5a34, under: 0x6b4226 },
+  rock: { crust: TERRAIN_COLOR, under: TERRAIN_UNDER_COLOR },
+  sand: { crust: 0xe2a868, under: 0xc0844a },
+  ice: { crust: 0xe4f4fc, under: 0x5d9fd0 },
+};
+const GRASS_COLOR = 0x6cc04a;
+const GRASS_LIGHT = 0x8ed468;
+const GRASS_TUFT = 0x5fb043;
+/** Meters of green turf over the soil. */
+export const GRASS_BAND = 0.16;
+const SAND_LIGHT = 0xefc185;
+const SAND_RIPPLE = 0xc98d52;
+const ICE_GLOSS = 0xffffff;
+const ICE_CRACK = 0x8fc3e0;
+/** A rock's fill if its picture failed to load. */
+const ROCK_COLOR = 0x9a4a2c;
+/** How deep (m) a rock picture reaches under the ground around it: the rock stands IN the sand. */
+export const ROCK_EMBED = 0.1;
+
+/** The ground a level is built on: its surface runs (surfaces.ts `surfaceRuns`; absent = all rock,
+ * the course's ground before 2026-10-09) and the rocks standing in it. `drawRuns` are the runs
+ * the ground is DRAWN with (default `runs`): `levelGround` leaves the rocks' own rock ranges out of
+ * them, so the sand runs on under a rock and the rock's picture stands in it, instead of a rock
+ * column reaching down through the sand. */
+export interface GroundOptions {
+  runs?: SurfaceRange[];
+  drawRuns?: SurfaceRange[];
+  rocks?: readonly Rock[];
+  /** The planet's own ground: a run of another kind (sand on a Mars mesa, a rock road on Europa)
+   * is drawn as a layer GROUND_FILL_DEPTH thick over this ground's under colour, not as a column
+   * of its own colour down to the fill depth (2026-10-09: sand on a cliff top read as a pillar). */
+  base?: SurfaceKind;
+}
+
+/** Small deterministic hash in [0, 1) for decoration jitter (no Math.random: the same level
+ * always draws the same tufts and cracks). */
+function jitter(i: number, salt: number): number {
+  let h = (Math.imul(i + 1, 0x9e3779b1) ^ Math.imul(salt + 7, 0x85ebca6b)) >>> 0;
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d) >>> 0;
+  h ^= h >>> 12;
+  return (h >>> 0) / 4294967296;
+}
+
+function terrainItem(body: BodyId, vertices: Vec2[], color: number, alpha?: number): RenderItem {
+  return {
+    partId: TERRAIN_PART_ID,
+    body,
+    shape: { kind: 'polygon', vertices },
+    color,
+    ...(alpha !== undefined ? { alpha } : {}),
+    role: 'terrain',
+    locked: true,
+    lockPosition: true,
+  };
+}
+
+/** Surface detail for one run of ground (drawn over its crust): turf and tufts on grass, a light
+ * edge and ripples in sand, a glossy line and cracks in ice. Rock gets none (the old look). */
+function surfaceDetail(body: BodyId, kind: SurfaceKind, sub: Vec2[], profile: Vec2[], from: number, to: number): RenderItem[] {
+  const out: RenderItem[] = [];
+  const x0 = Math.max(0, from);
+  const x1 = Math.min(WORLD_W, to);
+  if (x1 - x0 < 0.05) return out;
+  const salt = Math.round(from * 100);
+  if (kind === 'grass') {
+    for (const v of bandPolygons(sub, 0, GRASS_BAND)) out.push(terrainItem(body, v, GRASS_COLOR));
+    for (const v of bandPolygons(sub, 0, 0.035)) out.push(terrainItem(body, v, GRASS_LIGHT));
+    // Tufts of three blades every ~0.8 m, skipped on steep ground and at a gap's lip.
+    for (let i = 0, x = x0 + 0.3; x < x1 - 0.2; i++, x += 0.6 + 0.5 * jitter(i, salt)) {
+      const slope = (heightAt(profile, x + 0.1) - heightAt(profile, x - 0.1)) / 0.2;
+      if (Math.abs(slope) > 0.8 || nearGap(profile, x, 0.3)) continue;
+      const y = heightAt(profile, x) - 0.01;
+      const h = 0.09 + 0.07 * jitter(i, salt + 1);
+      const w = 0.07 + 0.04 * jitter(i, salt + 2);
+      out.push(terrainItem(body, [
+        { x: x - w, y },
+        { x: x - w * 0.9, y: y + h * 0.75 },
+        { x: x - w * 0.35, y: y + h * 0.3 },
+        { x: x, y: y + h },
+        { x: x + w * 0.35, y: y + h * 0.3 },
+        { x: x + w * 0.95, y: y + h * 0.7 },
+        { x: x + w, y },
+      ], GRASS_TUFT));
+    }
+  } else if (kind === 'sand') {
+    for (const v of bandPolygons(sub, 0, 0.035)) out.push(terrainItem(body, v, SAND_LIGHT));
+    // Wind ripples on the surface: low humps, gentle on the windward side, steep on the lee.
+    for (let i = 0, x = x0 + 0.1; x < x1 - 0.4; i++, x += 0.3 + 0.2 * jitter(i, salt)) {
+      const len = 0.22 + 0.12 * jitter(i, salt + 7);
+      if (nearGap(profile, x + len / 2, len)) continue;
+      const h = 0.03 + 0.02 * jitter(i, salt + 8);
+      out.push(terrainItem(body, [
+        { x, y: heightAt(profile, x) - 0.01 },
+        { x: x + 0.65 * len, y: heightAt(profile, x + 0.65 * len) + h },
+        { x: x + len, y: heightAt(profile, x + len) - 0.01 },
+      ], SAND_LIGHT));
+    }
+    // Ripple lines in the crust: long faint wavy streaks, staggered at different depths.
+    for (let i = 0, x = x0 + 0.2; x < x1 - 0.6; i++, x += 1.1 + 0.9 * jitter(i, salt)) {
+      const len = 0.9 + 0.9 * jitter(i, salt + 3);
+      const end = Math.min(x1, x + len);
+      if (nearGap(profile, (x + end) / 2, len)) continue;
+      const depth = 0.08 + 0.15 * jitter(i, salt + 4);
+      out.push(terrainItem(body, wavyBand(profile, x, end, depth, 0.02, 0.012, 0.45, i), SAND_RIPPLE, 0.55));
+    }
+  } else if (kind === 'ice') {
+    for (const v of bandPolygons(sub, 0.025, 0.05)) out.push(terrainItem(body, v, ICE_GLOSS, 0.85));
+    // Cracks: thin zig-zag slivers from just under the surface down into the blue, every ~2.4 m.
+    for (let i = 0, x = x0 + 0.8; x < x1 - 0.3; i++, x += 1.6 + 1.6 * jitter(i, salt)) {
+      if (nearGap(profile, x, 0.3)) continue;
+      const top = heightAt(profile, x) - 0.06;
+      const len = 0.45 + 0.6 * jitter(i, salt + 5);
+      const lean = (jitter(i, salt + 6) - 0.5) * 0.3;
+      const pts: Vec2[] = [];
+      const steps = 4;
+      for (let k = 0; k <= steps; k++) {
+        const t = k / steps;
+        const zig = (k % 2 === 0 ? -1 : 1) * 0.05 * (1 - t) * (k === 0 ? 0 : 1);
+        pts.push({ x: x + lean * t + zig, y: top - len * t });
+      }
+      const half = (k: number): number => 0.018 * (1 - k / (steps + 1));
+      out.push(terrainItem(body, [
+        ...pts.map((p, k) => ({ x: p.x - half(k), y: p.y })),
+        ...[...pts].reverse().map((p, j) => ({ x: p.x + half(steps - j), y: p.y })),
+      ], ICE_CRACK, 0.9));
+    }
+  }
+  return out;
+}
+
+/** A thin wavy ribbon `depth` m under the surface from x0 to x1 (a sand ripple line): its top
+ * edge waves by `amp` over `wavelength`, `thickness` thick, its ends tapered. */
+function wavyBand(profile: Vec2[], x0: number, x1: number, depth: number, thickness: number, amp: number, wavelength: number, phase: number): Vec2[] {
+  const n = Math.max(2, Math.ceil((x1 - x0) / 0.08));
+  const top: Vec2[] = [];
+  const bottom: Vec2[] = [];
+  for (let k = 0; k <= n; k++) {
+    const x = x0 + ((x1 - x0) * k) / n;
+    const taper = Math.sin((Math.PI * k) / n);
+    const y = heightAt(profile, x) - depth + amp * Math.sin((2 * Math.PI * (x - x0)) / wavelength + phase);
+    top.push({ x, y });
+    bottom.push({ x, y: y - thickness * taper });
+  }
+  return [...top, ...bottom.reverse()];
+}
+
+/** One rock standing in the ground: its picture over its lump of terrain (`withRocks` raised the
+ * lump; this only draws it), a little wider than the lump and reaching ROCK_EMBED under `ground`
+ * (the drawn ground, lumps taken out), so the rock stands in the sand. Picture `index % 3`. */
+function rockItem(body: BodyId, ground: Vec2[], r: Rock, index: number): RenderItem {
+  const base = heightAt(ground, r.x);
+  const top = base + r.h + 0.03;
+  const bottom = base - ROCK_EMBED;
+  const pic = ROCK_PICS[index % ROCK_PICS.length]!;
+  return {
+    partId: TERRAIN_PART_ID,
+    body,
+    shape: { kind: 'box', w: r.w * 1.12, h: top - bottom, cx: r.x, cy: (top + bottom) / 2 },
+    color: ROCK_COLOR,
+    role: 'terrain',
+    locked: true,
+    lockPosition: true,
+    textureKey: pic.key,
+  };
+}
+
+/** Texture keys for the ground pictures (`CourseSpec.textures`): the rocks and the wheel effects
+ * (sand puff, sand berm, ice chips; sim.ts draws those as overlay sprites). */
+export function groundTextures(): Record<string, { url: string }> {
+  const out: Record<string, { url: string }> = {};
+  for (const p of groundPictures()) out[p.key] = { url: `${GROUND_DIR}${p.file}` };
+  return out;
+}
+
 /** Static chain body carrying the level's ground profile, plus the filled polygon RenderItems
  * the scene draws it as: a darker "under" layer (the same silhouette, but closed all the way down
- * at `GROUND_DEPTH` instead of the crust's 0.3 m, so it fills the kit's whole below-ground band
+ * at `GROUND_FILL_DEPTH`, just past GROUND_DEPTH, instead of the crust's 0.3 m, so it fills the
+ * kit's whole below-ground band
  * for a layered-rock look, and still degenerates to nothing across a pit/gap - see
  * `terrainPolygon`'s doc comment) painted first, then the rust top "crust" (one 0.3 m-thick
  * polygon per contiguous run of real terrain, `crustPolygons` - it hugs the surface everywhere,
@@ -78,51 +268,79 @@ function boxBounds(x: number, y: number, w: number, h: number): Bounds {
  * except the kit draws no band at all here (`WorldSpec.groundBand: false`), so without the chasm
  * the hole would show bare sky instead. Each chasm visual is a dark quad from the gap's own lips
  * (its real height just outside the gap on each side, which may differ - e.g. a ramp's takeoff
- * lip vs. a lower landing) down to the panel bottom (`-GROUND_DEPTH`), so it fills the gap without
+ * lip vs. a lower landing) down past the panel bottom (`-GROUND_FILL_DEPTH`), so it fills the gap without
  * covering any real terrain on either side. It carries no collider: it reuses this same static
- * body purely for its RenderItem, adding no shape, so physics/colliders are unchanged. */
-export function buildTerrain(world: PhysicsWorld, profile: Vec2[]): { body: BodyId; items: RenderItem[] } {
+ * body purely for its RenderItem, adding no shape, so physics/colliders are unchanged.
+ *
+ * 2026-10-09 (planets and surfaces): `ground.runs` splits the ground into stretches of grass,
+ * rock, sand and ice (surfaces.ts). Each run gets its own chain collider (with that surface's
+ * ground friction; neighbouring chains share their end point) and its own under/crust colours
+ * (`GROUND_COLORS`) plus surface detail; `ground.rocks` adds a rock picture per rock. Without runs
+ * (or with one rock run, e.g. any Mars level without `surfaces`) the colliders and items are
+ * exactly the old ones: one chain at friction 0.8, the under layer, the rust crust, the chasms. */
+export function buildTerrain(world: PhysicsWorld, profile: Vec2[], ground: GroundOptions = {}): { body: BodyId; items: RenderItem[] } {
   const body = world.createBody({ type: 'static', position: { x: 0, y: 0 } });
-  world.addShape(body, { kind: 'chain', vertices: profile }, { friction: 0.8 });
-  const underVertices = terrainPolygon(profile, GROUND_DEPTH);
-  const underItem: RenderItem = {
-    partId: TERRAIN_PART_ID,
-    body,
-    shape: { kind: 'polygon', vertices: underVertices },
-    color: TERRAIN_UNDER_COLOR,
-    role: 'terrain',
-    locked: true,
-    lockPosition: true,
-  };
-  const topItems: RenderItem[] = crustPolygons(profile).map((vertices) => ({
-    partId: TERRAIN_PART_ID,
-    body,
-    shape: { kind: 'polygon', vertices },
-    color: TERRAIN_COLOR,
-    role: 'terrain',
-    locked: true,
-    lockPosition: true,
-  }));
+  const first = profile[0]!.x;
+  const last = profile[profile.length - 1]!.x;
+  const allRock = [{ from: first, to: last, kind: 'rock' as SurfaceKind }];
+  const piecesOf = (prof: Vec2[], runs: SurfaceRange[]): { run: SurfaceRange; sub: Vec2[] }[] =>
+    runs.length === 1 ? [{ run: runs[0]!, sub: prof }] : runs.map((run) => ({ run, sub: clipProfile(prof, run.from, run.to) }));
+  const runs = ground.runs && ground.runs.length > 0 ? ground.runs : allRock;
+  for (const { run, sub } of piecesOf(profile, runs)) {
+    world.addShape(body, { kind: 'chain', vertices: sub }, { friction: SURFACES[run.kind].groundFriction });
+  }
+  // The drawing: the ground around the rocks (their lumps taken out, `withoutRocks`), in the
+  // drawn runs, only over the world (x 0..WORLD_W; a run wholly outside it draws nothing).
+  const rocks = ground.rocks ?? [];
+  const drawProfile = rocks.length > 0 ? withoutRocks(profile, rocks) : profile;
+  const drawRuns = ground.drawRuns && ground.drawRuns.length > 0 ? ground.drawRuns : runs;
+  const pieces = piecesOf(drawProfile, drawRuns);
+  const drawn = pieces.filter(({ run }) => run.to > 0 && run.from < WORLD_W);
+  const single = pieces.length === 1;
+  const base = ground.base;
+  const underItems = drawn.flatMap(({ run, sub }) => {
+    const fill = single ? terrainPolygon(sub, GROUND_FILL_DEPTH) : terrainPolygon(sub, GROUND_FILL_DEPTH, Math.max(0, run.from), Math.min(WORLD_W, run.to));
+    if (single || base === undefined || run.kind === base) return [terrainItem(body, fill, GROUND_COLORS[run.kind].under)];
+    // On flat ground (surface at y 0) the layer ends exactly at the fill depth, so it looks as before.
+    return [
+      terrainItem(body, fill, GROUND_COLORS[base].under),
+      ...bandPolygons(sub, 0, GROUND_FILL_DEPTH).map((v) => terrainItem(body, v, GROUND_COLORS[run.kind].under)),
+    ];
+  });
+  const topItems = drawn.flatMap(({ run, sub }) => crustPolygons(sub).map((v) => terrainItem(body, v, GROUND_COLORS[run.kind].crust)));
+  const detailItems = drawn.flatMap(({ run, sub }) => surfaceDetail(body, run.kind, sub, drawProfile, run.from, run.to));
+  const rockItems = rocks.map((r, i) => rockItem(body, drawProfile, r, i));
   // The chasm's top is flat at the LOWER lip: above it, between a ramp's takeoff lip and a lower
   // landing, is open air the rover flies through, not rock in shadow.
-  const chasmItems: RenderItem[] = findGaps(profile).map((gap) => ({
-    partId: TERRAIN_PART_ID,
-    body,
-    shape: {
-      kind: 'polygon',
-      vertices: [
+  const chasmItems: RenderItem[] = findGaps(profile).map((gap) =>
+    terrainItem(
+      body,
+      [
         { x: gap.x0, y: Math.min(gap.y0, gap.y1) },
         { x: gap.x1, y: Math.min(gap.y0, gap.y1) },
-        { x: gap.x1, y: -GROUND_DEPTH },
-        { x: gap.x0, y: -GROUND_DEPTH },
+        { x: gap.x1, y: -GROUND_FILL_DEPTH },
+        { x: gap.x0, y: -GROUND_FILL_DEPTH },
       ],
-    },
-    color: CHASM_COLOR,
-    role: 'terrain',
-    locked: true,
-    lockPosition: true,
-  }));
-  return { body, items: [underItem, ...topItems, ...chasmItems] };
+      CHASM_COLOR,
+    ),
+  );
+  return { body, items: [...underItems, ...topItems, ...detailItems, ...rockItems, ...chasmItems] };
+}
+
+/** The ground of a level, for `buildTerrain`: its `surfaces` over its planet's ground, across the
+ * whole profile, for the colliders; for the drawing, the same without the rocks' own rock ranges
+ * (surfaces.ts `rockRanges`, which levels/shared.ts `level()` appends for every rock). */
+export function levelGround(profile: Vec2[], surfaces: readonly SurfaceRange[] | undefined, ground: SurfaceKind, rocks?: readonly Rock[]): GroundOptions {
+  const x0 = profile[0]!.x;
+  const x1 = profile[profile.length - 1]!.x;
+  const lumps = rocks ?? [];
+  const isLump = (r: SurfaceRange): boolean =>
+    r.kind === 'rock' && lumps.some((k) => Math.abs(r.from - (k.x - k.w / 2)) < 1e-9 && Math.abs(r.to - (k.x + k.w / 2)) < 1e-9);
+  return {
+    base: ground,
+    runs: surfaceRuns(surfaces, ground, x0, x1),
+    ...(lumps.length > 0 ? { drawRuns: surfaceRuns(surfaces?.filter((r) => !isLump(r)), ground, x0, x1), rocks: lumps } : {}),
+  };
 }
 
 /** Static walls just past the play field, at x -0.5 and WORLD_W + 0.5 (no visuals). */

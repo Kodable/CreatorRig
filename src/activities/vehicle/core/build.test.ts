@@ -3,6 +3,7 @@ import { PICS, ROVER_R } from './art';
 import {
   BLOCK_DENSITY,
   GROUND_DEPTH,
+  GROUND_FILL_DEPTH,
   ROVER_DENSITY,
   SHADOW_LIFT,
   SHADOW_W,
@@ -74,7 +75,7 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
   });
 
   it("buildTerrain's under layer follows the same silhouette as the rust top layer but closes " +
-    'at GROUND_DEPTH instead of the top layer\'s 0.3 m crust, so it fills the kit\'s whole ' +
+    'at GROUND_FILL_DEPTH (just past GROUND_DEPTH) instead of the top layer\'s 0.3 m crust, so it fills the kit\'s whole ' +
     'ground band; it is darker and drawn first (under the rust top)', async () => {
     world = await createWorld({ gravity: { x: 0, y: -10 } });
     const { items } = buildTerrain(world, flat());
@@ -93,8 +94,8 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
         { x: 0, y: -0.3 },
       ]);
       expect(under!.shape.vertices.slice(-2)).toEqual([
-        { x: WORLD_W, y: -GROUND_DEPTH },
-        { x: 0, y: -GROUND_DEPTH },
+        { x: WORLD_W, y: -GROUND_FILL_DEPTH },
+        { x: 0, y: -GROUND_FILL_DEPTH },
       ]);
     }
   });
@@ -108,7 +109,7 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
     const under = items[0]!;
     if (under.shape.kind === 'polygon') {
       const midGapUnder = under.shape.vertices.find((v) => v.x > 10 && v.x < 12);
-      expect(midGapUnder?.y).toBeCloseTo(-GROUND_DEPTH, 6); // clipped up to the under layer's own closing depth
+      expect(midGapUnder?.y).toBeCloseTo(-GROUND_FILL_DEPTH, 6); // clipped up to the under layer's own closing depth
     }
     const crustItems = items.filter((it) => it.color === 0xb5532e);
     expect(crustItems).toHaveLength(2); // one segment before the pit, one after
@@ -146,7 +147,7 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
   });
 
   it('buildTerrain emits one dark chasm visual per gap, spanning exactly the gap\'s x-range from ' +
-    'its lip(s) down to -GROUND_DEPTH, with no collider (it reuses the terrain\'s own static ' +
+    'its lip(s) down to -GROUND_FILL_DEPTH, with no collider (it reuses the terrain\'s own static ' +
     'body and adds no shape)', async () => {
     world = await createWorld({ gravity: { x: 0, y: -10 } });
     const profile = withGap(flat(), 10, 12);
@@ -166,7 +167,7 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
       expect(Math.min(...xs)).toBeCloseTo(10, 6); // exactly the gap's x-range, no more
       expect(Math.max(...xs)).toBeCloseTo(12, 6);
       expect(Math.max(...ys)).toBeCloseTo(0, 6); // the lip
-      expect(Math.min(...ys)).toBeCloseTo(-GROUND_DEPTH, 6); // the panel bottom
+      expect(Math.min(...ys)).toBeCloseTo(-GROUND_FILL_DEPTH, 6); // the panel bottom, and the margin under it
     }
   });
 
@@ -180,13 +181,13 @@ describe('vehicle build: terrain (kept from 2026-09-22)', () => {
     if (chasm.shape.kind === 'polygon') {
       const rampLength = 1 / Math.tan((15 * Math.PI) / 180);
       const lipX = 10 + rampLength;
-      const left = chasm.shape.vertices.find((v) => Math.abs(v.x - lipX) < 1e-6 && v.y > -GROUND_DEPTH);
+      const left = chasm.shape.vertices.find((v) => Math.abs(v.x - lipX) < 1e-6 && v.y > -GROUND_FILL_DEPTH);
       const right = chasm.shape.vertices.find(
-        (v) => Math.abs(v.x - (lipX + 2.5)) < 1e-6 && v.y > -GROUND_DEPTH,
+        (v) => Math.abs(v.x - (lipX + 2.5)) < 1e-6 && v.y > -GROUND_FILL_DEPTH,
       );
       expect(left?.y).toBeCloseTo(-0.5, 6); // not the 1 m takeoff lip: air above the landing
       expect(right?.y).toBeCloseTo(-0.5, 6); // the lower landing
-      for (const v of chasm.shape.vertices) expect(v.y).toBeGreaterThanOrEqual(-GROUND_DEPTH - 1e-9);
+      for (const v of chasm.shape.vertices) expect(v.y).toBeGreaterThanOrEqual(-GROUND_FILL_DEPTH - 1e-9);
     }
   });
 

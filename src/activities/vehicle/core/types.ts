@@ -1,4 +1,4 @@
-// Marstopia Rover (Vehicle Obstacle Course): course-specific types instantiating the builder
+// Planet Rover (Vehicle Obstacle Course; the Marstopia Rover until 2026-10-09): course-specific types instantiating the builder
 // kit's generics. Units are meters, y up. World is 90 m wide since 2026-10-05 (the panel shows a
 // 30 m window of it and the kit scrolls, see terrain.ts WORLD_W / VIEW_W) and 19.125 m tall since
 // 2026-10-06 (build.ts WORLD_H).
@@ -23,6 +23,8 @@ import type {
   Transform,
   Vec2,
 } from '../../../kit/types';
+import type { PlanetId } from './planets';
+import type { Rock, SurfaceRange } from './surfaces';
 
 export type { Bounds, BodyId, CourseSim, Goal, GoalResult, JointId, OverlayItem, RenderItem, Shape, SimSnapshot, Transform, Vec2 };
 
@@ -74,8 +76,18 @@ export type Metrics = {
 };
 
 export interface VehicleLevel extends Level<PartKind, Metrics, Outcome> {
+  /** Where the level is (2026-10-09): the planet's gravity runs the sim, its ground is the
+   * level's ground wherever `surfaces` say nothing, and its look draws the sky (planets.ts). */
+  planet: PlanetId;
   /** Ground profile: x ascending from -1 to WORLD_W + 1, no duplicate x (see terrain.ts). */
   terrain: Vec2[];
+  /** Stretches of other ground (x ranges, m; later ranges paint over earlier ones): sand, ice,
+   * rock, grass. Outside them, the planet's ground (surfaces.ts). */
+  surfaces?: SurfaceRange[];
+  /** Rocks standing in the ground (Mars "sand + rocks"): already raised into `terrain` (terrain.ts
+   * `withRocks`) and covered by rock `surfaces`; listed here so build.ts draws each with a rock
+   * picture. levels/shared.ts `level()` does all three from one `rocks` list. */
+  rocks?: Rock[];
   /** Seconds before a run ends as `timeout` (default sim.ts TIMEOUT_S): the long levels allow
    * more. */
   timeout?: number;

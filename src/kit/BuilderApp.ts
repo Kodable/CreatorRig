@@ -214,6 +214,10 @@ export class BuilderApp<
     this.viewW = viewWidth(this.effWorld);
     this.wide = isWideWorld(this.effWorld);
     this.scene.setWorldExtent(this.effWorld);
+    // 2026-10-09: `Level.look` picks a named `WorldSpec.looks` sky for this level (a rover level
+    // on Mars); absent = the world's own (`BuilderScene.setLook` no-ops for every course that
+    // never sets one).
+    this.scene.setLook(level.look);
 
     this.mode = 'edit';
     this.outcome = null;

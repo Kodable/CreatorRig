@@ -1,4 +1,4 @@
-// Picture geometry of the real Marstopia rover art: public/parts/rover/real/*.png, prepared
+// Picture geometry of the real rover art (drawn for the Marstopia Rover, now Planet Rover): public/parts/rover/real/*.png, prepared
 // 2026-10-01 from the art lead's exports. manifest.json in that folder lists every picture's
 // trimmed size and anchor points in px of the trimmed image (y DOWN); the numbers below are
 // copied from it (art.test.ts cross-checks them against the file). No physics or Phaser here.
@@ -61,6 +61,28 @@ export const PICS = {
   spring: pic('rv-spring', 'spring.png', 106, 121),
   cup: pic('rv-cup', 'suctioncup.png', 292, 92),
 } as const;
+
+/** 2026-10-09 (planets and surfaces): the ground effects and the rocks standing in Mars sand, in
+ * public/parts/rover/ (GROUND_DIR, one folder up from the rover's own art): a puff of sand behind
+ * a wheel spinning in sand, the low sand berm drawn in front of a sunk wheel's bottom, ice chips
+ * behind a wheel spinning on ice, and three flat-shaded rocks in Mars red-brown (painted to match
+ * the library's rock piles, which are stacked cairns with baked shadows and would not cut into
+ * single rocks). */
+export const GROUND_DIR = 'parts/rover/';
+export const GROUND_PICS = {
+  sandPuff: pic('rv-fx-sand', 'fx-sand.png', 192, 144),
+  sandHeap: pic('rv-fx-sand-heap', 'fx-sand-heap.png', 256, 72),
+  iceChips: pic('rv-fx-ice', 'fx-ice.png', 128, 96),
+} as const;
+/** Every ground picture's texture key and file, for `CourseSpec.textures`. */
+export function groundPictures(): Picture[] {
+  return [...Object.values(GROUND_PICS), ...ROCK_PICS];
+}
+export const ROCK_PICS = [
+  pic('rv-rock-1', 'rock-1.png', 265, 151),
+  pic('rv-rock-2', 'rock-2.png', 260, 159),
+  pic('rv-rock-3', 'rock-3.png', 260, 168),
+] as const;
 
 export type PictureName = keyof typeof PICS;
 

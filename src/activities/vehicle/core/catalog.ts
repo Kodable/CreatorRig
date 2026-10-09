@@ -139,8 +139,8 @@ export const CATALOG: Record<PartKind, CatalogEntry> = (Object.keys(LABELS) as P
  * review 2026-10-05: "explain what each part does"). */
 export const BLURBS: Record<AttachmentKind, string> = {
   wheelCircle: 'Fast and smooth on flat ground.',
-  wheelSquare: 'Grips rocks and steps. Slow!',
-  wheelStar: 'Climbs almost anything.',
+  wheelSquare: 'Cheap and bumpy. Slow!',
+  wheelStar: 'Climbs almost anything. Grips sand and ice!',
   fan: 'A gentle push. Stick it on the back.',
   stove: 'Puffs of push! Stick it on the back.',
   jet: 'A huge push. Watch out, it can lift you!',
@@ -163,9 +163,9 @@ export const ROVER_MASS = 2.5;
 export const ROVER_FRICTION = 0.6;
 
 /** Ground speed the wheel motors aim for (`speed`, m/s) and each wheel motor's torque cap (`torque`,
- * N.m). Above
- * the target speed a wheel freewheels (sim.ts), so a jet can push the rover faster than its
- * wheels would drive it. */
+ * N.m) at Flooftopia's gravity; on other planets the cap scales with gravity (planets.ts
+ * `driveTorque`, 2026-10-09). Above the target speed a wheel freewheels (sim.ts), so a jet can
+ * push the rover faster than its wheels would drive it. */
 export const DRIVE = { speed: 6, torque: 4 };
 
 export interface WheelSpec {

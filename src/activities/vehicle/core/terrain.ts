@@ -229,10 +229,57 @@ export function jumpEnd(x0: number, angleDeg: number, lipHeight: number, gapWidt
   return x0 + lipHeight / Math.tan(angleDeg * DEG2RAD) + gapWidth;
 }
 
+/** Rock lump outline exponent (`withRocks`): a superellipse, steep-sided with a rounded top, so
+ * a lump reads (and drives) like a rock standing in the ground, not a smooth hill. */
+const ROCK_P = 2.5;
+/** Points per rock lump outline (odd, so one sits on the top). */
+const ROCK_SAMPLES = 15;
+
+/** Raises a hard lump into the profile for each rock (2026-10-09, Mars "sand + rocks"): `h` m tall
+ * and `w` m wide, centred on `x`, following whatever ground is under it (a rock on a slope sits on
+ * the slope). Returns a NEW profile; terrain beyond each lump is unchanged. Use it through
+ * levels/shared.ts `level({ rocks })`, which also marks each lump as rock ground (surfaces.ts
+ * `rockRanges`) and draws it with a rock picture; called alone it only shapes the ground. Rocks
+ * must not overlap each other or a gap. */
+export function withRocks(profile: Vec2[], rocks: readonly { x: number; w: number; h: number }[]): Vec2[] {
+  let out = profile;
+  for (const r of rocks) {
+    const x0 = r.x - r.w / 2;
+    const x1 = r.x + r.w / 2;
+    const lump: Vec2[] = [];
+    for (let i = 0; i < ROCK_SAMPLES; i++) {
+      // Samples bunched toward the edges (cosine spacing), where the outline turns steeply.
+      const u = -Math.cos((Math.PI * i) / (ROCK_SAMPLES - 1));
+      const x = r.x + (u * r.w) / 2;
+      const shape = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(u), ROCK_P)), 1 / ROCK_P);
+      lump.push({ x, y: heightAt(out, x) + r.h * shape });
+    }
+    const before = out.filter((p) => p.x < x0 - EPS);
+    const after = out.filter((p) => p.x > x1 + EPS);
+    out = sortAscending([...before, ...lump, ...after]);
+  }
+  return out;
+}
+
+/** The ground under the rocks: `profile` with each rock's lump (`withRocks`) taken back out, the
+ * points strictly inside its span dropped so the ground runs straight from one edge of the lump
+ * to the other. build.ts draws the sand (or whatever lies around a rock) along this, and the
+ * rock's picture standing on it; the collider keeps the lumps. */
+export function withoutRocks(profile: Vec2[], rocks: readonly { x: number; w: number }[]): Vec2[] {
+  return profile.filter((p) => !rocks.some((r) => p.x > r.x - r.w / 2 + EPS / 2 && p.x < r.x + r.w / 2 - EPS / 2));
+}
+
 /** The shortest distance (m) from point `p` to the profile's polyline, looking only at segments
  * within `reach` of p horizontally (pass the largest distance you care about; anything farther
  * comes back as Infinity). The sim asks it whether a wheel is resting on the ground. */
 export function distanceToGround(profile: Vec2[], p: Vec2, reach: number): number {
+  return closestGround(profile, p, reach).dist;
+}
+
+/** `distanceToGround` plus the x of the closest ground point (p.x when nothing is within reach):
+ * where a wheel touches the ground, so the sim reads the surface there (a wheel pressed against
+ * the side of a rock standing in sand touches rock, though its axle is over sand). */
+export function closestGround(profile: Vec2[], p: Vec2, reach: number): { dist: number; x: number } {
   // First point at or past p.x - reach (binary search), then walk the segments up to p.x + reach.
   let lo = 0;
   let hi = profile.length - 1;
@@ -242,6 +289,7 @@ export function distanceToGround(profile: Vec2[], p: Vec2, reach: number): numbe
     else hi = mid;
   }
   let best = Infinity;
+  let bestX = p.x;
   for (let i = Math.max(0, lo - 1); i < profile.length - 1; i++) {
     const a = profile[i]!;
     const b = profile[i + 1]!;
@@ -250,9 +298,13 @@ export function distanceToGround(profile: Vec2[], p: Vec2, reach: number): numbe
     const dy = b.y - a.y;
     const len2 = dx * dx + dy * dy;
     const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
-    best = Math.min(best, Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y));
+    const d = Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y);
+    if (d < best) {
+      best = d;
+      bestX = a.x + t * dx;
+    }
   }
-  return best;
+  return { dist: best, x: bestX };
 }
 
 /** One gap in a profile (a `withGap` pit or a `withRampToLip` jump): the x-range with no real
@@ -305,11 +357,20 @@ export function findGaps(profile: Vec2[]): Gap[] {
  * (the chasm visual shows through instead). The rust top "crust" no longer uses this helper (a
  * fixed absolute closing depth clips away wherever the real surface sits below `-depth`, e.g. a
  * jump's lower landing) - see `crustPolygons` below. */
-export function terrainPolygon(profile: Vec2[], depth = 0.3): Vec2[] {
+export function terrainPolygon(profile: Vec2[], depth = 0.3, x0 = 0, x1 = WORLD_W): Vec2[] {
   const clipped = profile
-    .map((p) => ({ x: Math.min(WORLD_W, Math.max(0, p.x)), y: Math.max(-depth, p.y) }))
+    .map((p) => ({ x: Math.min(x1, Math.max(x0, p.x)), y: Math.max(-depth, p.y) }))
     .filter((p, i, arr) => i === 0 || p.x !== arr[i - 1]!.x || p.y !== arr[i - 1]!.y);
-  return [...clipped, { x: WORLD_W, y: -depth }, { x: 0, y: -depth }];
+  return [...clipped, { x: x1, y: -depth }, { x: x0, y: -depth }];
+}
+
+/** The part of `profile` between x0 and x1 (x0 < x1), with interpolated end points: one surface
+ * run's stretch of ground (build.ts draws and collides each run separately, 2026-10-09). A point
+ * within EPS of an end is dropped in favour of the exact end point, so the pieces of one profile
+ * meet exactly. */
+export function clipProfile(profile: Vec2[], x0: number, x1: number): Vec2[] {
+  const inner = profile.filter((p) => p.x > x0 + EPS / 2 && p.x < x1 - EPS / 2);
+  return [{ x: x0, y: heightAt(profile, x0) }, ...inner, { x: x1, y: heightAt(profile, x1) }];
 }
 
 /** Splits `profile` into the maximal runs of REAL terrain, dropping the `PIT_Y` gap sentinel: a
@@ -345,6 +406,13 @@ function terrainSegments(profile: Vec2[]): Vec2[][] {
  * no separate "wall" texture to draw. A segment that clips away entirely (outside x 0..WORLD_W) is
  * dropped. */
 export function crustPolygons(profile: Vec2[], thickness = 0.3): Vec2[][] {
+  return bandPolygons(profile, 0, thickness);
+}
+
+/** Like `crustPolygons`, but a ribbon from `top` to `bottom` m under the surface (top < bottom):
+ * a glossy line just under an ice surface, a sand ripple inside the crust (build.ts, 2026-10-09).
+ * `bandPolygons(p, 0, t)` is exactly `crustPolygons(p, t)`. */
+export function bandPolygons(profile: Vec2[], top: number, bottom: number): Vec2[][] {
   return terrainSegments(profile)
     .map((segment) =>
       segment
@@ -353,7 +421,13 @@ export function crustPolygons(profile: Vec2[], thickness = 0.3): Vec2[][] {
     )
     .filter((clipped) => clipped.length >= 2)
     .map((clipped) => {
-      const bottom = [...clipped].reverse().map((p) => ({ x: p.x, y: p.y - thickness }));
-      return [...clipped, ...bottom];
+      const upper = top === 0 ? clipped : clipped.map((p) => ({ x: p.x, y: p.y - top }));
+      const lower = [...clipped].reverse().map((p) => ({ x: p.x, y: p.y - bottom }));
+      return [...upper, ...lower];
     });
+}
+
+/** Whether x is inside (or within `margin` of) a gap: no surface to decorate there. */
+export function nearGap(profile: Vec2[], x: number, margin = 0.15): boolean {
+  return findGaps(profile).some((g) => x > g.x0 - margin && x < g.x1 + margin);
 }

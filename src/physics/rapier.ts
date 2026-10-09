@@ -256,6 +256,13 @@ export class RapierWorld extends BaseWorld {
     return this.must(body).mass();
   }
 
+  setFriction(body: BodyId, friction: number): void {
+    // Rapier recomputes every contact's combined friction from its two colliders each step, so
+    // the new value applies from the next step on, to contacts already touching too.
+    const rb = this.must(body);
+    for (let i = 0; i < rb.numColliders(); i++) rb.collider(i).setFriction(friction);
+  }
+
   applyForce(body: BodyId, force: Vec2): void {
     // Rapier accumulates forces until reset; match Box2D's per-step force by resetting after the step.
     this.must(body).addForce({ x: force.x, y: force.y }, true);

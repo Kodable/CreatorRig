@@ -67,11 +67,11 @@ describe('vehicle catalog', () => {
     expect(MOUNT_DESCRIPTOR.options[1]!.label).toContain(`+${SPRING_EXTRA} coin`);
   });
 
-  it('blurbs (2026-10-05): one short kid-friendly sentence per attachment', () => {
+  it('blurbs (2026-10-05): one short kid-friendly sentence per attachment; the star grips sand and ice (2026-10-09)', () => {
     expect(BLURBS).toEqual({
       wheelCircle: 'Fast and smooth on flat ground.',
-      wheelSquare: 'Grips rocks and steps. Slow!',
-      wheelStar: 'Climbs almost anything.',
+      wheelSquare: 'Cheap and bumpy. Slow!',
+      wheelStar: 'Climbs almost anything. Grips sand and ice!',
       fan: 'A gentle push. Stick it on the back.',
       stove: 'Puffs of push! Stick it on the back.',
       jet: 'A huge push. Watch out, it can lift you!',

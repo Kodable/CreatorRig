@@ -82,6 +82,9 @@ class FakeScene {
     this.rec('setWorldExtent', world);
     this.worldExtent = world;
   }
+  setLook(look: string | undefined): void {
+    this.rec('setLook', look);
+  }
   setTool(): void {}
   setGrid(): void {}
   setWidgets(ws: Widget[]): void {
@@ -392,6 +395,31 @@ describe('BuilderApp: Level.extentW (a short level in a wide course)', () => {
     expect(scene.base!.cx).toBeCloseTo(45, 9);
     app.addPart('box');
     expect(app.parts.at(-1)!.x).toBeCloseTo(30 + 5, 9);
+  });
+});
+
+describe('BuilderApp: Level.look (2026-10-09)', () => {
+  const MARS_LEVEL: L = { ...LEVEL, id: 'mars', look: 'mars' };
+  const MOON_LEVEL: L = { ...LEVEL, id: 'moon' }; // no look: the world's own
+
+  it('passes the level look to the scene', async () => {
+    const { scene } = boot(makeSpec(SINGLE, { levels: [MARS_LEVEL, MOON_LEVEL] }));
+    await flush();
+    expect(scene.named('setLook')).toEqual([['mars']]);
+  });
+
+  it('passes undefined for a level without a look', async () => {
+    const { scene } = boot(makeSpec(SINGLE, { levels: [MOON_LEVEL, MARS_LEVEL] }));
+    await flush();
+    expect(scene.named('setLook')).toEqual([[undefined]]);
+  });
+
+  it('passes the next level own look when advancing', async () => {
+    const { app, scene } = boot(makeSpec(SINGLE, { levels: [MOON_LEVEL, MARS_LEVEL] }));
+    await flush();
+    app.selectLevel('mars');
+    await flush();
+    expect(scene.named('setLook')).toEqual([[undefined], ['mars']]);
   });
 });
 

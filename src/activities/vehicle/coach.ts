@@ -71,7 +71,7 @@ function wheelsCoach(ctx: RoverCoachContext): RoverCoachStep | null {
 
 // ---- levels 2-5: after the first run --------------------------------------------------------
 
-/** Rock steps: round wheels trip; the star is the new part. */
+/** Stone steps: round wheels trip; the star is the new part. */
 function shapeCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   if (ctx.parts.some((p) => p.kind === 'wheelStar')) return null;
   return shelfStep(ctx, 'star', 'Round wheels trip here. Try the NEW Star wheel!', 'wheelStar');
@@ -106,7 +106,7 @@ function weightCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   return step('front', `Drag the ${LABELS[onTop.kind].toLowerCase()} to the FRONT of the rover.`, { type: 'part', partId: onTop.id });
 }
 
-/** Crater rim: wheels slip; a fan on the back pushes. */
+/** Big hill: wheels slip; a fan on the back pushes. */
 function powerCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   if (ctx.parts.some((p) => isPower(p.kind))) return null;
   return shelfStep(ctx, 'fan', 'Too steep! Add a Fan on the BACK for a push.', 'fan');

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -16,12 +16,15 @@ import {
   frameView,
   idleButtonsAt,
   introPan,
+  PLANET_LOOKS,
   rimSnap,
   vehicleSpec,
   viewFrameAt,
 } from './spec';
+import { PLANETS, PLANET_IDS } from './core/planets';
+import { resolveLook } from '../../kit/looks';
 import { roverCoach } from './coach';
-import { PICS, ROVER_R } from './core/art';
+import { PICS, ROVER_R, groundPictures } from './core/art';
 import { GROUND_DEPTH, WORLD_H } from './core/build';
 import { VIEW_W, WORLD_W, heightAt } from './core/terrain';
 import { ATTACHMENT_KINDS, BLURBS, CATALOG, MOUNT_DESCRIPTOR, partCost } from './core/catalog';
@@ -152,19 +155,24 @@ describe('vehicleSpec: wiring', () => {
     }
   });
 
-  it('textures: every real rover picture plus the boulder, all on disk', () => {
+  it('textures: every real rover picture, the ground pictures (rocks, sand and ice effects) and the boulder, all on disk', () => {
     const textures = vehicleSpec.textures!;
     for (const p of Object.values(PICS)) expect(textures[p.key]?.url).toBe(`parts/rover/real/${p.file}`);
+    for (const p of groundPictures()) expect(textures[p.key]?.url).toBe(`parts/rover/${p.file}`);
     expect(textures['rv-boulder']).toBeDefined();
     for (const t of Object.values(textures)) expect(existsSync(resolve(PUBLIC, t.url)), t.url).toBe(true);
   });
 
-  it('the world keeps the 2026-09-22 ground: 1.5 m of course-drawn ground, the Mars sky extended under it', () => {
+  it('the ground pictures are the size art.ts says (the berm and rock geometry depend on it)', () => {
+    for (const p of groundPictures()) {
+      const png = readFileSync(resolve(PUBLIC, `parts/rover/${p.file}`));
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)], p.file).toEqual([p.w, p.h]);
+    }
+  });
+
+  it('the world keeps the 2026-09-22 ground: 1.5 m of course-drawn ground', () => {
     expect(vehicleSpec.world.groundDepth).toBe(GROUND_DEPTH);
     expect(vehicleSpec.world.groundBand).toBe(false);
-    const sky = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('mars-sky'))!;
-    expect(sky.y - sky.h / 2).toBeCloseTo(-GROUND_DEPTH, 9);
-    expect(sky.y + sky.h / 2).toBeCloseTo(WORLD_H, 9);
   });
 
   it('a wide world (2026-10-05): 90 m at ppm 32, so the panel shows a 30 m window and scrolls', () => {
@@ -175,16 +183,41 @@ describe('vehicleSpec: wiring', () => {
     expect(vehicleSpec.world.worldH).toBe(WORLD_H);
   });
 
-  it('the Mars sky covers the whole world, unstretched (the wide picture keeps its aspect, running past the right end since the world grew taller); the planet hangs over the start', () => {
-    const sky = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('mars-sky'))!;
-    expect(sky.url).toBe('bg/mars-sky-wide.jpg');
-    expect(sky.x - sky.w / 2).toBeCloseTo(0, 9);
-    expect(sky.x + sky.w / 2).toBeGreaterThanOrEqual(WORLD_W);
-    expect(existsSync(resolve(PUBLIC, sky.url))).toBe(true);
-    const aspect = 7200 / 1300; // public/bg/mars-sky-wide.jpg
-    expect(Math.abs(sky.w / sky.h / aspect - 1)).toBeLessThan(0.03);
-    const planet = vehicleSpec.world.backgrounds!.find((b) => b.url.includes('planet'))!;
-    expect(planet.x + planet.w / 2).toBeLessThan(VIEW_W);
+  it('2026-10-09: one sky look per planet, keyed by the planet look every level of that planet names; the world\'s own sky is Mars\'s', () => {
+    const looks = vehicleSpec.world.looks!;
+    expect(Object.keys(looks).sort()).toEqual(PLANET_IDS.map((id) => PLANETS[id].look).sort());
+    for (const level of LEVELS) expect(looks[level.look!], level.id).toBeDefined();
+    expect(vehicleSpec.world.sky).toEqual(PLANET_LOOKS.mars.sky);
+    expect(vehicleSpec.world.backgrounds).toEqual(PLANET_LOOKS.mars.backgrounds);
+    // Each look resolves (kit looks.ts) to its own sky and pictures.
+    expect(resolveLook(vehicleSpec.world, 'europa').sky).toEqual(PLANET_LOOKS.europa.sky);
+    expect(resolveLook(vehicleSpec.world, 'flooftopia').backgrounds).toEqual(PLANET_LOOKS.flooftopia.backgrounds);
+  });
+
+  it('every look picture is on disk; the repeated far strips cover the whole world, standing on the panel bottom; the pictures under 1.5 MB', () => {
+    for (const id of PLANET_IDS) {
+      const bgs = PLANET_LOOKS[id].backgrounds;
+      for (const bg of bgs) {
+        const file = resolve(PUBLIC, bg.url);
+        expect(existsSync(file), bg.url).toBe(true);
+        expect(statSync(file).size, bg.url).toBeLessThan(1.5e6);
+      }
+      const far = bgs.filter((b) => b.url.endsWith('-far.png') || b.url.endsWith('-hills.png'));
+      expect(far.length, id).toBeGreaterThan(0);
+      expect(Math.min(...far.map((b) => b.x - b.w / 2))).toBeCloseTo(0, 9);
+      expect(Math.max(...far.map((b) => b.x + b.w / 2))).toBeGreaterThanOrEqual(WORLD_W);
+      for (const b of far) expect(b.y - b.h / 2).toBeCloseTo(-GROUND_DEPTH, 9);
+    }
+  });
+
+  it('Mars has its two little moons in the first view and no red planet in its sky; Europa has Jupiter low on the horizon', () => {
+    const mars = PLANET_LOOKS.mars.backgrounds.map((b) => b.url);
+    expect(mars).toContain('bg/mars-phobos.png');
+    expect(mars).toContain('bg/mars-deimos.png');
+    expect(mars.some((u) => u.includes('mars-sky') || u.includes('mars-planet'))).toBe(false);
+    const jupiter = PLANET_LOOKS.europa.backgrounds.find((b) => b.url === 'bg/jupiter.png')!;
+    expect(jupiter.x + jupiter.w / 2).toBeLessThan(VIEW_W);
+    expect(jupiter.y - jupiter.h / 2).toBeLessThan(0); // its bottom sinks behind the ice
   });
 
   it('2026-10-05 playtest, part 2: DRIVE is back in the (centred) bottom bar, a win banner, the coach, a rim-snap preview', () => {
@@ -514,7 +547,14 @@ describe('vehicleSpec.intro: the pan from the beacon back to the start', () => {
     }
   }
 
-  it('the five long challenges pan, the first nine levels do not', () => {
-    expect(LEVELS.filter((l) => vehicleSpec.intro!(l)).map((l) => l.id)).toEqual(['flip', 'canyon', 'ridge', 'hops', 'marathon']);
+  // 2026-10-09: no fixed id list any more (Mars and Europa add long levels): a level with goals
+  // pans exactly when it is wider than one view (free roam is wide but has no goal to show), and
+  // every Flooftopia intro is short.
+  it('the long goal levels (wider than one view) pan, the short ones do not', () => {
+    const pans = (l: (typeof LEVELS)[number]): boolean => l.goals.length > 0 && l.extentW! > VIEW_W;
+    const wrong = LEVELS.filter((l) => (vehicleSpec.intro!(l) !== null) !== pans(l)).map((l) => `${l.id} ${l.extentW}`);
+    expect(wrong).toEqual([]);
+    expect(LEVELS.filter((l) => l.chapter === 'Flooftopia' && vehicleSpec.intro!(l))).toEqual([]);
+    expect(LEVELS.some((l) => vehicleSpec.intro!(l))).toBe(true);
   });
 });

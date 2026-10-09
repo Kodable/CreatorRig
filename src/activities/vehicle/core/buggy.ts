@@ -1,7 +1,7 @@
 // The old two-wheel buggy (the Vehicle course's machine until 2026-10-02), kept verbatim because
 // the Bridge course drives it over the child's bridge as the load (see
 // src/activities/bridge/core/sim.ts, which builds it through `buildPart` with kind 'vehicle').
-// The Marstopia rover itself no longer uses any of this: see build.ts for the dome + attachments.
+// The rover itself (Planet Rover) no longer uses any of this: see build.ts for the dome + attachments.
 import { heightAt } from './terrain';
 import type { BodyId, Bounds, JointId, PartHandle, PlacedPart, RenderItem, Vec2 } from './types';
 import type { PhysicsWorld } from '../../../physics/types';

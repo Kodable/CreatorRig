@@ -160,6 +160,11 @@ export interface PhysicsWorld {
   /** Sets the angular velocity (rad/s). On a kinematic body this drives its rotation. */
   setAngularVelocity(body: BodyId, omega: number): void;
   getMass(body: BodyId): number;
+  /** Sets the friction of every collider on the body; takes effect from the next step. The
+   * engine combines it with the other collider's friction per contact (Rapier: the average), so a
+   * slippery pair needs BOTH sides low. 2026-10-09: the rover's wheels change grip with the ground
+   * under them (sand, ice) every fixed step. */
+  setFriction(body: BodyId, friction: number): void;
   applyForce(body: BodyId, force: Vec2): void;
   applyImpulse(body: BodyId, impulse: Vec2): void;
   /** Local point on a body to world coordinates. */

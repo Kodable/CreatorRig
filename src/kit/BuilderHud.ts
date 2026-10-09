@@ -15,6 +15,7 @@ import type {
   StatBar,
   ToolSpec,
 } from './types';
+import { levelPickerLabel } from './chapters';
 import { hasShelfKinds, nonShelfKinds, shelfGroups } from './shelf';
 import { playGoalsIntro as animateGoalsIntro, prefersReducedMotion } from '../ui/goalsIntro';
 import './builder.css';
@@ -1359,7 +1360,9 @@ export class BuilderHud<
     }
 
     // ---- level picker ----
-    this.setText(this.pickerLabelEl, `Level ${this.levelIndex + 1} of ${all.length}`);
+    // 2026-10-09: `Level.chapter` (e.g. several rover planets) reads "Mars · 3 of 12" instead of
+    // "Level N of M" — see `levelPickerLabel`.
+    this.setText(this.pickerLabelEl, levelPickerLabel(level, all));
     this.setDisabled(this.pickerPrevBtn, this.levelIndex <= 0);
     this.setDisabled(this.pickerNextBtn, this.levelIndex >= all.length - 1);
   }

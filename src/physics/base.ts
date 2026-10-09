@@ -125,6 +125,7 @@ export abstract class BaseWorld implements PhysicsWorld {
   abstract getAngularVelocity(body: BodyId): number;
   abstract setAngularVelocity(body: BodyId, omega: number): void;
   abstract getMass(body: BodyId): number;
+  abstract setFriction(body: BodyId, friction: number): void;
   abstract applyForce(body: BodyId, force: Vec2): void;
   abstract applyImpulse(body: BodyId, impulse: Vec2): void;
   abstract worldPoint(body: BodyId, local: Vec2): Vec2;

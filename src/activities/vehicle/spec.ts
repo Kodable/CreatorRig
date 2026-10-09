@@ -1,4 +1,6 @@
-// Marstopia Rover course spec. Stakeholder direction 2026-10-02 (Gao): "Revamp the rover building
+// Planet Rover course spec (the Marstopia Rover until 2026-10-09, when it gained planets: the
+// intros on Flooftopia, the challenges on Mars and Europa, each with its own gravity, ground and
+// sky; core/planets.ts, core/surfaces.ts, `world.looks` below). Stakeholder direction 2026-10-02 (Gao): "Revamp the rover building
 // completely ... putting parts onto a rover base ... wheels, or different ways to propel the rover,
 // or different weights, and choose the suspension. Each part will cost a different amount. Parts
 // can be placed anywhere on the base." The level places the glass dome with Kevin inside; the
@@ -28,7 +30,7 @@
 // bar handles it everywhere). Every bottom-bar/win/shelf/dash/card surface is reskinned with the
 // carnival's plain white box_curved art (kit/builder.css), tinted via CSS mask-border instead of
 // solid fills/borders.
-import type { CameraFrame, CourseSpec, PlacedPart, RenderItem, Vec2, Widget } from '../../kit/types';
+import type { CameraFrame, CourseSpec, PlacedPart, RenderItem, Vec2, Widget, WorldSpec } from '../../kit/types';
 import type { AttachmentKind, Metrics, Outcome, PartKind, VehicleLevel } from './core/types';
 import {
   ATTACHMENT_KINDS,
@@ -44,7 +46,9 @@ import {
   partCost,
 } from './core/catalog';
 import { ART_DIR } from './core/art';
-import { GROUND_DEPTH, WORLD_H } from './core/build';
+import { GROUND_DEPTH, WORLD_H, groundTextures } from './core/build';
+import { PLANETS } from './core/planets';
+import type { PlanetId } from './core/planets';
 import { ROVER_R, SPAWN, layoutRover, normalizeRoverParts, rotate, roverTextures, thetaOf } from './core/geometry';
 import { VIEW_W, WORLD_W, heightAt } from './core/terrain';
 import { createVehicleSim } from './core/sim';
@@ -307,10 +311,53 @@ function buildRows(parts: PlacedPart<PartKind>[], level: VehicleLevel): { label:
 
 const FILL = (item: RenderItem): { color: number; alpha: number } => ({ color: item.color, alpha: item.alpha ?? 1 });
 
-/** The Mars sky picture (public/bg/mars-sky-wide.jpg, 7200 x 1300 px): its aspect, and its height
- * in world meters (the whole world's height plus the ground band under y = 0). */
-const SKY_ASPECT = 7200 / 1300;
-const SKY_H = WORLD_H + GROUND_DEPTH;
+type Background = NonNullable<WorldSpec['backgrounds']>[number];
+
+/** A seamless picture strip `w` m wide repeated `copies` times side by side from x 0, spanning
+ * world y y0..y0 + h (the far hills, dunes and ridges, the clouds, the stars). */
+function strip(url: string, w: number, y0: number, h: number, copies: number): Background[] {
+  return Array.from({ length: copies }, (_, i) => ({ url, x: w / 2 + i * w, y: y0 + h / 2, w, h }));
+}
+
+/** The far scenery strips (60 x 8 m: 3840 x 512 px) stand on the panel's bottom edge, so their
+ * opaque bottom 1.5 m is behind the ground and their silhouettes rise from the horizon. */
+const FAR_W = 60;
+const FAR_H = 8;
+
+/** 2026-10-09 (Gao: "i want to introduce more planets"): one sky per planet, picked by each
+ * level's `look` (levels/shared.ts sets it from the planet; the kit redraws the sky gradient and
+ * these picture layers on every level load). Pictures in public/bg/, made 2026-10-09:
+ *  - Flooftopia: Earth for the floofs, a bright blue day: soft white clouds, then rolling green
+ *    hills with little Fuzztopia trees far away (the library's Fuzztopia props).
+ *  - Mars: we are ON Mars now (the old sky picture had a red planet hanging in it): a dusty
+ *    butterscotch daytime sky, the two little grey moons Phobos and Deimos, hazy mesas and dunes.
+ *  - Europa: a black starry sky with Jupiter (the library's solar-system Jupiter) huge and low on
+ *    the horizon, behind distant ice ridges. */
+export const PLANET_LOOKS: Record<PlanetId, { sky: NonNullable<WorldSpec['sky']>; backgrounds: Background[] }> = {
+  flooftopia: {
+    sky: { top: 0x4fa9ec, bottom: 0xd4f0ff, stars: false },
+    backgrounds: [
+      ...strip('bg/flooftopia-clouds.png', 60, 3, 14, 2),
+      ...strip('bg/flooftopia-hills.png', FAR_W, -GROUND_DEPTH, FAR_H, 2),
+    ],
+  },
+  mars: {
+    sky: { top: 0xb98258, bottom: 0xf0caa4, stars: false },
+    backgrounds: [
+      { url: 'bg/mars-phobos.png', x: 8, y: 14, w: 1.1, h: (1.1 * 183) / 256 },
+      { url: 'bg/mars-deimos.png', x: 21, y: 15.5, w: 0.6, h: (0.6 * 142) / 160 },
+      ...strip('bg/mars-far.png', FAR_W, -GROUND_DEPTH, FAR_H, 2),
+    ],
+  },
+  europa: {
+    sky: { top: 0x020309, bottom: 0x0e1a36, stars: false },
+    backgrounds: [
+      ...strip('bg/europa-stars.png', 30, -1.45, 20.5, 3),
+      { url: 'bg/jupiter.png', x: 19, y: 4, w: 10, h: 10 },
+      ...strip('bg/europa-far.png', FAR_W, -GROUND_DEPTH, FAR_H, 2),
+    ],
+  },
+};
 
 /** Parts-shelf section each attachment kind is grouped under (`hud.partInfo.group`, kit/types.ts):
  * the three groups a build chooses from (Jon, huddle 2026-09-16: wheels, propulsion, weights). */
@@ -364,33 +411,24 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
   writeBackSettled: false,
   partCost,
 
-  // `stars: false`: the mars-sky picture already carries its own starfield/nebula glow; the sky
-  // colours stay as the fallback for wherever the picture doesn't reach.
-  // `worldW` 90 (WORLD_W): one width for the whole course (the kit reads `world` once); the first
-  // nine levels keep their 30 m and the camera just has room to the right.
+  // `worldW` 90 (WORLD_W): one width for the whole course (the kit reads `world` once); the short
+  // levels keep their 30 m and the camera just has room to the right. The sky is per planet
+  // (`looks`, picked by each level's `look`); the world's own sky and pictures are Mars's, what
+  // the kit draws before the first level loads.
   world: {
     worldW: WORLD_W,
     worldH: WORLD_H,
     ppm: PPM,
-    sky: { top: 0x0b1030, bottom: 0x3a1c3f, stars: false },
+    sky: PLANET_LOOKS.mars.sky,
     groundStrip: { top: 0xb5532e, bottom: 0x8a3c1f },
     // Lets a focus/follow frame centre lower; GROUND_DEPTH (core/build.ts) is the same number
     // buildTerrain's darker "under" layer closes at (see terrainPolygon's doc comment).
     groundDepth: GROUND_DEPTH,
-    // The course draws its own ground (buildTerrain's under/crust/chasm layers): a level's
-    // terrain can dip below y = 0 (a jump's lower landing) or open into a pit.
+    // The course draws its own ground (buildTerrain's under/crust/chasm layers, coloured by
+    // surface): a level's terrain can dip below y = 0 (a jump's lower landing) or open into a pit.
     groundBand: false,
-    backgrounds: [
-      // The whole world tall, extended down to -GROUND_DEPTH so the picture covers the sky below
-      // y = 0 too. mars-sky-wide.jpg is mars-sky.jpg three times over (7200 x 1300 px, each copy
-      // cross-faded into the next over 300 px, so there is no seam). Its aspect matched the old
-      // 90 x 16.5 m world; since the world grew to 19.125 m (2026-10-06) the picture keeps that
-      // aspect (SKY_ASPECT, nothing stretched, the round glows stay round) and so runs past the
-      // world's right end (x 0..114.2), which the camera never shows.
-      { url: 'bg/mars-sky-wide.jpg', x: (SKY_H * SKY_ASPECT) / 2, y: WORLD_H / 2 - GROUND_DEPTH / 2, w: SKY_H * SKY_ASPECT, h: SKY_H },
-      // The planet hangs over the start, in the first view.
-      { url: 'bg/mars-planet.png', x: 24, y: 11.5, w: 3.2, h: 3.2 },
-    ],
+    backgrounds: PLANET_LOOKS.mars.backgrounds,
+    looks: Object.fromEntries((Object.keys(PLANET_LOOKS) as PlanetId[]).map((id) => [PLANETS[id].look, PLANET_LOOKS[id]])),
   },
 
   // The drawer shows the parts shelf and the selected part's Mount row (suction cup / spring
@@ -399,6 +437,7 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
   drawer: true,
   textures: {
     ...roverTextures(),
+    ...groundTextures(),
     'rv-boulder': { url: 'parts/rover/cargo-Heavy.png' },
   },
 
@@ -500,10 +539,18 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
           return current >= 1 ? 'yes' : 'not yet';
         case 'time':
           return `${current.toFixed(1)} of ${goal.value.toFixed(1)} s`;
-        case 'flips':
-          return `${Math.round(current)} of ${Math.round(goal.value)}`;
-        case 'distance':
+        case 'flips': {
+          // A "no flips" goal (== 0 or <= 0) read "0 of 0" (2026-10-09): say what happened instead.
+          const n = Math.round(current);
+          if (goal.value === 0 && (goal.op === '==' || goal.op === '<=')) return n === 0 ? 'no flips' : n === 1 ? 'flipped!' : `${n} flips`;
+          return `${n} of ${Math.round(goal.value)}`;
+        }
         case 'upsideDown':
+          // A "stay on your wheels" goal (upsideDown == 0 / <= 0): flips only count full turns, so
+          // a rover that slides in on its roof needs this metric to be honest (2026-10-09).
+          if (goal.value === 0 && (goal.op === '==' || goal.op === '<=')) return current <= 0 ? 'on its wheels' : 'upside down!';
+          return `${current.toFixed(1)} of ${goal.value.toFixed(1)} m`;
+        case 'distance':
           return `${current.toFixed(1)} of ${goal.value.toFixed(1)} m`;
         default:
           return `${current} of ${goal.value}`;
@@ -514,7 +561,7 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
       play: 'Drive, rover, drive!',
       pass: 'Kevin made it! What a rover!',
       doneNotPassed: 'The rover stopped. Check the goals, then change your build.',
-      freePlay: 'Build any rover you like and roam Marstopia!',
+      freePlay: 'Build any rover you like and go exploring!',
       launch: '▶ DRIVE',
       playAgain: '▶ DRIVE again',
       reset: '↺ Reset',

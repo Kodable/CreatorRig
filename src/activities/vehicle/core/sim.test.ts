@@ -23,7 +23,7 @@ import type { BodyDef, PhysicsWorld } from '../../../physics/types';
 const DEG = Math.PI / 180;
 
 function makeLevel(terrain: Vec2[]): VehicleLevel {
-  return { id: 'test', title: 'Test', bruno: '', goals: [], parts: [], palette: [], hints: [], failHints: {}, terrain };
+  return { id: 'test', planet: 'flooftopia', title: 'Test', bruno: '', goals: [], parts: [], palette: [], hints: [], failHints: {}, terrain };
 }
 
 type Stick = [AttachmentKind, number, ('cup' | 'spring')?];

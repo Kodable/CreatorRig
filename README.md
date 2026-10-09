@@ -85,6 +85,8 @@ Multi-shot courses let the child tune between runs (`tuneBetweenRuns`). The worl
 
 The physics adapter now has prismatic joints, collision groups, and a motor factor.
 
+**Looks and chapters** (2026-10-09): `WorldSpec.looks` names several skies (each a `sky` gradient and/or `backgrounds` picture layers; a field a look omits falls back to the world's own), and `Level.look` picks one per level: the scene preloads every look's pictures (keyed by URL, `src/kit/looks.ts` `lookImageUrls`) and redraws the sky and backgrounds on each level load (`BuilderScene.setLook`, a no-op when nothing changes). `Level.chapter` groups levels: the level picker then reads "Mars · 3 of 9" (position and count within the chapter, `src/kit/chapters.ts` `levelPickerLabel`) instead of "Level N of M". Courses that set neither are unchanged.
+
 **Ground layer**: `WorldSpec.groundDepth` (in meters) shows that much ground below world y = 0 (drawing only; physics/levels stay unchanged); camera frames may centre lower via `focusFrame`. `WorldSpec.groundBand: false` disables the kit's own ground stripe, letting a course draw terrain below y = 0 (dips, pits). When true (the default), the kit draws a coloured band at y = 0; when false, the course owns the ground visuals all the way down to `groundDepth`.
 
 Three editor tool kinds coordinate placed parts. **Move** (the default) taps to select and drags to reposition. **Place** taps empty space to add a part there. **Link** (Road, Wood, Steel, Cable tools) drags from anywhere to anywhere with a live rubber band; each end that is not an existing point becomes a new joint. A course can set a `grid`: the scene draws it and every placed part, dragged part and link end snaps to it. The scene hit-tests parts via `hitSegment` (a thick segment between two points) or bounds. The `canAdd` hook enforces rules (length caps, budgets); `normalizeParts` derives fields (a rod's midpoint) and cleans up broken references.
@@ -95,7 +97,7 @@ A dial widget can set `radiusM` (world-meter radius to ride a machine part at an
 
 Rail-locked sim in pure TypeScript (`src/core`), no physics engine. Fixed step 1/60 s with 4 sub-steps. Cart state is (s, v) along a centripetal Catmull-Rom curve resampled every 0.1 m. Seat g = side × (v² kappa / g + tangent.x). Outcomes: reachedEnd, rolledBack, stuck, fell (fell = seat g below -STICK, default -0.5 g, while inverted). Goals are data in `src/core/levels.ts`.
 
-File layout: `src/core` (pure math and data, unit-tested with Vitest), `src/game` (Phaser scene and view constants), `src/ui` (HTML HUD), `src/app.ts` (controller). Tests: run `npx vitest run` (1045 tests in 46 files).
+File layout: `src/core` (pure math and data, unit-tested with Vitest), `src/game` (Phaser scene and view constants), `src/ui` (HTML HUD), `src/app.ts` (controller). Tests: run `npx vitest run` (1252 tests in 52 files).
 
 ## How the Goldberg course works
 
@@ -141,31 +143,56 @@ Six intro levels (one new mechanic each: power, angle, weight, arm, moving the c
 - `dominoes`: Domino drop — three dominoes leading into a tower, line 3.5, 3 shots.
 - `free`: Free play — unlimited shots.
 
-## Vehicle Obstacle Course (Marstopia Rover)
+## Vehicle Obstacle Course (Planet Rover)
 
-The child builds a rover on a dark starry sky with rust-coloured terrain: a locked glass-dome base with Kevin inside, and parts (wheels, propulsion, weights) added via a parts shelf in the right-hand drawer. Tap the dome (or the big blue **BUILD** button) to open the drawer with the parts shelf (grouped by Wheels, Power, Weights: big picture buttons, each with its coin cost; a tap adds the part); tap a part to see its Mount row (suction cup or spring, labelled "Spring (bouncy, +1 coin)") pinned below the shelf. Unaffordable parts dim. The child drags parts anywhere around the rim and snaps them to 5-degree angles (live preview). The in-scene controls are the big blue BUILD button (opens the drawer) and the big green **DRIVE** button (launches the run); both float over the rover when nothing is selected. The course shows 1.5 m of ground (`groundBand: false` lets the course draw its own ground): a darker under-layer that fills the full depth, a 0.3 m rust crust that follows the surface (including below y = 0 on a jump's lower landing), a dark chasm visual in each gap (crevasse/pit), and the Mars sky picture (mars-sky-wide.jpg, three blended copies) extended down to -1.5 m. The world is 90 m wide with a 30 m view; the first nine levels fit the view, and five long challenges scroll the camera with an intro pan (from the finish back to the start over 2.8 s; a tap skips). Focus is at zoom 2.8 with the rover and DRIVE button mid-screen. Each level defines a coin budget, a palette (wheels: Round, Square, Star; propulsion: Fan, Stove, Jet; weights: Feather, Beans, Melon), Marstopia's terrain (hills, slopes, stairs, gaps, obstacles), and a finish beacon. Outcomes: finished, fell, stuck, timeout (no `flipped`: a rover on its roof keeps driving if wheels touch ground). Metrics: reached the finish, time, flips (full turns), distance, upside down (meters driven on the roof). A "Level complete!" win banner shows on pass with confetti, the outcome line, "Next level" and "Try again" buttons.
+The child builds a rover for Kevin and drives it on three planets: a locked glass-dome base with Kevin inside, and parts (wheels, propulsion, weights) added via a parts shelf in the right-hand drawer. Tap the dome (or the big blue **BUILD** button) to open the drawer with the parts shelf (grouped by Wheels, Power, Weights: big picture buttons, each with its coin cost; a tap adds the part); tap a part to see its Mount row (suction cup or spring, labelled "Spring (bouncy, +1 coin)") pinned below the shelf. Unaffordable parts dim. The child drags parts anywhere around the rim and snaps them to 5-degree angles (live preview). The in-scene control is the big blue BUILD button (opens the drawer); the bottom bar's centred **DRIVE** button launches the run. The course draws its own 1.5 m of ground (`groundBand: false`): an under-layer that fills the full depth (and the panel's bottom margin), a 0.3 m crust that follows the surface (including below y = 0 on a jump's lower landing), and a dark chasm in each gap. The world is 90 m wide with a 30 m view; short levels fit the view, and long challenges scroll the camera with an intro pan (from the finish back to the start over 2.8 s; a tap skips). Focus is at zoom 2.8. Each level defines its planet, a coin budget, a palette (wheels: Round, Square, Star; propulsion: Fan, Stove, Jet; weights: Feather, Beans, Melon), its terrain (hills, slopes, stairs, gaps, rocks) and ground, and a finish beacon. Outcomes: finished, fell, stuck, timeout (no `flipped`: a rover on its roof keeps driving if wheels touch ground). Metrics: reached the finish, time, flips (full turns), distance, upside down (meters driven on the roof). A "Level complete!" win banner shows on pass with confetti, the outcome line, "Next level" and "Try again" buttons.
 
-Wheels (Round "Fast and smooth on flat ground." 2 coins, Square "Grips rocks and steps. Slow!" 1, Star "Climbs almost anything." 3) are motors (6 m/s, 4 N.m cap) that keep driving in any orientation: a wheel on the ground spins the normal way; a wheel more than 20 deg above the dome's centre spins the other way, so a rover on its roof still goes forward. Propulsion (Fan "A gentle push. Stick it on the back." 2, Stove "Puffs of push! Stick it on the back." 3, Jet "A huge push. Watch out, it can lift you!" 5) pushes the dome away from themselves. Weights (Feather "Almost no weight." 1, Beans "Adds some weight to hold you down." 2, Melon "Heavy! Great for ramming." 3) sit on a plate. Every part mounts with a suction cup (rigid, free) or spring (soft, labelled "Spring (bouncy, +1 coin)", +1 coin); springs are a vertical prismatic suspension (2.5 Hz, damping tuned per part type, ±0.15 m travel). A level's coin budget is shown in the drawer header "🪙 used / total" and refused adds show "Not enough coins for that part!". The palette is the concept gate per level, and mount unlocks mid-course. Tap tutorials (coach) guide the first five levels (wheels: build, add one Round wheel, add another, watch DRIVE, next; shape: try the Star wheel; mount: tap a wheel and pick Spring; weight: add a Melon on front; power: add a Fan on back).
+**Planets** (`core/planets.ts`, 2026-10-09; the course was the Marstopia Rover before): each level names one. The planet sets the gravity, the ground wherever the level says nothing else, the sky (`WorldSpec.looks`, one per planet) and the HUD chapter ("Mars · 3 of 9" in the level picker).
+- **Flooftopia** (Earth for the floofs): gravity 10 (the course's old value, so the intros keep their physics), grass ground (green turf with tufts over brown soil), a bright blue sky with clouds and far green hills.
+- **Mars**: gravity 3.7, rock ground (the old rust crust), a dusty butterscotch sky with the little moons Phobos and Deimos and hazy mesas.
+- **Europa**: gravity 1.3, ice ground (pale blue-white with a glossy line and cracks over deep blue), a black starry sky with Jupiter low on the horizon behind ice ridges.
+The wheel motors' torque cap scales with gravity (4 N.m on Flooftopia, 1.48 on Mars, 0.52 on Europa): at full torque a light Mars rover reared up and flipped at every start. So the wheels pull the same for the rover's weight everywhere, and what changes on a planet is what gravity changes: jumps fly farther (the same ramp: 3.6 m on Flooftopia, 5.1 m on Mars; with a jet 4.9 vs 12.8 m), bumps throw higher, and fans, stoves and jets (which do not scale) push a lighter rover harder.
 
-### 14 Levels
+**Surfaces** (`core/surfaces.ts`): a level's `surfaces` ranges (`sand(a, b)`, `ice(a, b)`, `rock(a, b)`, `grass(a, b)`; later ranges paint over earlier ones) change the ground along x; the terrain gets one collider per run with that ground's friction, and every fixed step each wheel takes the grip of the ground under its contact point (`PhysicsWorld.setFriction`). Grip below is the combined friction (Rapier averages wheel and ground).
+- Grass, rock: the old physics (ground 0.8, wheels 1, grip 0.9).
+- Sand ("Sand is soft: round and square wheels sink and slow down; star wheels paddle through. Heavy rovers sink more."): round/square grip 0.495, star 0.9; each wheel in sand is held back by its share of the rover's weight x (crr + perSpeed x speed), crr round 0.22, square 0.3, star 0.07, perSpeed 0.3 / 0.3 / 0.03. Measured on flat Mars ground (two wheels): round 6.0 m/s on rock, 0.9 in sand; square 1.9 / 0.2; star 1.9 / 1.9. A 15 degree sand slope stops round wheels (stars climb); with a fan, a melon rover crosses sand at 1.0 m/s, a feather one at 1.9. Sunk wheels are drawn sunk behind a sand berm and kick up sand puffs.
+- Ice ("Ice is slippery: round and square wheels spin and slide; star wheels' points bite into the ice. Fans, stoves and jets push no matter what is under you."): ground friction 0; round grip 0.06, square 0.07, star 0.5. On flat Europa ice two round wheels creep 1.2 m in 6 s, two stars drive 6.9 m (on Mars ice: round 1.0 m/s, star 2.2 m/s at seconds 4-8). Wheels spinning on ice spray chips.
+- Rocks standing in sand: `rocks: [rockAt(x, 'small' | 'medium' | 'big')]` in a level raises a hard lump into the terrain (`withRocks`), makes it rock ground and draws it with a rock picture standing in the sand.
 
-The first nine unchanged (intro levels with new mechanics, then challenges):
-- `wheels`: Dusty hill — budget 4. Introduces wheels.
-- `shape`: Rock steps — budget 6. Introduces star wheels.
+Wheels (Round "Fast and smooth on flat ground." 2 coins, Square "Cheap and bumpy. Slow!" 1, Star "Climbs almost anything. Grips sand and ice!" 3) are motors (6 m/s) that keep driving in any orientation: a wheel on the ground spins the normal way; a wheel more than 20 deg above the dome's centre spins the other way, so a rover on its roof still goes forward. Propulsion (Fan "A gentle push. Stick it on the back." 2, Stove "Puffs of push! Stick it on the back." 3, Jet "A huge push. Watch out, it can lift you!" 5) pushes the dome away from themselves. Weights (Feather "Almost no weight." 1, Beans "Adds some weight to hold you down." 2, Melon "Heavy! Great for ramming." 3) sit on a plate. Every part mounts with a suction cup (rigid, free) or spring (soft, labelled "Spring (bouncy, +1 coin)", +1 coin); springs are a vertical prismatic suspension (2.5 Hz, damping tuned per part type, ±0.15 m travel). A level's coin budget is shown in the drawer header "🪙 used / total" and refused adds show "Not enough coins for that part!". The palette is the concept gate per level, and mount unlocks mid-course. Tap tutorials (coach) guide the five Flooftopia levels (wheels: build, add one Round wheel, add another, watch DRIVE, next; shape: try the Star wheel; mount: tap a wheel and pick Spring; weight: add a Melon on front; power: add a Fan on back).
+
+### Levels
+
+One file per planet under `core/levels/` (`flooftopia.ts`, `mars.ts`, `europa.ts`, built with `shared.ts`'s `level()`; `core/levels.ts` joins them), each with its own test file (`levels/*.test.ts`; `levels/prove.ts` proves every solution by simulation).
+
+Flooftopia (the intros, the 2026-10-02 levels unchanged in physics, one new mechanic each):
+- `wheels`: Grassy hill — budget 4. Introduces wheels.
+- `shape`: Stone steps — budget 6. Introduces star wheels.
 - `mount`: Bumpy road — budget 6. Introduces the spring mount.
 - `weight`: Boulder push — budget 7. Introduces weights.
-- `power`: Crater rim — budget 8. Introduces propulsion.
-- `jump`: Crevasse jump — budget 9.
-- `rubble`: Rubble field — budget 10, under 12 s.
-- `race`: Flat plain race — budget 9, under 3.5 s.
-- `free`: Roam Marstopia — budget 40. Free play, no goals.
+- `power`: Big hill — budget 8. Introduces propulsion.
 
-Five long challenges (intro pan, 45 s timeout, 90 m terrain):
-- `flip`: Topsy-turvy — budget 12. Two cliffs flip the rover; needs wheels on top and bottom.
-- `canyon`: Canyon climb — budget 12. Climb the crevasse walls.
-- `ridge`: Rocky ridge — budget 14. Cross the ridge's uneven terrain.
-- `hops`: Crater hops — budget 15. Hop the crater rim.
-- `marathon`: Marstopia marathon — budget 20, under 18 s. The long way home.
+Mars (g 3.7: jumps fly about 40% farther and bumps throw the rover high, so springs and "not too fast" matter; every challenge retuned on 2026-10-09):
+- `jump`: Crevasse jump — budget 9. Welcome to Mars: an 8 m crevasse plain wheels cannot clear; land on the wheels.
+- `rubble`: Rubble field — budget 10, stay right side up, under 12 s.
+- `race`: Flat plain race — budget 9, under 4 s.
+- `sand`: Soft sand — budget 9. Meets sand: a 15° sand rise; round and square wheels get stuck, stars or a pusher climb.
+- `dunes`: Dune dash — budget 12, under 10 s. Sand dunes; stars alone are too slow.
+- `rocky`: Rocky sand — budget 9. Meets rocks in sand: stiff wheels stop at a rock, springs pass.
+- `rockfield`: Rock garden — budget 12. A big rock and a dune in sand; fast rovers get tossed.
+- `flip`: Topsy-turvy — budget 12. Sand at each cliff edge tips the rover onto its roof; needs wheels on top and bottom.
+- `canyon`: Canyon climb — budget 12. A 4 m wall at 45°.
+- `ridge`: Rocky ridge — budget 14. Uneven ridge; springs help.
+- `hops`: Crater hops — budget 15. Gaps of 2.5, 4, 5.5 and 7.5 m.
+- `marathon`: Mars marathon — budget 20, under 30 s. Rubble, steps, a jump, then sand with a dune and rocks.
+- `free`: Roam Mars — budget 40. Free play, with sand and rocks.
+
+Europa (g 1.3, ice everywhere unless a level lays rock: round and square wheels slip, star wheels bite, pushers push regardless; added 2026-10-09):
+- `ice`: Icy hill — budget 8. Meets ice: wheels-only round or square builds spin at the foot of the hill.
+- `crack`: Floaty jump — budget 8. An icy ramp and a 6 m crack; only a pusher floats across.
+- `frozen`: Frozen rocks — budget 10, stay right side up. Rocks in ice; stars need springs.
+- `runway`: Rock runway — budget 8. A rock run-up before a crack: the one Europa level plain round wheels win.
+- `trek`: Europa trek — budget 14. Long, scrolling: icy climbs, a rock road, a crack, rocks.
 
 ## Bridge Builder
 
@@ -187,7 +214,7 @@ The level places anchor points on two banks (locked). The child draws rods with 
 
 Part pictures under `public/parts/{catapult,rover}` are drawn as classroom makerspace objects (warm marker outline `#3b2a1a`): the rover is a tissue-box body, bottle-cap and cardboard wheels, battery-and-motor engines, a popsicle-stick strut / pipe-cleaner coil / pen spring, a juice box, a straw mast with a paper-cup dish and sticky-note panels. Drawer icons are 256×256; scene textures have viewBoxes whose aspect matches the physics box they are stretched to, so change both together.
 
-Real Kodable art from the Marketing Library (map: `docs/marketing-library.md`), the **Marstopia Rover** is `public/parts/rover/real/`: `manifest.json` (trimmed sizes, anchor points), `cockpit.png` (dome base), `kevin.png` (Kevin's portrait), `shadow.png` (ground shadow), `wheel-circle.png` / `wheel-square.png` / `wheel-star1.png` (wheels), `power-fan.png` / `power-stove.png` / `power-jet.png` and `-flip.png` mirrors (propulsion), `fx-thrust.png` / `fx-poof.png` (thrust flame, poof cloud), `weight-feather.png` / `weight-beans.png` / `weight-watermelon.png` (weights), `plate.png` (weight plate), `spring.png` / `suctioncup.png` (mounts). The scale rule lives in `core/art.ts`: dome and Kevin at BASE_PPM (323.5 px / 0.75 m = 431.3 px/m), all other parts at PART_PPM (200.6 px / 0.3 m = 668.7 px/m, the circle wheel's scale).
+Real Kodable art from the Marketing Library (map: `docs/marketing-library.md`), the **Planet Rover** (formerly Marstopia Rover) is `public/parts/rover/real/`: `manifest.json` (trimmed sizes, anchor points), `cockpit.png` (dome base), `kevin.png` (Kevin's portrait), `shadow.png` (ground shadow), `wheel-circle.png` / `wheel-square.png` / `wheel-star1.png` (wheels), `power-fan.png` / `power-stove.png` / `power-jet.png` and `-flip.png` mirrors (propulsion), `fx-thrust.png` / `fx-poof.png` (thrust flame, poof cloud), `weight-feather.png` / `weight-beans.png` / `weight-watermelon.png` (weights), `plate.png` (weight plate), `spring.png` / `suctioncup.png` (mounts). The scale rule lives in `core/art.ts`: dome and Kevin at BASE_PPM (323.5 px / 0.75 m = 431.3 px/m), all other parts at PART_PPM (200.6 px / 0.3 m = 668.7 px/m, the circle wheel's scale).
 
 **Part flight.** Tapping a drawer picture flies a copy of it to the machine (`CourseSpec.partTargets` gives world-meter targets; the kit converts them with `worldToStage`), and the change commits when it lands (520 ms; a fallback timer commits after 920 ms if the animation clock stalls). Two wheels = two copies.
 
@@ -195,7 +222,7 @@ Real Kodable art from the Marketing Library (map: `docs/marketing-library.md`), 
 - **Catapult parts** (real exports, square canvases centred on the machine body): `public/parts/catapult/real-base.png` (plank + A-frame + blue hub), `real-arm-Short.png` and `real-arm-Long.png` (blue-striped launch arm with cup), `real-cup.png` (cup front drawn over the fuzz), `real-lever.png` (wood angle arm's blue pad and stick), `real-gear.png` (star gear), `real-hook.png` (band and string hooks), `real-band-3.png` through `real-band-29.png` (eight strength band lengths for scaling).
 - **Fuzzes** `public/parts/catapult/fuzz-{Flower,Donut,Fur,Helmet,Metal}.png`: the five fuzzes in weight order, normal face on the arm and in the drawer. Fuzz body centred at 1/1.44 of a square canvas, baked ground shadow cut out, drawn `upright` on the swinging arm. (The old fuzz-Light.png, fuzz-Medium.png, fuzz-Heavy.png, fuzz-Prism.png remain in public/parts/catapult/ but unused by the catapult.)
 - **FX** `public/fx/dust.svg` (dust puff where a falling block lands) and `public/fx/crash.svg` (CRASH! burst when one shot knocks down 3 targets).
-- **Backdrops** (`WorldSpec.backgrounds`, world-meter picture layers under the ground strip): `public/bg/park.jpg` (park meadow, horizon 5.5 m up) for the catapult; `public/bg/mars-sky.jpg` (starfield) plus `public/bg/mars-planet.png` for the rover, whose ground strip is rust (`WorldSpec.groundStrip`).
+- **Backdrops** (`WorldSpec.backgrounds`, world-meter picture layers under the ground strip): `public/bg/park.jpg` (park meadow, horizon 5.5 m up) for the catapult; for the rover one look per planet (2026-10-09, made for it): Flooftopia `flooftopia-clouds.png` and `flooftopia-hills.png` (with the library's Fuzztopia trees), Mars `mars-phobos.png`, `mars-deimos.png` and `mars-far.png`, Europa `europa-stars.png`, `jupiter.png` (the library's solar-system Jupiter) and `europa-far.png`; the ground effects and rocks are `public/parts/rover/fx-sand.png`, `fx-sand-heap.png`, `fx-ice.png` and `rock-1..3.png`. The rover's old night sky (`mars-sky.jpg`, `mars-sky-wide.jpg`) is no longer used; `mars-planet.png` still decorates the launcher card.
 - **Rover cargo** `public/parts/rover/cargo-Light.png` (heart balloons) and `cargo-Heavy.png` (boulder); the crate stays an SVG.
 - **Hit bursts** `public/fx/pow.png` and `boom.png`: the catapult sim emits a `sprite` overlay (grow, hold, fade over 0.7 s) when the fuzz first touches a can or bullseye (POW) or a block (BOOM).
 
@@ -217,4 +244,4 @@ Add your activity to `ACTIVITIES` in `src/activities/registry.ts`.
 
 ## Playtest deploy
 
-The playtest build lives on the `theme-park-playtest` branch of `Kodable/CreatorRig` (an orphan branch; the rig stays on `main`) and deploys to the Heroku app `kodable-creator-rig` (`git push heroku theme-park-playtest:main`). Heroku runs `heroku-postbuild` (`vite build`) and `node server.mjs` (Procfile), a zero-dependency static server for `dist/`. The park map (`src/launcher.ts`, `PARK_ACTIVITIES` in the registry) shows only the Rollercoaster, Catapults and Marstopia Rover; the other activities stay reachable by URL (`?activity=bridge`). Hero pictures for the cards are composed PNGs in `public/home/`.
+The playtest build lives on the `theme-park-playtest` branch of `Kodable/CreatorRig` (an orphan branch; the rig stays on `main`) and deploys to the Heroku app `kodable-creator-rig` (`git push heroku theme-park-playtest:main`). Heroku runs `heroku-postbuild` (`vite build`) and `node server.mjs` (Procfile), a zero-dependency static server for `dist/`. The park map (`src/launcher.ts`, `PARK_ACTIVITIES` in the registry) shows only the Rollercoaster, Catapults and Planet Rover; the other activities stay reachable by URL (`?activity=bridge`). Hero pictures for the cards are composed PNGs in `public/home/`.
