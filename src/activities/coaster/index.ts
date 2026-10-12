@@ -28,6 +28,9 @@ export const coaster: ActivityDef = {
       width: STAGE_W * RENDER_SCALE,
       height: STAGE_H * RENDER_SCALE,
       backgroundColor: COLORS.navy,
+      // The kit's blur/shimmer fix (src/kit/boot.ts): mipmaps for down-scaled pictures (the 288 px
+      // fuzz skins drawn ~28 px across shimmered while spinning) and whole-pixel positions.
+      render: { mipmapFilter: 'LINEAR_MIPMAP_LINEAR', roundPixels: true },
       scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
       scene: [CoasterScene],
       plugins: { scene: [{ key: 'spine.SpinePlugin', plugin: SpinePlugin, mapping: 'spine' }] },

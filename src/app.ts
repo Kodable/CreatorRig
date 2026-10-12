@@ -5,6 +5,7 @@ import { RunMeters, staticMetrics } from './core/meters';
 import { allPass, evaluateGoals } from './core/goals';
 import { LEVELS, findLevel } from './core/levels';
 import { FIXED_DT, FixedStepper } from './core/stepper';
+import { interpolateCart } from './core/interpolateCart';
 import { clonePoints, expandTrackPoints } from './core/trackPoints';
 import type { Hud } from './ui/hud';
 import type { CoasterScene } from './game/CoasterScene';
@@ -26,6 +27,8 @@ export class App {
   readonly meters = new RunMeters();
   readonly stepper = new FixedStepper();
   lastSnap: CartSnapshot | null = null;
+  /** The snapshot before the latest step (render interpolation); null between runs. */
+  private prevSnap: CartSnapshot | null = null;
   outcome: Outcome | null = null;
   passed = false;
   /** The fuzz that rides (2026-10-12, skins.ts): this session's / the stored pick, Blue by default. */
@@ -70,6 +73,7 @@ export class App {
     this.passed = false;
     this.sim = null;
     this.lastSnap = null;
+    this.prevSnap = null;
     this.tool = 'point';
     this.meters.reset();
     this.stepper.reset();
@@ -140,6 +144,7 @@ export class App {
     this.mode = 'edit';
     this.sim = null;
     this.lastSnap = null;
+    this.prevSnap = null;
     this.outcome = null;
     this.passed = false;
     this.stepper.reset();
@@ -178,11 +183,14 @@ export class App {
     const sim = this.sim;
     if (this.mode === 'play' && sim) {
       this.stepper.update(deltaMs, () => {
+        // The pose before each step, for render interpolation (core/interpolateCart.ts).
+        this.prevSnap = this.lastSnap ?? sim.snapshot();
         sim.step();
-        this.meters.observe(sim.snapshot(), FIXED_DT);
+        this.lastSnap = sim.snapshot();
+        this.meters.observe(this.lastSnap, FIXED_DT);
       });
       this.lastSnap = sim.snapshot();
-      this.scene.drawCart(this.lastSnap);
+      this.scene.drawCart(interpolateCart(this.prevSnap, this.lastSnap, this.stepper.alpha));
 
       if (sim.outcome !== 'running') {
         this.mode = 'done';
