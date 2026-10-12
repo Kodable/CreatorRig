@@ -37,7 +37,6 @@ const UNDO_CAP = 50;
 const DEPTH_SKY = 0;
 // 2026-10-12: the theme-park backdrop between the sky and the ground strip (createBackdrop)
 const DEPTH_CLOUDS = 0.1;
-const DEPTH_FLYERS = 0.15;
 const DEPTH_FAR = 0.2;
 const DEPTH_WHEEL = 0.3;
 const DEPTH_MID = 0.4;
@@ -67,12 +66,13 @@ const PANEL_RADIUS = 12;
 /* 2026-10-12 (Gao: "make the background more engaging"): a theme park instead of the plain blue
    gradient. Layers composed from the Kodable Marketing Library into public/bg/coaster/ at 2x stage
    px (README "Fuzz Rollercoaster"), back to front: the sky (HighFlyer sky clouds over a deep-to-pale
-   gradient), drifting clouds, a hot-air balloon and a blimp, two hazy hill ranges with a tree line,
-   a turning ferris wheel (drawn here: the library has none), the fairground (bouncy castle, tents,
-   candy arch, arcade, balloons, bunting; softened a little toward the horizon colour so the track
-   stays the boldest thing on screen) and a grass strip at the ground line. While the ride camera
+   gradient), drifting clouds, two hazy hill ranges with a tree line, a turning ferris wheel (drawn
+   here: the library has none), a row of trees (softened a little toward the horizon colour so the
+   track stays the boldest thing on screen) and a grass strip at the ground line. Later the same day
+   (Gao: "wayyy too many decorations in the back. keep the trees and the ferris wheel and clouds, get
+   rid of everything else") the blimp, the hot-air balloon and the fairground props went. While the ride camera
    moves, each layer lags it by its depth factor (parallaxOffset); the ground-standing layers only
-   across, so nothing sinks into the grass. Static pictures, no tweens: the clouds, flyers and wheel
+   across, so nothing sinks into the grass. Static pictures, no tweens: the clouds and the wheel
    are moved by hand once a frame (a handful of setPosition calls). */
 const BG_DIR = 'bg/coaster/';
 /** Parallax depth factors, across (x) and up/down (y): 1 moves with the track, 0 stays put. */
@@ -85,7 +85,7 @@ const PX_MID = { x: 0.75, y: 1 };
 const FAR_H = 300;
 const MID_H = 230;
 const GROUND_STRIP_H = 30;
-/** The ferris wheel, in the fairground's gap between the balloons and the striped tent. */
+/** The ferris wheel, between the trees. */
 const WHEEL_X = 604;
 const WHEEL_Y = 586;
 const WHEEL_R = 84;
@@ -147,7 +147,7 @@ interface BackdropPiece {
   px: { x: number; y: number };
 }
 
-/** A sky drifter (cloud, blimp): its full-view x advances at `speed` px/s and wraps. */
+/** A sky drifter (a cloud): its full-view x advances at `speed` px/s and wraps. */
 interface Drifter {
   img: Phaser.GameObjects.Image;
   x: number;
@@ -215,7 +215,6 @@ export class CoasterScene extends Phaser.Scene {
 
   private backdrop: BackdropPiece[] = [];
   private drifters: Drifter[] = [];
-  private balloon!: Phaser.GameObjects.Image;
   private wheel!: Phaser.GameObjects.Graphics;
   private wheelCars: Phaser.GameObjects.Graphics[] = [];
   private wheelAngle = 0;
@@ -237,7 +236,7 @@ export class CoasterScene extends Phaser.Scene {
       this.load.image(`skin-${s.id}-excited`, s.excited);
     }
     this.load.image('cb-sky', `${BG_DIR}sky.jpg`);
-    for (const k of ['far', 'mid', 'ground', 'hot-air-balloon', 'blimp', 'cloud1', 'cloud2', 'cloud3']) {
+    for (const k of ['far', 'mid', 'ground', 'cloud1', 'cloud2', 'cloud3']) {
       this.load.image(`cb-${k}`, `${BG_DIR}${k}.png`);
     }
   }
@@ -367,7 +366,7 @@ export class CoasterScene extends Phaser.Scene {
     ground.setDisplaySize(w, GROUND_STRIP_H);
     ground.setDepth(DEPTH_GROUND);
 
-    // Sky drifters: three clouds and the blimp creep left to right and wrap (the textures are 2x).
+    // Sky drifters: three clouds creep left to right and wrap (the textures are 2x).
     const drifter = (key: string, x: number, y: number, speed: number, bob: number, depth: number): void => {
       const img = this.onWorld(this.add.image(x, y, key));
       img.setScale(0.5);
@@ -377,11 +376,6 @@ export class CoasterScene extends Phaser.Scene {
     drifter('cb-cloud1', 300, 300, 5, 0, DEPTH_CLOUDS);
     drifter('cb-cloud2', 720, 175, 3.5, 0, DEPTH_CLOUDS);
     drifter('cb-cloud3', 860, 420, 6, 0, DEPTH_CLOUDS);
-    drifter('cb-blimp', 420, 250, 9, 4, DEPTH_FLYERS);
-    // The hot-air balloon (a fuzz in its basket) bobs in place over the right of the park.
-    this.balloon = this.onWorld(this.add.image(850, 330, 'cb-hot-air-balloon'));
-    this.balloon.setScale(0.5);
-    this.balloon.setDepth(DEPTH_FLYERS);
 
     this.createFerrisWheel();
   }
@@ -559,7 +553,7 @@ export class CoasterScene extends Phaser.Scene {
     this.applyCamera();
   }
 
-  /** Parallax, drifting clouds and blimp, the bobbing balloon, the turning wheel. */
+  /** Parallax, drifting clouds, the turning wheel. */
   private updateBackdrop(dtMs: number): void {
     const dt = Math.min(dtMs, 100) / 1000;
     const f = this.camCur;
@@ -577,7 +571,6 @@ export class CoasterScene extends Phaser.Scene {
       const bob = d.bob ? Math.sin(t * 0.9 + d.phase) * d.bob : 0;
       d.img.setPosition(d.x + fly.x, d.y + bob + fly.y);
     }
-    this.balloon.setPosition(850 + Math.sin(t * 0.27) * 10 + fly.x, 330 + Math.sin(t * 1.05) * 7 + fly.y);
     this.wheelAngle = (this.wheelAngle + WHEEL_SPEED * dt) % (Math.PI * 2);
     this.wheel.setRotation(this.wheelAngle);
     this.placeWheelCars(parallaxOffset(f, PX_WHEEL.x, PX_WHEEL.y));
