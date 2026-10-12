@@ -263,3 +263,54 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
    first/last-child radii above lose to `#bottombar button.tool`'s 0, so this needs the id too. */
 #bottombar .tool-group.rounded button:first-child { border-radius: 23px 0 0 23px; }
 #bottombar .tool-group.rounded button:last-child { border-radius: 0 23px 23px 0; }
+
+/* ---- Coaster fuzz picker (src/ui/hud.ts, 2026-10-12: Gao "make an option to swap fuzz skins").
+   A round button with the riding fuzz's face right of Point/Loop (x 243..295, clear of the centred
+   Play button), edit mode only. A tap opens `.skin-tray` above it over the scene's bottom-left; a
+   tap on a face swaps the fuzz and both pop. `.skin-backdrop` (the whole stage, see-through) closes
+   the tray on any other tap and keeps that tap off the track. Coaster-only classes: the kit's bar
+   never has them. ---- */
+#bottombar button.skin-btn {
+  position: relative; flex: 0 0 auto; min-width: 0; width: 52px; height: 52px; padding: 0;
+  border-radius: 50%; background: #2c3560; border: 3px solid #ffb40f;
+  display: flex; align-items: center; justify-content: center; overflow: visible;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+#bottombar button.skin-btn img { width: 68px; height: 68px; margin-top: -4px; pointer-events: none; }
+#bottombar button.skin-btn.open { background: #3a4a8a; }
+#bottombar button.skin-btn:active { transform: translateY(2px); }
+.skin-badge {
+  position: absolute; right: -6px; bottom: -4px; width: 22px; height: 22px; border-radius: 50%;
+  background: #ffb40f; color: #1a2142; font-size: 14px; font-weight: 800; line-height: 22px; text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); pointer-events: none;
+}
+#bottombar button.skin-btn.pop img { animation: skin-pop 360ms ease-out; }
+@keyframes skin-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.35) rotate(-8deg); }
+  70% { transform: scale(0.92) rotate(4deg); }
+  100% { transform: scale(1); }
+}
+.skin-backdrop { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; z-index: 39; pointer-events: auto; }
+.skin-tray {
+  position: absolute; left: 236px; bottom: 74px; z-index: 40; pointer-events: auto;
+  padding: 8px 12px 10px; border-radius: 16px; background: rgba(11, 16, 48, 0.86);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); animation: skin-tray-in 160ms ease-out;
+  transform-origin: 33px 100%;
+}
+.skin-tray::after {
+  content: ''; position: absolute; left: 25px; bottom: -8px; width: 16px; height: 16px;
+  background: rgba(11, 16, 48, 0.86); transform: rotate(45deg); border-radius: 2px;
+}
+@keyframes skin-tray-in { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.skin-tray-title { font-size: 15px; font-weight: 800; color: #ffb40f; margin: 0 0 6px 2px; }
+.skin-row { display: flex; gap: 8px; }
+.skin-face {
+  width: 56px; height: 56px; padding: 0; border-radius: 50%; border: 3px solid transparent;
+  background: #2c3560; cursor: pointer; display: flex; align-items: center; justify-content: center; overflow: visible;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: transform 120ms ease-out;
+}
+.skin-face img { width: 72px; height: 72px; margin-top: -4px; pointer-events: none; }
+.skin-face:hover { transform: scale(1.08); }
+.skin-face:active { transform: scale(0.94); }
+.skin-face.current { border-color: #ffb40f; background: #3a4a8a; }

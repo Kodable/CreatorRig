@@ -3,6 +3,9 @@ import { COLORS, ORIGIN_X, GROUND_Y, PANEL_TOP_Y, PPM, WORLD_W, WORLD_H, STAGE_W
 import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, EditTool } from '../core/types';
 import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
 import type { SpineGameObject } from '@esotericsoftware/spine-phaser-v4';
+import type { FrameState } from '../kit/camera';
+import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
+import { FULL_FRAME, RIDE_ZOOM, frameCentrePx, parallaxOffset, rideTarget, stepCamera } from './rideCamera';
 
 interface Gesture {
   index: number;
@@ -32,6 +35,12 @@ const UNDO_CAP = 50;
 
 // depth layering, back to front
 const DEPTH_SKY = 0;
+// 2026-10-12: the theme-park backdrop between the sky and the ground strip (createBackdrop)
+const DEPTH_CLOUDS = 0.1;
+const DEPTH_FLYERS = 0.15;
+const DEPTH_FAR = 0.2;
+const DEPTH_WHEEL = 0.3;
+const DEPTH_MID = 0.4;
 const DEPTH_GROUND = 1;
 const DEPTH_SUPPORT = 1.5; // posts + ties
 const DEPTH_TRACK = 2; // rail outline/rail/highlight
@@ -42,6 +51,10 @@ const DEPTH_BRUNO = 3.5;
  * (stage x 32..108, y 0..72) open for him. */
 const BRUNO_SLOT = { x: 70, y: 66 };
 const DEPTH_FUZZ = 4;
+/** The fuzz waiting in the station (edit mode): under the control-point handles, so the station
+ * handle stays on top and draggable-looking. */
+const DEPTH_STATION_FUZZ = 2.9;
+const DEPTH_CONFETTI = 4.5;
 
 // world panel: a single rounded sky/ground panel, x 32..992, y 78..700 (2026-10-07: was 210..700;
 // the top follows WORLD_H, view.ts)
@@ -50,14 +63,48 @@ const PANEL_Y0 = WORLD_Y0;
 const PANEL_X1 = 992;
 const PANEL_Y1 = 700;
 const PANEL_RADIUS = 12;
-const SKY_TOP = 0x2a4aa6;
-const SKY_BOTTOM = 0x4f7bd6;
-const GRASS_Y0 = 686;
-const EARTH_Y0 = 694;
-const EARTH_COLOR = 0x3f6b2a;
 
-const FUZZ_R_PX = 11; // screen-space radius of the rolling fuzz
+/* 2026-10-12 (Gao: "make the background more engaging"): a theme park instead of the plain blue
+   gradient. Layers composed from the Kodable Marketing Library into public/bg/coaster/ at 2x stage
+   px (README "Fuzz Rollercoaster"), back to front: the sky (HighFlyer sky clouds over a deep-to-pale
+   gradient), drifting clouds, a hot-air balloon and a blimp, two hazy hill ranges with a tree line,
+   a turning ferris wheel (drawn here: the library has none), the fairground (bouncy castle, tents,
+   candy arch, arcade, balloons, bunting; softened a little toward the horizon colour so the track
+   stays the boldest thing on screen) and a grass strip at the ground line. While the ride camera
+   moves, each layer lags it by its depth factor (parallaxOffset); the ground-standing layers only
+   across, so nothing sinks into the grass. Static pictures, no tweens: the clouds, flyers and wheel
+   are moved by hand once a frame (a handful of setPosition calls). */
+const BG_DIR = 'bg/coaster/';
+/** Parallax depth factors, across (x) and up/down (y): 1 moves with the track, 0 stays put. */
+const PX_SKY = { x: 0.15, y: 0.15 };
+const PX_FLYERS = { x: 0.3, y: 0.3 };
+const PX_FAR = { x: 0.35, y: 1 };
+const PX_WHEEL = { x: 0.55, y: 1 };
+const PX_MID = { x: 0.75, y: 1 };
+/** Band heights (stage px) of the bottom-anchored layers; each ends at the panel's bottom. */
+const FAR_H = 300;
+const MID_H = 230;
+const GROUND_STRIP_H = 30;
+/** The ferris wheel, in the fairground's gap between the balloons and the striped tent. */
+const WHEEL_X = 604;
+const WHEEL_Y = 586;
+const WHEEL_R = 84;
+const WHEEL_CARS = 10;
+const WHEEL_SPEED = 0.12; // rad/s: a calm turn
+/** The horizon colour the fairground is hazed toward (by 0.22 in the compose step). The wheel stands
+ * further back (and loops often pass in front of it), so it gets more haze: a loop never reads as a
+ * second wheel. */
+const HAZE_COLOR = 0xc4e2f8;
+const WHEEL_HAZE_K = 0.42;
+
+/** Screen-space radius of the rolling fuzz (2026-10-12: 14, was 11 — Jon and Greg asked for a
+ * bigger fuzz). Cosmetic: the sim rides a point on the rail; this only offsets the drawn ball. */
+const FUZZ_R_PX = 14;
 const FUZZ_R = FUZZ_R_PX / PPM; // world-space radius, meters
+/** The fur reaches a little past the rolling radius (it overlaps the rail by a hair, as before). */
+const FUZZ_FUR = 1.12;
+/** Display size of a skin picture: the body (2 R x fur) is 1 / SKIN_CANVAS_K of its canvas. */
+const FUZZ_IMG_PX = FUZZ_R_PX * 2 * FUZZ_FUR * SKIN_CANVAS_K;
 
 const TRACK_DARK_RED = 0x8c1f18;
 const TRACK_RED = 0xe0392f;
@@ -82,15 +129,32 @@ const STATION_RING_MIN = 13;
 const STATION_RING_MAX = 15;
 const STATION_RING_PERIOD_MS = 1400;
 
-/** Linear blend of two 0xRRGGBB colors, t in [0, 1]. */
-function lerpColor(a: number, b: number, t: number): number {
-  const k = Math.max(0, Math.min(1, t));
+/** Blends a 0xRRGGBB colour toward the horizon haze (the ferris wheel's colours). */
+function hazed(c: number, k = WHEEL_HAZE_K): number {
   const ch = (shift: number): number => {
-    const ca = (a >> shift) & 0xff;
-    const cb = (b >> shift) & 0xff;
-    return Math.round(ca + (cb - ca) * k) & 0xff;
+    const a = (c >> shift) & 0xff;
+    const b = (HAZE_COLOR >> shift) & 0xff;
+    return Math.round(a + (b - a) * k) & 0xff;
   };
   return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
+/** A backdrop object and the stage position it sits at in the full view (before parallax). */
+interface BackdropPiece {
+  obj: Phaser.GameObjects.Components.Transform;
+  x: number;
+  y: number;
+  px: { x: number; y: number };
+}
+
+/** A sky drifter (cloud, blimp): its full-view x advances at `speed` px/s and wraps. */
+interface Drifter {
+  img: Phaser.GameObjects.Image;
+  x: number;
+  y: number;
+  speed: number;
+  bob: number; // bob amplitude, px (0 = none)
+  phase: number;
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -129,6 +193,32 @@ export class CoasterScene extends Phaser.Scene {
   private fuzzBody!: Phaser.GameObjects.Image;
   private fuzzSpin!: Phaser.GameObjects.Container;
   private fuzzFellStarted = false;
+  /** The riding fuzz's velocity (world m/s) for the camera's look-ahead; zero once the run ends. */
+  private fuzzVel: Vec2 = { x: 0, y: 0 };
+
+  // 2026-10-12: fuzz skins (skins.ts). The picked fuzz waits in the station in edit mode and rides
+  // in play mode, with its excited face while fast or airborne.
+  private skin: SkinId = DEFAULT_SKIN;
+  private excited = false;
+  private stationFuzz!: Phaser.GameObjects.Image;
+
+  // 2026-10-12: two cameras, like the builder kit (src/kit/BuilderScene.ts). The world camera is
+  // clipped to the world panel and zooms in to follow the fuzz in play mode (rideCamera.ts); the UI
+  // camera always shows the whole stage at RENDER_SCALE, for Bruno and the panel's corner caps.
+  private worldCam!: Phaser.Cameras.Scene2D.Camera;
+  private uiCam!: Phaser.Cameras.Scene2D.Camera;
+  private camCur: FrameState = { ...FULL_FRAME };
+  private camFollow = false;
+  /** Scene time (ms) at which a pending follow release happens (the end-of-ride hold), or null. */
+  private camReleaseAt: number | null = null;
+  private nowMs = 0;
+
+  private backdrop: BackdropPiece[] = [];
+  private drifters: Drifter[] = [];
+  private balloon!: Phaser.GameObjects.Image;
+  private wheel!: Phaser.GameObjects.Graphics;
+  private wheelCars: Phaser.GameObjects.Graphics[] = [];
+  private wheelAngle = 0;
 
   private bruno: SpineGameObject | null = null;
 
@@ -142,27 +232,46 @@ export class CoasterScene extends Phaser.Scene {
     // rest of the scene keeps working without Bruno.
     this.load.spineAtlas('floofs', 'spine/FloofFamily01.atlas', true);
     this.load.spineJson('engineer', 'spine/Engineer_skeleton.json');
-    this.load.image('fuzz', 'blueFuzz_idle.png');
+    for (const s of FUZZ_SKINS) {
+      this.load.image(`skin-${s.id}`, s.normal);
+      this.load.image(`skin-${s.id}-excited`, s.excited);
+    }
+    this.load.image('cb-sky', `${BG_DIR}sky.jpg`);
+    for (const k of ['far', 'mid', 'ground', 'hot-air-balloon', 'blimp', 'cloud1', 'cloud2', 'cloud3']) {
+      this.load.image(`cb-${k}`, `${BG_DIR}${k}.png`);
+    }
   }
 
   create(): void {
-    // High-DPI: the canvas is RENDER_SCALE times the stage; zoom the camera so stage
-    // coordinates (1024x768) stay valid for every game object and for the HTML HUD.
-    this.cameras.main.setZoom(RENDER_SCALE);
-    this.cameras.main.centerOn(STAGE_W / 2, STAGE_H / 2);
+    // High-DPI + ride camera: the canvas is RENDER_SCALE times the stage. The world camera's
+    // viewport is clipped to the world panel (in canvas px) and zooms by RENDER_SCALE x the frame's
+    // zoom, so stage coordinates (1024x768) stay valid for every game object and for the HTML HUD,
+    // and a zoomed-in ride never spills over the top or bottom bar. The UI camera shows the whole
+    // stage at RENDER_SCALE only (Bruno, the corner caps). Taps map through the world camera
+    // (stagePoint), never pointer.worldX/worldY, which follow whichever camera hit-tested last.
+    const RS = RENDER_SCALE;
+    this.worldCam = this.cameras.main;
+    this.worldCam.setViewport(PANEL_X0 * RS, PANEL_Y0 * RS, (PANEL_X1 - PANEL_X0) * RS, (PANEL_Y1 - PANEL_Y0) * RS);
+    this.uiCam = this.cameras.add(0, 0, STAGE_W * RS, STAGE_H * RS, false, 'ui');
+    this.uiCam.setZoom(RS);
+    this.uiCam.centerOn(STAGE_W / 2, STAGE_H / 2);
+    this.uiCam.inputEnabled = false;
+    this.camCur = { ...FULL_FRAME };
+    this.applyCamera();
 
-    this.createPanel();
+    this.createBackdrop();
+    this.createCornerCaps();
 
-    this.supportGfx = this.add.graphics();
+    this.supportGfx = this.onWorld(this.add.graphics());
     this.supportGfx.setDepth(DEPTH_SUPPORT);
 
-    this.trackGfx = this.add.graphics();
+    this.trackGfx = this.onWorld(this.add.graphics());
     this.trackGfx.setDepth(DEPTH_TRACK);
 
-    this.pointsGfx = this.add.graphics();
+    this.pointsGfx = this.onWorld(this.add.graphics());
     this.pointsGfx.setDepth(DEPTH_POINTS);
 
-    this.finishGfx = this.add.graphics();
+    this.finishGfx = this.onWorld(this.add.graphics());
     this.finishGfx.setDepth(DEPTH_POINTS);
 
     this.createFuzz();
@@ -179,7 +288,13 @@ export class CoasterScene extends Phaser.Scene {
   }
 
   override update(time: number, delta: number): void {
+    this.nowMs = time;
+    // The app steps the sim and draws the fuzz inside onUpdate; the camera follows after that so it
+    // frames this frame's fuzz, not last frame's (the kit learned that the hard way: a one-frame lag
+    // jitters everything it follows).
     this.onUpdate?.(delta);
+    this.updateCamera(delta);
+    this.updateBackdrop(delta);
     this.updateStationPulse(time);
     if (this.trackDirty) {
       this.redrawTrack();
@@ -212,72 +327,201 @@ export class CoasterScene extends Phaser.Scene {
 
   // ---------------- setup helpers ----------------
 
+  // ---------------- camera assignment ----------------
+
+  /** Assigns a game object to the world camera only (the UI camera ignores it). */
+  private onWorld<T extends Phaser.GameObjects.GameObject>(o: T): T {
+    this.uiCam.ignore(o);
+    return o;
+  }
+
+  /** Assigns a game object to the UI camera only. Spine's SpineGameObject honours the same
+   * `cameraFilter` bitmask `ignore` sets on ordinary objects. */
+  private onUi<T extends Phaser.GameObjects.GameObject>(o: T): T {
+    this.worldCam.ignore(o);
+    return o;
+  }
+
+  // ---------------- setup helpers ----------------
+
   /**
-   * The world panel: a rounded sky/ground shape, x 32..992, y 78..700, radius 12. The sky gradient
-   * spans the whole panel height (SKY_TOP at the panel top, SKY_BOTTOM at the grass).
-   *
-   * Phaser 4 has no WebGL geometry mask (GeometryMask is Canvas-only) and `fillGradientStyle`
-   * only maps correctly onto `fillRect`. So the panel is built from plain rectangles: one gradient
-   * rect for the sky body, solid rects for the grass and earth, and 1 px rows with a circular
-   * inset for the top and bottom corner zones. No mask, no rounded-rect path.
+   * The theme-park backdrop filling the world panel (x 32..992, y 78..700), see BG_DIR. Every layer
+   * is a plain rectangle; the panel's rounded corners come from the corner caps on the UI camera
+   * (createCornerCaps), which stay put while the world camera zooms.
    */
-  private createPanel(): void {
-    const x0 = PANEL_X0;
+  private createBackdrop(): void {
     const w = PANEL_X1 - PANEL_X0;
-    const h = PANEL_Y1 - PANEL_Y0;
-    const r = PANEL_RADIUS;
-    const skyAt = (y: number): number => lerpColor(SKY_TOP, SKY_BOTTOM, (y - PANEL_Y0) / h);
-    /** Horizontal inset of a row that is `d` px away from the panel's top or bottom edge. */
-    const insetAt = (d: number): number => r - Math.sqrt(Math.max(0, r * r - (r - d) * (r - d)));
-
-    const sky = this.add.graphics();
-    sky.setDepth(DEPTH_SKY);
-    // Top corner zone: 1 px rows with the circular inset.
-    for (let y = PANEL_Y0; y < PANEL_Y0 + r; y++) {
-      const inset = insetAt(y - PANEL_Y0 + 0.5);
-      sky.fillStyle(skyAt(y), 1);
-      sky.fillRect(x0 + inset, y, w - 2 * inset, 1);
-    }
-    // Sky body: one gradient rect down to the grass.
-    sky.fillGradientStyle(skyAt(PANEL_Y0 + r), skyAt(PANEL_Y0 + r), skyAt(GRASS_Y0), skyAt(GRASS_Y0), 1);
-    sky.fillRect(x0, PANEL_Y0 + r, w, GRASS_Y0 - (PANEL_Y0 + r));
-
-    const ground = this.add.graphics();
+    const addLayer = (key: string, y: number, h: number, depth: number, px: { x: number; y: number }): void => {
+      const img = this.onWorld(this.add.image(PANEL_X0, y, key));
+      img.setOrigin(0, 0);
+      img.setDisplaySize(w, h);
+      img.setDepth(depth);
+      this.backdrop.push({ obj: img, x: PANEL_X0, y, px });
+    };
+    addLayer('cb-sky', PANEL_Y0, PANEL_Y1 - PANEL_Y0, DEPTH_SKY, PX_SKY);
+    addLayer('cb-far', PANEL_Y1 - FAR_H, FAR_H, DEPTH_FAR, PX_FAR);
+    addLayer('cb-mid', PANEL_Y1 - MID_H, MID_H, DEPTH_MID, PX_MID);
+    // The ground strip moves with the track (factor 1): the supports stand on it.
+    const ground = this.onWorld(this.add.image(PANEL_X0, PANEL_Y1 - GROUND_STRIP_H, 'cb-ground'));
+    ground.setOrigin(0, 0);
+    ground.setDisplaySize(w, GROUND_STRIP_H);
     ground.setDepth(DEPTH_GROUND);
-    ground.fillStyle(COLORS.green, 1);
-    ground.fillRect(x0, GRASS_Y0, w, PANEL_Y1 - r - GRASS_Y0);
-    // Bottom corner zone: grass rows, then earth rows, each with the circular inset.
-    for (let y = PANEL_Y1 - r; y < PANEL_Y1; y++) {
-      const inset = insetAt(PANEL_Y1 - y - 0.5);
-      ground.fillStyle(y >= EARTH_Y0 ? EARTH_COLOR : COLORS.green, 1);
-      ground.fillRect(x0 + inset, y, w - 2 * inset, 1);
+
+    // Sky drifters: three clouds and the blimp creep left to right and wrap (the textures are 2x).
+    const drifter = (key: string, x: number, y: number, speed: number, bob: number, depth: number): void => {
+      const img = this.onWorld(this.add.image(x, y, key));
+      img.setScale(0.5);
+      img.setDepth(depth);
+      this.drifters.push({ img, x, y, speed, bob, phase: x * 0.01 });
+    };
+    drifter('cb-cloud1', 300, 300, 5, 0, DEPTH_CLOUDS);
+    drifter('cb-cloud2', 720, 175, 3.5, 0, DEPTH_CLOUDS);
+    drifter('cb-cloud3', 860, 420, 6, 0, DEPTH_CLOUDS);
+    drifter('cb-blimp', 420, 250, 9, 4, DEPTH_FLYERS);
+    // The hot-air balloon (a fuzz in its basket) bobs in place over the right of the park.
+    this.balloon = this.onWorld(this.add.image(850, 330, 'cb-hot-air-balloon'));
+    this.balloon.setScale(0.5);
+    this.balloon.setDepth(DEPTH_FLYERS);
+
+    this.createFerrisWheel();
+  }
+
+  /**
+   * A ferris wheel behind the fairground (the library has none): white A-frame legs, a pink rim
+   * with bulbs and spokes that turns, and cars that hang level as it turns. Coloured like the
+   * hazed fairground. Vector graphics, so it stays crisp at the ride zoom.
+   */
+  private createFerrisWheel(): void {
+    const legs = this.onWorld(this.add.graphics());
+    legs.setDepth(DEPTH_WHEEL);
+    const legColor = hazed(0xf3f5fb);
+    const legEdge = hazed(0x9aa6c8);
+    const foot = GROUND_Y + 2 - WHEEL_Y;
+    legs.lineStyle(7, legEdge, 1);
+    legs.lineBetween(0, 0, -46, foot);
+    legs.lineBetween(0, 0, 46, foot);
+    legs.lineStyle(5, legColor, 1);
+    legs.lineBetween(0, 0, -46, foot);
+    legs.lineBetween(0, 0, 46, foot);
+    legs.lineStyle(3, legColor, 1);
+    legs.lineBetween(-30, foot * 0.62, 30, foot * 0.62);
+    legs.setPosition(WHEEL_X, WHEEL_Y);
+    this.backdrop.push({ obj: legs, x: WHEEL_X, y: WHEEL_Y, px: PX_WHEEL });
+
+    const wheel = this.onWorld(this.add.graphics());
+    wheel.setDepth(DEPTH_WHEEL + 0.01);
+    const rim = hazed(0xff6fa3);
+    const spoke = hazed(0xf3f5fb);
+    wheel.lineStyle(2, spoke, 1);
+    for (let i = 0; i < WHEEL_CARS * 2; i++) {
+      const a = (i / (WHEEL_CARS * 2)) * Math.PI * 2;
+      wheel.lineBetween(0, 0, Math.cos(a) * WHEEL_R, Math.sin(a) * WHEEL_R);
+    }
+    wheel.lineStyle(5, rim, 1);
+    wheel.strokeCircle(0, 0, WHEEL_R);
+    wheel.lineStyle(2.5, rim, 1);
+    wheel.strokeCircle(0, 0, WHEEL_R * 0.8);
+    const bulbs = [hazed(0xffd23d), hazed(0xffffff)];
+    for (let i = 0; i < 30; i++) {
+      const a = (i / 30) * Math.PI * 2;
+      wheel.fillStyle(bulbs[i % 2]!, 1);
+      wheel.fillCircle(Math.cos(a) * WHEEL_R, Math.sin(a) * WHEEL_R, 2);
+    }
+    wheel.fillStyle(hazed(0x3a4470), 1);
+    wheel.fillCircle(0, 0, 9);
+    wheel.fillStyle(hazed(0xffd23d), 1);
+    wheel.fillCircle(0, 0, 4.5);
+    wheel.setPosition(WHEEL_X, WHEEL_Y);
+    this.wheel = wheel;
+    this.backdrop.push({ obj: wheel, x: WHEEL_X, y: WHEEL_Y, px: PX_WHEEL });
+
+    // Cars: a hanger and a little cabin under each pivot, placed on the rim every frame.
+    const carColors = [0xe8574f, 0xffc43d, 0x3fb6ec, 0x76c75a, 0xd95aa8];
+    for (let i = 0; i < WHEEL_CARS; i++) {
+      const car = this.onWorld(this.add.graphics());
+      car.setDepth(DEPTH_WHEEL + 0.02);
+      const c = hazed(carColors[i % carColors.length]!);
+      car.lineStyle(2, hazed(0x6b7190), 1);
+      car.lineBetween(0, 0, 0, 5);
+      car.fillStyle(c, 1);
+      car.fillRoundedRect(-9, 5, 18, 13, 4);
+      car.fillStyle(hazed(0xffffff), 1);
+      car.fillRect(-6, 8, 12, 4); // window band
+      car.fillStyle(c, 1);
+      car.fillRoundedRect(-10, 3, 20, 4, 2); // roof
+      this.wheelCars.push(car);
+    }
+    this.placeWheelCars({ x: 0, y: 0 });
+  }
+
+  private placeWheelCars(off: Vec2): void {
+    for (let i = 0; i < this.wheelCars.length; i++) {
+      const a = this.wheelAngle + (i / this.wheelCars.length) * Math.PI * 2;
+      this.wheelCars[i]!.setPosition(WHEEL_X + off.x + Math.cos(a) * WHEEL_R, WHEEL_Y + off.y + Math.sin(a) * WHEEL_R);
+    }
+  }
+
+  /** The world panel's rounded corners, drawn on the UI camera in the canvas colour over the world
+   * camera's square viewport (same as the kit's wide worlds). */
+  private createCornerCaps(): void {
+    const caps = this.onUi(this.add.graphics());
+    caps.setDepth(DEPTH_SKY);
+    caps.fillStyle(COLORS.navy, 1);
+    const r = PANEL_RADIUS;
+    const insetAt = (d: number): number => r - Math.sqrt(Math.max(0, r * r - (r - d) * (r - d)));
+    for (let i = 0; i < r; i++) {
+      const inset = insetAt(i + 0.5);
+      if (inset <= 0) continue;
+      const top = PANEL_Y0 + i;
+      const bottom = PANEL_Y1 - 1 - i;
+      caps.fillRect(PANEL_X0, top, inset, 1);
+      caps.fillRect(PANEL_X1 - inset, top, inset, 1);
+      caps.fillRect(PANEL_X0, bottom, inset, 1);
+      caps.fillRect(PANEL_X1 - inset, bottom, inset, 1);
     }
   }
 
   private createFuzz(): void {
-    // The blue fuzz image (570x590). The fluff reaches past the rolling radius, so the
-    // image is drawn a little larger than the ball that touches the rail.
-    const body = this.add.image(0, 0, 'fuzz');
-    const fluff = 1.25;
-    body.setDisplaySize(FUZZ_R_PX * 2 * fluff, FUZZ_R_PX * 2 * fluff * (590 / 570));
+    // The picked fuzz's picture (skins.ts): the body is 1 / SKIN_CANVAS_K of the square canvas, so
+    // the drawn body is the rolling ball plus a little fur.
+    const body = this.add.image(0, 0, this.skinKey(false));
+    body.setDisplaySize(FUZZ_IMG_PX, FUZZ_IMG_PX);
 
     // The face rolls with the ball; the outer container handles position, orientation and squash.
     this.fuzzSpin = this.add.container(0, 0, [body]);
     this.fuzzBody = body;
-    this.fuzz = this.add.container(0, 0, [this.fuzzSpin]);
+    this.fuzz = this.onWorld(this.add.container(0, 0, [this.fuzzSpin]));
     this.fuzz.setDepth(DEPTH_FUZZ);
     this.fuzz.setVisible(false);
+
+    this.stationFuzz = this.onWorld(this.add.image(0, 0, this.skinKey(false)));
+    this.stationFuzz.setDisplaySize(FUZZ_IMG_PX, FUZZ_IMG_PX);
+    this.stationFuzz.setDepth(DEPTH_STATION_FUZZ);
+    this.stationFuzz.setVisible(false);
+
+    // A small white card for the confetti (tinted per particle).
+    const card = this.add.graphics();
+    card.fillStyle(0xffffff, 1);
+    card.fillRect(0, 0, 6, 10);
+    card.generateTexture('confetti', 6, 10);
+    card.destroy();
+  }
+
+  private skinKey(excited: boolean): string {
+    return `skin-${this.skin}${excited ? '-excited' : ''}`;
   }
 
   private createBruno(): void {
     // A soft shadow under Bruno's feet, drawn once (he never moves) at a depth just below him.
-    const shadow = this.add.graphics();
+    // Both live on the UI camera: the top bar's slot is outside the world panel, and Bruno must not
+    // zoom with the ride camera.
+    const shadow = this.onUi(this.add.graphics());
     shadow.setDepth(DEPTH_BRUNO_SHADOW);
     shadow.fillStyle(0x000000, 0.25);
     shadow.fillEllipse(BRUNO_SLOT.x, BRUNO_SLOT.y + 1, 34, 8);
 
     try {
-      const bruno = this.add.spine(BRUNO_SLOT.x, BRUNO_SLOT.y, 'engineer', 'floofs');
+      const bruno = this.onUi(this.add.spine(BRUNO_SLOT.x, BRUNO_SLOT.y, 'engineer', 'floofs'));
       bruno.setScale(0.084); // about 66 px tall
       bruno.setDepth(DEPTH_BRUNO);
       bruno.animationState.setAnimation(0, 'engineer_idle', true);
@@ -287,6 +531,62 @@ export class CoasterScene extends Phaser.Scene {
       console.warn('CoasterScene: Bruno (Spine) failed to load; continuing without Bruno.', err);
       this.bruno = null;
     }
+  }
+
+  // ---------------- camera + backdrop (per frame) ----------------
+
+  /** Applies `camCur` to the world camera: zoom RENDER_SCALE x frame zoom, centred on the frame. */
+  private applyCamera(): void {
+    const c = frameCentrePx(this.camCur);
+    this.worldCam.setZoom(RENDER_SCALE * this.camCur.zoom);
+    this.worldCam.centerOn(c.x, c.y);
+  }
+
+  /** Follow the fuzz at RIDE_ZOOM in play mode; otherwise glide to (and rest exactly on) the full
+   * level view. */
+  private updateCamera(dtMs: number): void {
+    if (this.camReleaseAt !== null && this.nowMs >= this.camReleaseAt) {
+      this.camReleaseAt = null;
+      this.camFollow = false;
+    }
+    let target = FULL_FRAME;
+    if (this.camFollow && this.fuzz.visible) {
+      target = rideTarget(toWorld({ x: this.fuzz.x, y: this.fuzz.y }), this.fuzzVel, RIDE_ZOOM);
+    }
+    // A long frame (tab switch) must not overshoot or stall: approach maths are exponential, so a
+    // clamp on dt only bounds the jump.
+    this.camCur = stepCamera(this.camCur, target, Math.min(dtMs, 100));
+    this.applyCamera();
+  }
+
+  /** Parallax, drifting clouds and blimp, the bobbing balloon, the turning wheel. */
+  private updateBackdrop(dtMs: number): void {
+    const dt = Math.min(dtMs, 100) / 1000;
+    const f = this.camCur;
+    for (const p of this.backdrop) {
+      const o = parallaxOffset(f, p.px.x, p.px.y);
+      p.obj.setPosition(p.x + o.x, p.y + o.y);
+    }
+    const fly = parallaxOffset(f, PX_FLYERS.x, PX_FLYERS.y);
+    const t = this.nowMs / 1000;
+    for (const d of this.drifters) {
+      d.x += d.speed * dt;
+      const half = d.img.displayWidth / 2;
+      // wrap well outside the panel, past the largest parallax shift, so no cloud pops in view
+      if (d.x - half > PANEL_X1 + 220) d.x = PANEL_X0 - 220 - half;
+      const bob = d.bob ? Math.sin(t * 0.9 + d.phase) * d.bob : 0;
+      d.img.setPosition(d.x + fly.x, d.y + bob + fly.y);
+    }
+    this.balloon.setPosition(850 + Math.sin(t * 0.27) * 10 + fly.x, 330 + Math.sin(t * 1.05) * 7 + fly.y);
+    this.wheelAngle = (this.wheelAngle + WHEEL_SPEED * dt) % (Math.PI * 2);
+    this.wheel.setRotation(this.wheelAngle);
+    this.placeWheelCars(parallaxOffset(f, PX_WHEEL.x, PX_WHEEL.y));
+  }
+
+  /** A pointer's position in stage px through the world camera (zoom and scroll included). */
+  private stagePoint(pointer: Phaser.Input.Pointer): Vec2 {
+    const p = this.worldCam.getWorldPoint(pointer.x, pointer.y);
+    return { x: p.x, y: p.y };
   }
 
   // ---------------- public API ----------------
@@ -349,9 +649,16 @@ export class CoasterScene extends Phaser.Scene {
     if (!snap || !this.track) {
       this.fuzz.setVisible(false);
       this.resetFuzzFallState();
+      this.fuzzVel = { x: 0, y: 0 };
+      this.setExcited(false);
       return;
     }
     this.fuzz.setVisible(true);
+    this.fuzzVel = snap.outcome === 'running'
+      ? { x: snap.v * Math.cos(snap.theta), y: snap.v * Math.sin(snap.theta) }
+      : { x: 0, y: 0 };
+    // Excited while fast or flying; a fall keeps the excited (alarmed) face, a calm stop the normal one.
+    this.setExcited(snap.outcome === 'fell' || excitedPose(this.excited, snap.v, snap.airborne));
 
     if (snap.outcome === 'running') this.resetFuzzFallState();
 
@@ -401,6 +708,13 @@ export class CoasterScene extends Phaser.Scene {
     }
   }
 
+  private setExcited(on: boolean): void {
+    if (this.excited === on) return;
+    this.excited = on;
+    this.fuzzBody.setTexture(this.skinKey(on));
+    this.fuzzBody.setDisplaySize(FUZZ_IMG_PX, FUZZ_IMG_PX);
+  }
+
   private resetFuzzFallState(): void {
     if (this.fuzzFellStarted) {
       this.tweens.killTweensOf(this.fuzz);
@@ -417,6 +731,71 @@ export class CoasterScene extends Phaser.Scene {
     if (!bruno) return;
     bruno.animationState.setAnimation(0, 'engineer_wave', false);
     bruno.animationState.addAnimation(0, 'engineer_idle', true, 0);
+  }
+
+  /** Swaps the fuzz picture (both the station fuzz and the rider). With `pop`, the station fuzz
+   * does a little pop so the child sees the swap land. Cosmetic only. */
+  setSkin(id: SkinId, pop = false): void {
+    this.skin = id;
+    this.fuzzBody.setTexture(this.skinKey(this.excited));
+    this.fuzzBody.setDisplaySize(FUZZ_IMG_PX, FUZZ_IMG_PX);
+    this.tweens.killTweensOf(this.stationFuzz);
+    this.stationFuzz.setTexture(this.skinKey(false));
+    this.stationFuzz.setDisplaySize(FUZZ_IMG_PX, FUZZ_IMG_PX);
+    if (pop) {
+      const base = this.stationFuzz.scaleX;
+      this.tweens.add({
+        targets: this.stationFuzz,
+        scaleX: base * 1.4,
+        scaleY: base * 1.4,
+        duration: 130,
+        yoyo: true,
+        ease: 'Quad.easeOut',
+        onComplete: () => this.stationFuzz.setScale(base),
+      });
+    }
+  }
+
+  /**
+   * The ride camera: `true` follows the fuzz zoomed in (rideCamera.ts); `false` glides back out to
+   * the full level view, after `holdMs` (the end-of-ride beat on the fuzz) when given.
+   */
+  setRideCamera(follow: boolean, holdMs = 0): void {
+    if (follow) {
+      this.camFollow = true;
+      this.camReleaseAt = null;
+    } else if (holdMs > 0 && this.camFollow) {
+      this.camReleaseAt = this.nowMs + holdMs;
+    } else {
+      this.camFollow = false;
+      this.camReleaseAt = null;
+    }
+  }
+
+  /** The payoff of a passed level: three confetti bursts over the fuzz (at the flag). */
+  celebrate(): void {
+    const at = { x: this.fuzz.x, y: this.fuzz.y };
+    const burst = (dx: number, dy: number, count: number): void => {
+      const em = this.onWorld(
+        this.add.particles(at.x + dx, at.y + dy, 'confetti', {
+          emitting: false,
+          speed: { min: 140, max: 360 },
+          angle: { min: 200, max: 340 },
+          gravityY: 420,
+          lifespan: { min: 1400, max: 2200 },
+          rotate: { min: 0, max: 360 },
+          scale: { min: 0.6, max: 1.1 },
+          alpha: { start: 1, end: 0.2 },
+          tint: [0xe8574f, 0xffc43d, 0x3fb6ec, 0x76c75a, 0xd95aa8, 0xffffff],
+        }),
+      );
+      em.setDepth(DEPTH_CONFETTI);
+      em.explode(count);
+      this.time.delayedCall(2600, () => em.destroy());
+    };
+    burst(0, -10, 70);
+    this.time.delayedCall(260, () => burst(-30, -40, 45));
+    this.time.delayedCall(480, () => burst(30, -40, 45));
   }
 
   undo(): boolean {
@@ -450,8 +829,7 @@ export class CoasterScene extends Phaser.Scene {
     if (!pointer.isDown) return;
     if (this.activePointerId !== null) return; // ignore a second concurrent pointer
 
-    const sx = pointer.worldX;
-    const sy = pointer.worldY;
+    const { x: sx, y: sy } = this.stagePoint(pointer);
     if (sx < WORLD_X0 || sx > WORLD_X1 || sy < WORLD_Y0 || sy > WORLD_Y1) return;
 
     let bestIdx = -1;
@@ -515,8 +893,7 @@ export class CoasterScene extends Phaser.Scene {
     if (!this.editable) return;
     if (!this.gesture || pointer.id !== this.activePointerId) return;
 
-    const sx = pointer.worldX;
-    const sy = pointer.worldY;
+    const { x: sx, y: sy } = this.stagePoint(pointer);
     const dist = Math.hypot(sx - this.gesture.startPx.x, sy - this.gesture.startPx.y);
     if (dist > MOVE_THRESHOLD) this.gesture.moved = true;
 
@@ -678,6 +1055,22 @@ export class CoasterScene extends Phaser.Scene {
     g.fillTriangle(x0 + w - 4, roofY - 12, x0 + w + 8, roofY - 9, x0 + w - 4, roofY - 6);
   }
 
+  /**
+   * Edit mode: the picked fuzz waits on the station deck, left of the start point, kept inside the
+   * panel for a station at the left edge (most levels: x 2 m). Behind a draggable station handle;
+   * in front of a locked one (a padlock is only a label, and at the left edge the fuzz would
+   * otherwise hide behind it), stopping just short of the padlock. Hidden while it rides.
+   */
+  private placeStationFuzz(p: Vec2): void {
+    if (!this.editable) return;
+    const r = FUZZ_R_PX * FUZZ_FUR;
+    const deckY = p.y + 10; // drawStation's deck top
+    const x = Math.max(PANEL_X0 + r - 1, p.x - 24);
+    this.stationFuzz.setPosition(x, deckY - FUZZ_R_PX);
+    this.stationFuzz.setDepth(this.points[0]?.locked ? DEPTH_POINTS + 0.1 : DEPTH_STATION_FUZZ);
+    this.stationFuzz.setVisible(true);
+  }
+
   /** A small white padlock mark (body + shackle), centred on `p`. Used on locked control points. */
   private drawPadlockMark(p: Vec2): void {
     const g = this.pointsGfx;
@@ -692,10 +1085,12 @@ export class CoasterScene extends Phaser.Scene {
 
   private redrawPoints(): void {
     this.pointsGfx.clear();
+    this.stationFuzz.setVisible(false);
     if (this.points.length === 0) return;
 
     const station = toPx(this.points[0]!);
     this.drawStation(station);
+    this.placeStationFuzz(station);
 
     if (!this.editable) return;
 

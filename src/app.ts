@@ -8,6 +8,8 @@ import { FIXED_DT, FixedStepper } from './core/stepper';
 import { clonePoints, expandTrackPoints } from './core/trackPoints';
 import type { Hud } from './ui/hud';
 import type { CoasterScene } from './game/CoasterScene';
+import { isSkinId, loadSkin, saveSkin, type SkinId } from './game/skins';
+import { END_HOLD_MS } from './game/rideCamera';
 
 /**
  * Controller: owns the level/run state machine and glues the editor scene,
@@ -26,6 +28,8 @@ export class App {
   lastSnap: CartSnapshot | null = null;
   outcome: Outcome | null = null;
   passed = false;
+  /** The fuzz that rides (2026-10-12, skins.ts): this session's / the stored pick, Blue by default. */
+  skin: SkinId = loadSkin();
 
   private level: Level;
 
@@ -49,6 +53,8 @@ export class App {
 
     document.addEventListener('visibilitychange', this.onVisibilityChange);
 
+    this.scene.setSkin(this.skin);
+    this.hud.setSkin(this.skin);
     this.loadLevel(level);
   }
 
@@ -69,6 +75,7 @@ export class App {
     this.stepper.reset();
 
     this.hud.setLevel(level, LEVELS);
+    this.scene.setRideCamera(false);
     this.scene.setEditable(true);
     this.scene.setTool('point');
     this.scene.drawCart(null);
@@ -99,6 +106,16 @@ export class App {
 
   // ---- public commands (wired to the HUD) ------------------------------
 
+  /** Picks the fuzz that rides (cosmetic: the sim never sees it). Remembered for the session and
+   * in localStorage; the station fuzz pops so the swap is felt. */
+  setSkin(id: string): void {
+    if (!isSkinId(id)) return;
+    this.skin = id;
+    saveSkin(id);
+    this.scene.setSkin(id, true);
+    this.hud.setSkin(id);
+  }
+
   setTool(tool: EditTool): void {
     if (this.mode !== 'edit') return;
     this.tool = tool;
@@ -114,6 +131,8 @@ export class App {
     this.meters.reset();
     this.stepper.reset();
     this.scene.setEditable(false);
+    // 2026-10-12: the camera zooms in and follows the fuzz for the ride (rideCamera.ts).
+    this.scene.setRideCamera(true);
   }
 
   stop(): void {
@@ -126,6 +145,7 @@ export class App {
     this.stepper.reset();
     this.scene.setEditable(true);
     this.scene.drawCart(null);
+    this.scene.setRideCamera(false);
   }
 
   clear(): void {
@@ -172,7 +192,13 @@ export class App {
         // three goals, so some flag levels have no room for a "reaches the end" goal of their own.
         const reached = !this.level.finish || this.outcome === 'reachedEnd';
         this.passed = this.outcome !== 'fell' && reached && allPass(evaluateGoals(this.level.goals, metrics));
-        if (this.passed) this.scene.brunoWave();
+        if (this.passed) {
+          this.scene.brunoWave();
+          this.scene.celebrate();
+        }
+        // Hold on the fuzz for a beat (the confetti at the flag, or the tumble), then glide out to
+        // the whole track with the final numbers.
+        this.scene.setRideCamera(false, END_HOLD_MS);
       }
     }
 

@@ -1,6 +1,7 @@
 import type { EditTool, Goal, GoalResult, HudState, Level, Metric } from '../core/types';
 import { GROUND_Y, PANEL_TOP_Y } from '../game/view';
 import { playGoalsIntro } from './goalsIntro';
+import { FUZZ_SKINS, findSkin, type SkinId } from '../game/skins';
 
 export interface HudCallbacks {
   play(): void;
@@ -10,6 +11,8 @@ export interface HudCallbacks {
   next(): void;
   selectLevel(id: string): void;
   setTool(tool: EditTool): void;
+  /** 2026-10-12: the child picked a fuzz in the skin tray. */
+  setSkin(id: string): void;
   exit(): void;
 }
 
@@ -147,6 +150,15 @@ export class Hud {
   private undoBtn!: HTMLButtonElement;
   private clearBtn!: HTMLButtonElement;
   private nextBtn!: HTMLButtonElement;
+
+  // 2026-10-12: the fuzz picker. A round button showing the riding fuzz sits right of Point/Loop in
+  // edit mode; a tap opens a tray of fuzz faces above it; a tap on a face swaps the fuzz (both pop).
+  private skinBtn!: HTMLButtonElement;
+  private skinBtnImg!: HTMLImageElement;
+  private skinTray!: HTMLDivElement;
+  private skinBackdrop!: HTMLDivElement;
+  private skinFaces = new Map<SkinId, HTMLButtonElement>();
+  private skin: SkinId | null = null;
 
   private readonly syncHandler = (): void => this.syncTransform();
   private intervalId: ReturnType<typeof setInterval> | undefined;
@@ -378,6 +390,8 @@ export class Hud {
     this.toolPointBtn = toolPointBtn;
     this.toolLoopBtn = toolLoopBtn;
 
+    this.buildSkinPicker(bottombar);
+
     // Play, Stop and Next level share one centred box, side by side whichever of them show (after
     // a passed run: Stop and Next level).
     const barCentre = document.createElement('div');
@@ -393,6 +407,92 @@ export class Hud {
     this.nextBtn = makeBtn('next', 'Next level ▶', 'primary', () => this.cb.next(), barCentre);
 
     this.root.appendChild(bottombar);
+  }
+
+  /**
+   * The fuzz picker: the round button in the bar (after Point/Loop, well clear of the centred Play
+   * button), the tray of faces that opens above it over the scene's bottom-left, and a see-through
+   * backdrop that closes the tray on a tap anywhere else (and keeps that tap off the track).
+   */
+  private buildSkinPicker(bottombar: HTMLElement): void {
+    const btn = document.createElement('button');
+    btn.id = 'skin';
+    btn.type = 'button';
+    btn.className = 'skin-btn';
+    btn.setAttribute('aria-label', 'Pick your fuzz');
+    btn.title = 'Pick your fuzz';
+    const img = document.createElement('img');
+    img.alt = '';
+    img.draggable = false;
+    const badge = document.createElement('span');
+    badge.className = 'skin-badge';
+    badge.textContent = '⇄';
+    btn.append(img, badge);
+    btn.addEventListener('click', () => this.toggleSkinTray());
+    bottombar.appendChild(btn);
+    this.skinBtn = btn;
+    this.skinBtnImg = img;
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'skin-backdrop';
+    backdrop.hidden = true;
+    backdrop.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.toggleSkinTray(false);
+    });
+    this.root.appendChild(backdrop);
+    this.skinBackdrop = backdrop;
+
+    const tray = document.createElement('div');
+    tray.className = 'skin-tray';
+    tray.hidden = true;
+    const title = document.createElement('div');
+    title.className = 'skin-tray-title';
+    title.textContent = 'Who rides?';
+    const row = document.createElement('div');
+    row.className = 'skin-row';
+    for (const s of FUZZ_SKINS) {
+      const face = document.createElement('button');
+      face.type = 'button';
+      face.className = 'skin-face';
+      face.dataset.skin = s.id;
+      face.title = s.label;
+      face.setAttribute('aria-label', s.label);
+      const fimg = document.createElement('img');
+      fimg.src = s.normal;
+      fimg.alt = '';
+      fimg.draggable = false;
+      face.appendChild(fimg);
+      face.addEventListener('click', () => {
+        this.cb.setSkin(s.id);
+        this.toggleSkinTray(false);
+      });
+      row.appendChild(face);
+      this.skinFaces.set(s.id, face);
+    }
+    tray.append(title, row);
+    this.root.appendChild(tray);
+    this.skinTray = tray;
+  }
+
+  private toggleSkinTray(open = this.skinTray.hidden): void {
+    this.skinTray.hidden = !open;
+    this.skinBackdrop.hidden = !open;
+    this.skinBtn.classList.toggle('open', open);
+  }
+
+  /** Shows `id` as the riding fuzz (button face, ring in the tray); pops the button on a change. */
+  setSkin(id: SkinId): void {
+    const changed = this.skin !== null && this.skin !== id;
+    this.skin = id;
+    this.skinBtnImg.src = findSkin(id).normal;
+    for (const [sid, face] of this.skinFaces) face.classList.toggle('current', sid === id);
+    if (changed) {
+      // restart the CSS pop: drop the class, force a reflow, add it back
+      this.skinBtn.classList.remove('pop');
+      void this.skinBtn.offsetWidth;
+      this.skinBtn.classList.add('pop');
+    }
   }
 
   private setText(el: Element, text: string): void {
@@ -574,6 +674,8 @@ export class Hud {
 
     // ---- bottom bar buttons ----
     this.setHidden(this.toolGroupEl, !editMode);
+    this.setHidden(this.skinBtn, !editMode);
+    if (!editMode && !this.skinTray.hidden) this.toggleSkinTray(false);
     this.toolPointBtn.classList.toggle('active', state.tool === 'point');
     this.toolLoopBtn.classList.toggle('active', state.tool === 'loop');
 

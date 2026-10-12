@@ -53,6 +53,7 @@ export const coaster: ActivityDef = {
       next: () => app?.next(),
       selectLevel: (id: string) => app?.selectLevel(id),
       setTool: (tool: EditTool) => app?.setTool(tool),
+      setSkin: (id: string) => app?.setSkin(id),
       exit: () => host.exit(),
     });
 
