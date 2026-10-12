@@ -7,41 +7,19 @@ html, body { margin: 0; height: 100%; background: #192661; overflow: hidden; }
 #ui { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; transform-origin: 0 0; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #fff; }
 #ui [hidden] { display: none !important; }
 
-/* ================= Top bar: y 0..72, x 32..992 ================= */
-
-/* Open cell over the Phaser canvas — Bruno (Spine) is drawn through here. */
-.bruno-slot {
-  position: absolute; left: 32px; top: 0; width: 76px; height: 72px;
-  border: 1px solid #2c3560; border-radius: 10px;
-  background: transparent; pointer-events: none; box-sizing: border-box;
-}
-
-/* Bruno's speech bubble */
+/* ================= Top bar: y 0..72 — the level picker and Park only =================
+   2026-10-12 (Gao: "remove him and the dialog from the top, remove the box there, but leave the park
+   button and scroll buttons at the top right"): no Bruno slot, title or speech box any more; Bruno
+   talks through his dialog box (src/ui/brunoDialog.ts, rules at the end of this file). The picker
+   and Park keep their old spot (Park's right edge at x 976). */
 #topbar {
-  position: absolute; left: 116px; top: 0; width: 876px; height: 72px;
-  background: rgba(23, 30, 58, 0.94); border: 1px solid #2c3560; border-radius: 12px;
-  pointer-events: auto; box-sizing: border-box;
-  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  position: absolute; right: 48px; top: 0; height: 72px;
+  display: flex; align-items: center; gap: 12px; pointer-events: none;
 }
-#topbar::before {
-  content: ''; position: absolute; left: -6px; top: 50%; width: 12px; height: 12px;
-  background: rgba(23, 30, 58, 0.94); border: 1px solid #2c3560; border-radius: 2px;
-  transform: translateY(-50%) rotate(45deg);
-}
-
-.topbar-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
-.topbar-main .title {
-  font-weight: 700; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.topbar-main .bruno-text {
-  font-size: 15px; line-height: 1.25; color: #fff;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.topbar-main .bruno-text.pass { color: #61bb46; }
-.topbar-main .bruno-text.fail { color: #c32f96; }
+#topbar > * { pointer-events: auto; }
 
 .level-picker { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
-.level-picker .picker-label { font-size: 13px; color: #9aa1c0; white-space: nowrap; }
+.level-picker .picker-label { font-size: 13px; color: #b4bad6; white-space: nowrap; }
 .picker-btn {
   flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;
   background: #2c3560; color: #fff; border: none; font-size: 16px; line-height: 1;
@@ -187,7 +165,7 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 /* ---- Goals overlay: the goals list (the same .goals-col / #goalList rows) as a small translucent
    panel over the top-left corner, the twin of .meters-col.overlay, shown in every mode
    (HudSpec.goalsOverlay; the coaster always). In the kit the result card sits under the goals in
-   done mode (builder.css); the coaster tells the outcome in Bruno's bubble. Compact type: goal
+   done mode (builder.css); the coaster tells the outcome in Bruno's quick line. Compact type: goal
    label 14px, value 13px, check mark 18px, bar 5px. At level start it pops up big in the middle
    of the panel and glides here (src/ui/goalsIntro.ts). ---- */
 .goals-overlay {
@@ -314,3 +292,86 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 .skin-face:hover { transform: scale(1.08); }
 .skin-face:active { transform: scale(0.94); }
 .skin-face.current { border-color: #ffb40f; background: #3a4a8a; }
+
+/* ================= Bruno's dialog (src/ui/brunoDialog.ts) =================
+   2026-10-12, Gao: "whenever a new level is opened, i want the whole viewport to dim, then bruno
+   animates in from left (ease out back). after that, a text box along the bottom of the screen
+   appears when he talks, and i want the text to be animated in word by word."
+   The canvas dims itself and draws the big Bruno (src/ui/brunoStage.ts); the DOM HUD sits above the
+   canvas, so it dims here: `bd-dim` darkens every HUD element to match the canvas's 55% black, and
+   `bd-open` hides the DOM that would sit over Bruno at the bottom-left (the bottom bar, the goals
+   panel, the scrollbar, the coach's hand, the win banner, the skin tray, the unlock callout) until
+   the dialog is over. `.bd-layer` marks the dialog's own elements, which never dim. ---- */
+#ui.bd-fade > :not(.bd-layer) { transition: filter 250ms ease; }
+/* The kit's properties drawer keeps its own slide (builder.css) while the dim animates. */
+#ui.bd-fade > .prop-drawer { transition: filter 250ms ease, transform 260ms cubic-bezier(.2, .8, .2, 1); }
+#ui.bd-dim > :not(.bd-layer) { filter: brightness(0.45); }
+#ui.bd-open > #bottombar, #ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll,
+#ui.bd-open > .coach-hand, #ui.bd-open > .win-banner, #ui.bd-open > .skin-tray,
+#ui.bd-open > .skin-backdrop, #ui.bd-open > .unlock-callout-wrap {
+  opacity: 0; visibility: hidden; transition: opacity 250ms ease, visibility 0s linear 250ms;
+}
+
+/* The tap catcher: the whole stage, see-through; every tap during the dialog lands here. */
+.bd-catcher {
+  position: absolute; left: 0; top: 0; width: 1024px; height: 768px; z-index: 90;
+  pointer-events: auto; cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+
+/* The modal box: along the bottom of the screen right of Bruno (x 240..1000, bottom at y 752, it
+   grows upward for a third line). A plain navy rounded box with a soft drop shadow, no outline;
+   the level title (or "Hint 2 of 3") as a small orange label. */
+.bd-box {
+  position: absolute; left: 240px; right: 24px; bottom: 16px; min-height: 124px; z-index: 95;
+  box-sizing: border-box; padding: 16px 30px 22px 28px; border-radius: 22px;
+  background: rgba(23, 30, 58, 0.97); color: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  pointer-events: auto; cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+.bd-label { font-size: 15px; font-weight: 800; line-height: 1.1; letter-spacing: 0.02em; color: #ffb40f; }
+.bd-text { font-family: "Nunito", "Arial Rounded MT Bold", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.bd-box .bd-text { font-size: 24px; font-weight: 700; line-height: 1.32; }
+.bd-box.bd-in { animation: bd-box-in 200ms ease-out both; }
+.bd-box.bd-out { animation: bd-box-out 150ms ease-in both; }
+@keyframes bd-box-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes bd-box-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px); } }
+/* "Tap to continue": a small bouncing arrow in the bottom-right corner once the line is all in. */
+.bd-cue { position: absolute; right: 18px; bottom: 8px; font-size: 15px; line-height: 1; color: #ffb40f; opacity: 0; pointer-events: none; }
+.bd-cue.bd-show { opacity: 1; animation: bd-cue 800ms ease-in-out infinite; }
+@keyframes bd-cue { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(3px); } }
+
+/* Word by word: the whole line is laid out first (each word an inline-block span), then each word
+   pops in after the previous one (--d, set per word from JS: 90 ms apart, 150 ms each). */
+.bd-w { display: inline-block; }
+.bd-typing .bd-w { animation: bd-word 150ms ease-out both; animation-delay: var(--d, 0ms); }
+.bd-all .bd-w { opacity: 1; animation: none; }
+@keyframes bd-word { from { opacity: 0; transform: translateY(6px) scale(0.85); } to { opacity: 1; transform: none; } }
+
+/* The quick line: the same box, compact and non-modal, with Bruno's face at its left. Placed from
+   JS (left/top/max-width) just above the bottom bar over the free part of the world panel; under
+   the coach's hand (z 45), over the win banner (z 40). A tap on it hides it early. */
+.bd-quick {
+  position: absolute; left: 0; top: 0; z-index: 44; width: max-content; max-width: 560px;
+  box-sizing: border-box; display: flex; align-items: center; gap: 10px;
+  padding: 7px 20px 7px 8px; border-radius: 18px;
+  background: rgba(23, 30, 58, 0.95); color: #fff; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  pointer-events: auto; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.bd-face { flex: 0 0 auto; width: 54px; height: 54px; object-fit: contain; pointer-events: none; }
+.bd-quick .bd-text { min-width: 0; font-size: 19px; font-weight: 700; line-height: 1.3; }
+.bd-quick.pass .bd-text { color: #a6ec8a; }
+.bd-quick.fail .bd-text { color: #ffa3dc; }
+.bd-quick.pass .bd-face { animation: bd-face-cheer 700ms ease-out 1; }
+@keyframes bd-face-cheer {
+  0%, 100% { transform: none; } 25% { transform: rotate(-10deg) scale(1.08); } 50% { transform: rotate(8deg) scale(1.08); } 75% { transform: rotate(-4deg); }
+}
+.bd-quick.bd-in { animation: bd-quick-in 180ms ease-out both; }
+@keyframes bd-quick-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .bd-box.bd-in, .bd-box.bd-out, .bd-quick.bd-in, .bd-typing .bd-w, .bd-cue.bd-show, .bd-quick.pass .bd-face { animation: none !important; }
+  #ui.bd-fade > :not(.bd-layer),
+  #ui.bd-open > #bottombar, #ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll,
+  #ui.bd-open > .coach-hand, #ui.bd-open > .win-banner, #ui.bd-open > .skin-tray,
+  #ui.bd-open > .skin-backdrop, #ui.bd-open > .unlock-callout-wrap { transition: none; }
+}

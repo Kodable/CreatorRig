@@ -11,6 +11,7 @@ import type { Hud } from './ui/hud';
 import type { CoasterScene } from './game/CoasterScene';
 import { isSkinId, loadSkin, saveSkin, type SkinId } from './game/skins';
 import { END_HOLD_MS } from './game/rideCamera';
+import { makeDialogRunner, type BrunoDialogRunner } from './ui/brunoDialog';
 
 /**
  * Controller: owns the level/run state machine and glues the editor scene,
@@ -35,6 +36,11 @@ export class App {
   skin: SkinId = loadSkin();
 
   private level: Level;
+  /** Bruno's lesson intro (src/ui/brunoDialog.ts): the scene's dim + big Bruno and the HUD's box.
+   * Null when either lacks its half (a test fake): the goals intro then plays at once. */
+  private readonly dialogs: BrunoDialogRunner | null;
+  /** Bumped per level load, so a replaced lesson intro never plays the old level's goals intro. */
+  private lessonGen = 0;
 
   private readonly onVisibilityChange = (): void => {
     // A long background pause would otherwise accumulate a burst of steps.
@@ -55,6 +61,7 @@ export class App {
     this.scene.onUpdate = (dt: number): void => this.frame(dt);
 
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.dialogs = makeDialogRunner(this.scene, this.hud.brunoDialog);
 
     this.scene.setSkin(this.skin);
     this.hud.setSkin(this.skin);
@@ -88,6 +95,23 @@ export class App {
     this.scene.setPoints(clonePoints(level.preset ?? []));
 
     this.syncUrl(level.id);
+
+    // 2026-10-12: every level load (not Stop/replay) opens with Bruno's lesson intro: the
+    // viewport dims, he slides in from the left, the box types his line; the goals intro plays
+    // once the child taps it closed.
+    const gen = ++this.lessonGen;
+    if (!this.dialogs) {
+      this.hud.playGoalsIntro?.();
+      return;
+    }
+    void this.dialogs.play({ label: level.title, text: level.bruno }).then((done) => {
+      if (done && gen === this.lessonGen) this.hud.playGoalsIntro?.();
+    });
+  }
+
+  /** Bruno's lesson intro is on screen. */
+  isDialogOpen(): boolean {
+    return this.dialogs?.open ?? false;
   }
 
   private syncUrl(id: string): void {
@@ -246,6 +270,8 @@ export class App {
   }
 
   destroy(): void {
+    this.lessonGen++;
+    this.dialogs?.cancel();
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.scene.onPointsChanged = undefined;
     this.scene.onUpdate = undefined;

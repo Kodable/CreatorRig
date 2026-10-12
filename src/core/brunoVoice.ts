@@ -1,6 +1,7 @@
 // Bruno's voice rules that a test can check (Bruno voice audit, 2026-10-12). Bruno is calm, steady
-// and "not a floof of many words", so every line he says in the top-bar bubble must:
-//  - fit the bubble: the bubble clamps at 2 lines of 15 px text (style.css), about 128 characters;
+// and "not a floof of many words", so every line he says must:
+//  - stay short: about 128 characters, two lines of his dialog box (src/ui/brunoDialog.ts; until
+//    2026-10-12 the top-bar bubble, which clamped at 2 lines of 15 px text);
 //  - use at most one "!" (steady delight, not hype);
 //  - use no ALL-CAPS emphasis words. Button names the child taps (DRIVE, BUILD, FIRE) are fine.
 // Units like m/s and g are lowercase, so they never trip the caps rule.

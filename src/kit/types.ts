@@ -305,7 +305,8 @@ export interface Level<K extends string, M, O extends string> {
   parts: PlacedPart<K>[];
   /** Kinds the child may add. Empty = tune only. */
   palette: K[];
-  /** Escalating hints behind the Hint button. */
+  /** Escalating hints behind the Hint button (bottom bar since 2026-10-12): each tap plays the
+   * next one in Bruno's modal dialog (src/ui/brunoDialog.ts), cycling. */
   hints: string[];
   failHints: Partial<Record<O, string>>;
   /** Static decorations (a keep-above line, a blast point, ...). */
@@ -386,6 +387,10 @@ export interface HudState<K extends string, M, O extends string, L> {
   scroll: number | null;
   /** The coach's current step (see `CourseSpec.coach`), or null. */
   coach: CoachStep<K> | null;
+  /** 2026-10-12: where the coach's IN-SCENE hand points ('widget' / 'part' targets), in stage px
+   * (its fingertip; the glove hangs below and right of it), or null/absent while none shows. The
+   * HUD keeps Bruno's quick line (src/ui/brunoDialog.ts) clear of it. */
+  coachPoint?: Vec2 | null;
   /** Kinds this level unlocks on the shelf (`Level.introduces` entries `part:<kind>`): the HUD
    * plays the unlock callout (the button pops in with NEW and its blurb) once per level load. */
   unlocked: K[];
@@ -541,7 +546,7 @@ export interface HudSpec<K extends string, M, O extends string> {
     /** Bruno's line for 2 s after the child tapped a locked widget. */
     locked?: string;
   };
-  /** Outcomes that read `level.failHints[outcome]` in Bruno's bubble with the fail colour. */
+  /** Outcomes that read `level.failHints[outcome]` in Bruno's quick line with the fail colour. */
   failOutcomes: O[];
   /** Hide the bottom bar's Play/Start button (the course offers its own start control in the
    * scene, e.g. the big DRIVE button). Stop/Reset, Undo, Clear stay. Default false. */
@@ -635,7 +640,8 @@ export interface CourseSpec<
   dragSnap?: (part: PlacedPart<K>, at: Vec2, parts: PlacedPart<K>[], level: L) => Vec2;
   /** The "coach": the one tap the child should do next, re-asked every frame in edit/tune mode
    * (and in done mode for the win step). The HUD/scene draw a bouncing pointer hand at the
-   * target and put `text` in Bruno's bubble (it wins over the level's `bruno` line while set).
+   * target and show `text` as Bruno's quick line, which stays while the step is active (2026-10-12:
+   * the level's `bruno` line plays in the modal lesson intro on level load).
    * Return null when the child is on their own. Keep steps to the first levels. */
   coach?: (ctx: CoachContext<K, L>) => CoachStep<K> | null;
   /** A widget the controller could not resolve itself (`action: 'none'`, or a tap with no

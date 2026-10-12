@@ -31,6 +31,7 @@ import { interpolateSnapshot } from './interpolate';
 import { clampFrame, cxToScroll, fullFrame, isWideWorld, scrollToCx, viewWidth, type FrameState } from './camera';
 import type { BuilderScene } from './BuilderScene';
 import type { BuilderHud } from './BuilderHud';
+import { hintLabel, makeDialogRunner, type BrunoDialogRunner, type DialogLine } from '../ui/brunoDialog';
 
 const UNDO_CAP = 50;
 const NUDGE_CAP = 7;
@@ -133,8 +134,20 @@ export class BuilderApp<
   /** The edit rest frame saved at `play()` (wide worlds move `restFrame` to where the run ends),
    * restored by `stop()`. */
   private editRest: FrameState | null = null;
-  /** `CourseSpec.intro`'s pan for the level being loaded, played once its first build is ready. */
+  /** `CourseSpec.intro`'s pan for the level being loaded, played once its first build is ready
+   * AND Bruno's lesson intro has closed. */
   private pendingIntro: { from: CameraFrame; to: CameraFrame; ms: number } | null = null;
+
+  // ---- Bruno's modal dialog (2026-10-12; src/ui/brunoDialog.ts) ----
+  /** Sequences the scene's dim + big Bruno and the HUD's box; null when the scene or HUD lacks
+   * them (the test fakes), and then a dialog closes at once. */
+  private readonly dialogs: BrunoDialogRunner | null;
+  /** The level's lesson intro (or a hint) is on screen: the goals intro and the camera pan wait. */
+  private lessonOpen = false;
+  /** Bumped per dialog, so a superseded one never runs its after-close effects. */
+  private lessonGen = 0;
+  /** The level loaded last has had its first build (the intro pan may start). */
+  private levelBuilt = false;
 
   private readonly onVisibilityChange = (): void => {
     // A long background pause would otherwise accumulate a burst of steps.
@@ -175,6 +188,7 @@ export class BuilderApp<
     if (spec.dragSnap) this.scene.dragSnap = (id: number, at: Vec2): Vec2 | null => this.dragSnapDelta(id, at);
     this.scene.setTool(this.toolKind());
     this.scene.setGrid(spec.grid ?? null);
+    this.dialogs = makeDialogRunner(scene, hud.brunoDialog);
 
     document.addEventListener('visibilitychange', this.onVisibilityChange);
 
@@ -258,12 +272,51 @@ export class BuilderApp<
       this.scene.focusFrame(null);
     }
 
+    this.levelBuilt = false;
     this.hud.setLevel(level, this.spec.levels);
     this.scene.setEditable(true);
     this.scene.setMarkers(level.markers ?? []);
     void this.rebuild();
 
     this.syncUrl(level.id);
+
+    // 2026-10-12: every level load opens with Bruno's lesson intro (the viewport dims, he slides
+    // in, the box types his line); the goals intro and the intro pan run once it closes.
+    this.openDialog({ label: level.title, text: level.bruno }, () => this.afterLessonIntro());
+  }
+
+  /** Plays one modal dialog; `after` runs once it closes (never for one a newer dialog or level
+   * replaced). Without dialog support it runs at once. */
+  private openDialog(line: DialogLine, after?: () => void): void {
+    const gen = ++this.lessonGen;
+    if (!this.dialogs) {
+      this.lessonOpen = false;
+      after?.();
+      return;
+    }
+    this.lessonOpen = true;
+    void this.dialogs.play(line).then((done) => {
+      if (!done || gen !== this.lessonGen || this.destroyed) return;
+      this.lessonOpen = false;
+      after?.();
+    });
+  }
+
+  /** The level's start effects, once Bruno's lesson intro closed: the goals panel's pop-and-glide,
+   * then (a long rover level) the camera pan, if the first build is ready (else `rebuild` starts
+   * it when it is). */
+  private afterLessonIntro(): void {
+    this.hud.playGoalsIntro?.();
+    if (this.pendingIntro && this.levelBuilt && this.mode === 'edit') {
+      const intro = this.pendingIntro;
+      this.pendingIntro = null;
+      this.scene.playIntro(intro.from, intro.to, intro.ms);
+    }
+  }
+
+  /** Bruno's lesson intro or a hint is on screen. */
+  isDialogOpen(): boolean {
+    return this.lessonOpen;
   }
 
   private syncUrl(id: string): void {
@@ -295,7 +348,8 @@ export class BuilderApp<
     this.scene.setItems(sim.renderItems(), this.boundsOf(sim.handles()), this.regionsOf(), this.segmentsOf(sim.handles()));
     this.scene.syncTransforms(sim.snapshot());
     this.scene.setSelected(this.selectedId);
-    if (this.pendingIntro && this.mode === 'edit') {
+    this.levelBuilt = true;
+    if (this.pendingIntro && this.mode === 'edit' && !this.lessonOpen) {
       const intro = this.pendingIntro;
       this.pendingIntro = null;
       this.scene.playIntro(intro.from, intro.to, intro.ms);
@@ -725,9 +779,14 @@ export class BuilderApp<
     void this.rebuild();
   }
 
+  /** The next hint in the level's ladder (cycling), in Bruno's modal dialog (2026-10-12: the
+   * same dim / slide-in / word-by-word sequence as the lesson intro, labelled "Hint 2 of 3"). Not
+   * during a run (the HUD disables the button) or while a dialog is already up. */
   hint(): void {
-    if (this.level.hints.length === 0) return;
-    this.hintIndex = (this.hintIndex + 1) % this.level.hints.length;
+    const hints = this.level.hints;
+    if (hints.length === 0 || this.mode === 'play' || this.lessonOpen) return;
+    this.hintIndex = (this.hintIndex + 1) % hints.length;
+    this.openDialog({ label: hintLabel(this.hintIndex, hints.length), text: hints[this.hintIndex]! });
   }
 
   // ---- public commands (wired to the HUD) --------------------------------
@@ -1026,7 +1085,7 @@ export class BuilderApp<
 
   /** Asks `spec.coach` for this frame's step (edit/tune mode, and done mode for the win step;
    * never while a run plays) and points the scene's hand at an in-scene target. The HUD draws
-   * the hand for shelf/drawer/bar targets and puts the text in Bruno's bubble. */
+   * the hand for shelf/drawer/bar targets and shows the text as Bruno's quick line. */
   private updateCoach(): void {
     if (!this.spec.coach) return;
     const ask = this.canTune() || this.mode === 'done';
@@ -1116,12 +1175,15 @@ export class BuilderApp<
       paletteCosts,
       scroll: this.scrollState(),
       coach: this.coach,
+      coachPoint: this.scene.coachPoint?.() ?? null,
       unlocked: this.unlocked,
     };
   }
 
   destroy(): void {
     this.destroyed = true;
+    this.lessonGen++;
+    this.dialogs?.cancel();
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.scene.onUpdate = undefined;
     this.scene.onPartTapped = undefined;

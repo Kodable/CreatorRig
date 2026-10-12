@@ -594,3 +594,171 @@ describe('BuilderApp: dismissWin', () => {
     expect(hud.dismissed).toBe(1);
   });
 });
+
+// ---- Bruno's modal dialog (2026-10-12, src/ui/brunoDialog.ts) ------------------------------------
+
+/** A scene with Bruno's stage and a HUD with a dialog box, recording everything in one `log` (in
+ * order) so the tests can check that the goals intro and the camera pan wait for the dialog. The
+ * box's `say` stays open until `tap()` closes it. */
+function bootWithDialog(spec: CourseSpec<K, M, O, L>) {
+  const log: string[] = [];
+  const said: { label: string; text: string }[] = [];
+  let close: (() => void) | null = null;
+  const scene = new FakeScene() as FakeScene & { showBrunoStage(): Promise<void>; hideBrunoStage(): Promise<void> };
+  scene.showBrunoStage = async () => void log.push('stage-in');
+  scene.hideBrunoStage = async () => void log.push('stage-out');
+  const origPlayIntro = scene.playIntro.bind(scene);
+  scene.playIntro = (from, to, ms) => {
+    log.push('pan');
+    origPlayIntro(from, to, ms);
+  };
+  const hud = new FakeHud() as FakeHud & { brunoDialog: unknown; playGoalsIntro(): void };
+  hud.playGoalsIntro = () => void log.push('goals-intro');
+  hud.brunoDialog = {
+    begin: () => log.push('dim'),
+    say: (line: { label: string; text: string }) => {
+      log.push('say');
+      said.push(line);
+      return new Promise<void>((r) => {
+        close = r;
+      });
+    },
+    undim: () => log.push('undim'),
+    end: () => log.push('end'),
+    cancel: () => {
+      const c = close;
+      close = null;
+      c?.();
+    },
+  };
+  const app = new BuilderApp<K, M, O, L>(scene as unknown as BuilderScene, hud as unknown as BuilderHud<K, M, O, L>, spec);
+  const tap = async (): Promise<void> => {
+    const c = close;
+    close = null;
+    c?.();
+    await flush();
+  };
+  return { app, scene, hud, log, said, tap };
+}
+
+describe("BuilderApp: Bruno's lesson intro on level load", () => {
+  const FROM = { cx: 75, cy: 7.5, zoom: 1 };
+  const TO = { cx: 20, cy: 7.5, zoom: 1 };
+  const LEVELS: L[] = [
+    { ...LEVEL, id: 'one', title: 'One', bruno: 'Welcome to the park.', hints: ['Try a box.', 'Two boxes.'] },
+    { ...LEVEL, id: 'two', title: 'Two', bruno: 'Now a harder one.' },
+  ];
+  const withIntro = (): CourseSpec<K, M, O, L> =>
+    makeSpec(WIDE, { levels: LEVELS, intro: () => ({ from: FROM, to: TO, ms: 3000 }) });
+
+  it('says the level title and line, and runs the goals intro and the pan only after the tap', async () => {
+    const { app, log, said, tap } = bootWithDialog(withIntro());
+    await flush(); // the first build is ready, the dialog still open
+    expect(said).toEqual([{ label: 'One', text: 'Welcome to the park.' }]);
+    expect(log).toEqual(['dim', 'stage-in', 'say']);
+    expect(app.isDialogOpen()).toBe(true);
+    await tap();
+    expect(log).toEqual(['dim', 'stage-in', 'say', 'undim', 'stage-out', 'end', 'goals-intro', 'pan']);
+    expect(app.isDialogOpen()).toBe(false);
+  });
+
+  it('a dialog closed before the first build is ready: the pan starts when the build lands', async () => {
+    let release: (() => void) | null = null;
+    const spec = withIntro();
+    const createSim = spec.createSim;
+    spec.createSim = (parts, level) =>
+      new Promise((r) => {
+        release = () => r(createSim(parts, level) as unknown as FakeSim);
+      });
+    const { log, tap } = bootWithDialog(spec);
+    await flush();
+    await tap();
+    expect(log.slice(-2)).toEqual(['end', 'goals-intro']);
+    expect(log).not.toContain('pan');
+    release!();
+    await flush();
+    await flush();
+    expect(log.at(-1)).toBe('pan');
+  });
+
+  it('plays again for the next level, the picker and a reload, but not for stop/replay', async () => {
+    const { app, scene, hud, said, tap } = bootWithDialog(makeSpec(SINGLE, { levels: LEVELS, passed: () => true }));
+    await flush();
+    await tap();
+    app.play();
+    (app.sim as FakeSim).outcome = 'done';
+    frame(scene, hud);
+    app.stop();
+    await flush();
+    expect(said).toHaveLength(1);
+    app.play();
+    (app.sim as FakeSim).outcome = 'done';
+    frame(scene, hud);
+    app.next();
+    await flush();
+    expect(said.at(-1)).toEqual({ label: 'Two', text: 'Now a harder one.' });
+    await tap();
+    app.selectLevel('one');
+    await flush();
+    expect(said.at(-1)).toEqual({ label: 'One', text: 'Welcome to the park.' });
+    expect(said).toHaveLength(3);
+  });
+
+  it('a level loaded while the previous intro is open replaces it (no goals intro for the old one)', async () => {
+    const { app, log, said, tap } = bootWithDialog(makeSpec(SINGLE, { levels: LEVELS }));
+    await flush();
+    app.selectLevel('two');
+    await flush();
+    expect(said.map((l) => l.label)).toEqual(['One', 'Two']);
+    expect(log.filter((e) => e === 'goals-intro')).toHaveLength(0);
+    await tap();
+    expect(log.filter((e) => e === 'goals-intro')).toHaveLength(1);
+  });
+});
+
+describe('BuilderApp: hints play in the same dialog', () => {
+  const LEVELS: L[] = [{ ...LEVEL, title: 'One', bruno: 'Hi.', hints: ['Try a box.', 'Two boxes.'] }];
+
+  it('cycles the hint ladder with a "Hint N of M" label, and no goals intro follows', async () => {
+    const { app, scene, hud, log, said, tap } = bootWithDialog(makeSpec(SINGLE, { levels: LEVELS }));
+    await flush();
+    await tap();
+    const goalsAfterIntro = log.filter((e) => e === 'goals-intro').length;
+    app.hint();
+    await flush();
+    expect(said.at(-1)).toEqual({ label: 'Hint 1 of 2', text: 'Try a box.' });
+    expect(frame(scene, hud).hintIndex).toBe(0);
+    app.hint(); // ignored while the hint is still open
+    await flush();
+    expect(said).toHaveLength(2);
+    await tap();
+    app.hint();
+    await flush();
+    expect(said.at(-1)).toEqual({ label: 'Hint 2 of 2', text: 'Two boxes.' });
+    await tap();
+    app.hint();
+    await flush();
+    expect(said.at(-1)).toEqual({ label: 'Hint 1 of 2', text: 'Try a box.' });
+    await tap();
+    expect(log.filter((e) => e === 'goals-intro')).toHaveLength(goalsAfterIntro);
+  });
+
+  it('is ignored during a run', async () => {
+    const { app, said, tap } = bootWithDialog(makeSpec(SINGLE, { levels: LEVELS }));
+    await flush();
+    await tap();
+    app.play();
+    app.hint();
+    await flush();
+    expect(said).toHaveLength(1);
+  });
+
+  it('without dialog support (plain fakes) a hint still advances the ladder', async () => {
+    const { app, scene, hud } = boot(makeSpec(SINGLE, { levels: LEVELS }));
+    await flush();
+    app.hint();
+    expect(frame(scene, hud).hintIndex).toBe(0);
+    app.hint();
+    expect(frame(scene, hud).hintIndex).toBe(1);
+  });
+});

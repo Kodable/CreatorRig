@@ -1,17 +1,13 @@
 /* Builder-kit HUD rules, shared by every course built on BuilderHud (Goldberg, Structures, ...).
-   Everything else (.bruno-slot, #topbar, .topbar-main, .level-picker, .picker-btn, .park-btn,
+   Everything else (#topbar, .level-picker, .picker-btn, .park-btn, Bruno's dialog .bd-*,
    #dash, .goals-col, #goalList, li.goal, .goal-bar, .meters-col, .meter, #bottombar,
    button.primary/.stop/.secondary) lives in the global src/style.css (the coaster HUD) and is
    reused as-is. */
 
-/* ---- Hint button (top bar, pill like .park-btn) ---- */
-.hint-btn {
-  flex: 0 0 auto; height: 36px; padding: 0 18px; border-radius: 18px;
-  background: #2c3560; color: #fff; border: none; font-size: 14px; font-weight: 700; line-height: 1;
-  display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; white-space: nowrap;
-  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-}
-.hint-btn:disabled { color: #6b7190; cursor: default; }
+/* ---- Hint button: the bottom bar's left end (2026-10-12: moved from the top bar), a `.secondary`
+   pill like Undo/Clear (rules at the end of this file). A tap plays the level's next hint in
+   Bruno's modal dialog (src/ui/brunoDialog.ts). ---- */
+#bottombar #hint { flex: 0 0 auto; min-width: 110px; }
 
 /* ---- Property panel (dash right column, shown instead of .meters-col
    when a part is selected in edit mode). Sized to fit the worst case (seesaw:
@@ -242,7 +238,7 @@
   100% { transform: scale(1); }
 }
 /* ---- Budget pill (bottom bar, next to the palette; courses with Level.budget only). Pill like
-   .hint-btn/.park-btn in the topbar, but smaller: the bottom bar is a 62px row shared with the
+   .park-btn in the topbar, but smaller: the bottom bar is a 62px row shared with the
    palette and the play/stop/undo/clear buttons. ---- */
 .budget-pill {
   flex: 0 0 auto; height: 32px; padding: 0 12px; border-radius: 16px;
@@ -538,7 +534,7 @@
    flow, pushed to the right edge by the palette's own flex-grow. 2026-10-07: the centring rules
    (2026-10-05, then scoped to a .kit-hud class on #ui) moved to the global src/style.css, since the
    coaster's bar (src/ui/hud.ts) is now laid out the same way. ---- */
-#bottombar #undo, #bottombar #clear { border-radius: 23px; }
+#bottombar #undo, #bottombar #clear, #bottombar #hint { border-radius: 23px; }
 
 /* ---- Creator styling pass (2026-10-05, stakeholder direction #2): "the BUILD pill and the
    celebration still don't use Creator's styling: use simple, no-outline rounded box buttons with

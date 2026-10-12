@@ -216,7 +216,7 @@ export const LEVELS: Level[] = [
   }
 ];
 
-/** Bruno's coaster bubble lines that are not per level (src/ui/hud.ts): while the fuzz rides, on a
+/** Bruno's coaster quick lines (src/ui/brunoDialog.ts) that are not per level (src/ui/hud.ts): while the fuzz rides, on a
  * pass, and when the ride reaches the end without passing. */
 export const COASTER_LINES = {
   play: 'Here it goes. Watch the fuzz!',

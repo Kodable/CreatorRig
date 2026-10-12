@@ -2,6 +2,7 @@ import type { EditTool, Goal, GoalResult, HudState, Level, Metric } from '../cor
 import { GROUND_Y, PANEL_TOP_Y } from '../game/view';
 import { COASTER_LINES } from '../core/levels';
 import { playGoalsIntro } from './goalsIntro';
+import { BrunoDialog, type QuickLine } from './brunoDialog';
 import { FUZZ_SKINS, findSkin, type SkinId } from '../game/skins';
 
 export interface HudCallbacks {
@@ -18,6 +19,9 @@ export interface HudCallbacks {
 }
 
 const STAGE_W = 1024;
+/** Bruno's quick line (src/ui/brunoDialog.ts): over the whole world panel (x 32..992), its bottom
+ * just above the bottom bar. The coaster has no coach, so it never needs the top spot. */
+const QUICK_REGION = { left: 32, right: 992, bottom: 690, top: PANEL_TOP_Y + 12 };
 const G_MAX = 6; // g value that maps to a full (100%) intense-o-meter gauge
 
 /* 2026-10-07 (Gao: "put the same treatment of the goal, the stats, and the bottom for the coaster"):
@@ -119,8 +123,8 @@ export class Hud {
   private hasLoopsGoal = false;
   private goalItems: GoalItem[] = [];
 
-  private titleEl!: HTMLDivElement;
-  private brunoTextEl!: HTMLDivElement;
+  /** Bruno's dialog box: the modal lesson intro (run by App) and the quick lines (`update`). */
+  brunoDialog!: BrunoDialog;
   private goalsOverlayEl!: HTMLDivElement;
   private goalsColEl!: HTMLDivElement;
   private goalListEl!: HTMLUListElement;
@@ -185,6 +189,7 @@ export class Hud {
     if (this.intervalId !== undefined) clearInterval(this.intervalId);
     this.goalsIntroAnim?.cancel();
     this.goalsIntroAnim = null;
+    this.brunoDialog.destroy();
     window.removeEventListener('resize', this.syncHandler);
     window.removeEventListener('orientationchange', this.syncHandler);
     window.visualViewport?.removeEventListener('resize', this.syncHandler);
@@ -203,24 +208,10 @@ export class Hud {
   private build(): void {
     this.root.innerHTML = '';
 
-    // ---- bruno slot + topbar (speech bubble) ----
-    const slot = document.createElement('div');
-    slot.className = 'bruno-slot';
-    this.root.appendChild(slot);
-
+    // ---- topbar: only the level picker and Park, at the top right (2026-10-12: Bruno and his
+    // bubble left; he talks through src/ui/brunoDialog.ts) ----
     const topbar = document.createElement('div');
     topbar.id = 'topbar';
-
-    const topbarMain = document.createElement('div');
-    topbarMain.className = 'topbar-main';
-
-    const title = document.createElement('div');
-    title.className = 'title';
-    const brunoText = document.createElement('div');
-    brunoText.className = 'bruno-text';
-    topbarMain.append(title, brunoText);
-    this.titleEl = title;
-    this.brunoTextEl = brunoText;
 
     const picker = document.createElement('div');
     picker.className = 'level-picker';
@@ -255,11 +246,11 @@ export class Hud {
     parkBtn.addEventListener('click', () => this.cb.exit());
     this.parkBtn = parkBtn;
 
-    topbar.append(topbarMain, picker, parkBtn);
+    topbar.append(picker, parkBtn);
     this.root.appendChild(topbar);
 
     // ---- goals overlay (over the world panel's top-left corner, every mode) ----
-    // The outcome of a run needs no result card here: Bruno's bubble says it (update()).
+    // The outcome of a run needs no result card here: Bruno's quick line says it (update()).
     const goalsOverlay = document.createElement('div');
     goalsOverlay.className = 'goals-overlay';
     const goalsCol = document.createElement('div');
@@ -408,6 +399,9 @@ export class Hud {
     this.nextBtn = makeBtn('next', 'Next level ▶', 'primary', () => this.cb.next(), barCentre);
 
     this.root.appendChild(bottombar);
+
+    // ---- Bruno's dialog box, over everything (src/ui/brunoDialog.ts) ----
+    this.brunoDialog = new BrunoDialog(this.root);
   }
 
   /**
@@ -521,8 +515,6 @@ export class Hud {
     this.levelIndex = idx >= 0 ? idx : 0;
     this.hasLoopsGoal = level.goals.some((g) => g.metric === 'loops' || g.metric === 'loopsCompleted');
 
-    this.setText(this.titleEl, level.title);
-
     // ---- goals column ----
     this.goalListEl.innerHTML = '';
     this.goalItems = [];
@@ -561,15 +553,10 @@ export class Hud {
       });
     }
 
-    // ---- goals intro: the panel pops up big in the middle of the scene, then glides home ----
+    // The goals intro waits for Bruno's lesson intro: App calls `playGoalsIntro` once the dialog
+    // closes. A previous level's run in flight stops here.
     this.goalsIntroAnim?.cancel();
-    const anim = playGoalsIntro(this.goalsOverlayEl, PANEL_TOP_Y, GROUND_Y);
-    this.goalsIntroAnim = anim;
-    if (anim) {
-      anim.onfinish = (): void => {
-        if (this.goalsIntroAnim === anim) this.goalsIntroAnim = null;
-      };
-    }
+    this.goalsIntroAnim = null;
 
     // ---- meter focus/dim styling (depends only on the level's goals) ----
     const freePlay = level.goals.length === 0;
@@ -589,6 +576,36 @@ export class Hud {
     this.setDisabled(this.pickerNextBtn, this.levelIndex >= all.length - 1);
   }
 
+  /** The level-start goals intro: the panel pops up big in the middle of the scene, then glides
+   * home (goalsIntro.ts). 2026-10-12: App calls it once Bruno's lesson intro closes. */
+  playGoalsIntro(): void {
+    this.goalsIntroAnim?.cancel();
+    const anim = playGoalsIntro(this.goalsOverlayEl, PANEL_TOP_Y, GROUND_Y);
+    this.goalsIntroAnim = anim;
+    if (anim) {
+      anim.onfinish = (): void => {
+        if (this.goalsIntroAnim === anim) this.goalsIntroAnim = null;
+      };
+    }
+  }
+
+  /** This frame's quick line: the play line, then the outcome (none while the child builds: the
+   * level's line plays in the modal lesson intro). */
+  private quickLine(state: HudState): QuickLine | null {
+    const level = state.level;
+    if (state.mode === 'play') return { text: COASTER_LINES.play };
+    if (state.mode !== 'done') return null;
+    if (state.passed) return { text: COASTER_LINES.pass, tone: 'pass' };
+    if (state.outcome === 'reachedEnd') {
+      const atFinishGoal = state.goals.find((gr) => gr.goal.metric === 'atFinish');
+      return { text: atFinishGoal && !atFinishGoal.pass ? COASTER_LINES.endShortOfFlag : COASTER_LINES.end };
+    }
+    if (state.outcome === 'rolledBack') return { text: level.hints.rolledBack, tone: 'fail' };
+    if (state.outcome === 'stuck') return { text: level.hints.stuck, tone: 'fail' };
+    if (state.outcome === 'fell') return { text: level.hints.fell, tone: 'fail' };
+    return null;
+  }
+
   update(state: HudState): void {
     if (!this.level) return;
     const level = this.level;
@@ -597,34 +614,8 @@ export class Hud {
     const playMode = state.mode === 'play';
     const doneMode = state.mode === 'done';
 
-    // ---- Bruno's speech bubble ----
-    let brunoLine: string;
-    if (editMode) {
-      brunoLine = level.bruno;
-    } else if (playMode) {
-      brunoLine = COASTER_LINES.play;
-    } else if (state.passed) {
-      brunoLine = COASTER_LINES.pass;
-    } else if (state.outcome === 'reachedEnd') {
-      const atFinishGoal = state.goals.find((gr) => gr.goal.metric === 'atFinish');
-      brunoLine = atFinishGoal && !atFinishGoal.pass
-        ? COASTER_LINES.endShortOfFlag
-        : COASTER_LINES.end;
-    } else if (state.outcome === 'rolledBack') {
-      brunoLine = level.hints.rolledBack;
-    } else if (state.outcome === 'stuck') {
-      brunoLine = level.hints.stuck;
-    } else if (state.outcome === 'fell') {
-      brunoLine = level.hints.fell;
-    } else {
-      brunoLine = level.bruno;
-    }
-    this.setText(this.brunoTextEl, brunoLine);
-    const isPass = doneMode && state.passed;
-    const isFail = doneMode && !state.passed &&
-      (state.outcome === 'rolledBack' || state.outcome === 'stuck' || state.outcome === 'fell');
-    this.brunoTextEl.classList.toggle('pass', isPass);
-    this.brunoTextEl.classList.toggle('fail', isFail);
+    // ---- Bruno's quick line (src/ui/brunoDialog.ts; animates only when the text changes) ----
+    this.brunoDialog.setQuick(this.quickLine(state), { region: QUICK_REGION, avoid: [] });
 
     // ---- meters (the overlay shows once the fuzz rolls and keeps the final numbers) ----
     this.setHidden(this.metersColEl, editMode);

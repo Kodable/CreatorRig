@@ -1,6 +1,9 @@
-// Generic builder-kit HUD: bubble, level picker, goals, meters, property panel and palette,
-// driven by a HudSpec instead of Goldberg's hardcoded part/meter/line tables. Moved from
-// activities/goldberg/ui/goldbergHud.ts.
+// Generic builder-kit HUD: Bruno's dialog box, level picker, goals, meters, property panel and
+// palette, driven by a HudSpec instead of Goldberg's hardcoded part/meter/line tables. Moved from
+// activities/goldberg/ui/goldbergHud.ts. 2026-10-12: Bruno and his bubble left the top bar (only the
+// level picker and Park stay there); he talks through src/ui/brunoDialog.ts (the modal lesson
+// intro / hint, and the quick lines docked above the bottom bar), and the Hint button moved to the
+// bottom bar's left end.
 import type {
   CoachTarget,
   Goal,
@@ -18,6 +21,7 @@ import type {
 import { levelPickerLabel } from './chapters';
 import { hasShelfKinds, nonShelfKinds, shelfGroups } from './shelf';
 import { playGoalsIntro as animateGoalsIntro, prefersReducedMotion } from '../ui/goalsIntro';
+import { BrunoDialog, type QuickLine, type QuickRegion, type Rect } from '../ui/brunoDialog';
 import './builder.css';
 
 const STAGE_W = 1024;
@@ -35,6 +39,14 @@ const SCROLL_THUMB_MIN = 88;
  * 480 px panel, higher for a taller world (2026-10-06: the rover's, under `hud.goalsOverlay`). */
 const DEFAULT_PANEL_TOP = 210;
 const PANEL_BOTTOM = 690;
+/** Bruno's quick line docks its bottom here (just above the bottom bar, inside the world panel),
+ * or at QUICK_BOTTOM_SCROLL while the world scrollbar (y 656..700) shows. The free span is the
+ * world panel (x 32..992), or left of the open drawer (x 652). */
+const QUICK_BOTTOM = 684;
+const QUICK_BOTTOM_SCROLL = 650;
+const PANEL_LEFT_X = 32;
+const PANEL_RIGHT_X = 992;
+const DRAWER_LEFT_X = 652;
 /* The level-start goals intro's geometry and timing live in src/ui/goalsIntro.ts (2026-10-07: shared
    with the coaster HUD). */
 
@@ -147,8 +159,9 @@ export class BuilderHud<
   private levelIndex = 0;
   private goalItems: GoalItem[] = [];
 
-  private titleEl!: HTMLDivElement;
-  private brunoTextEl!: HTMLDivElement;
+  /** Bruno's dialog box: the modal lesson intro / hint, and the quick lines (src/ui/brunoDialog.ts).
+   * The controller (BuilderApp) runs the modal; `update` feeds the quick line every frame. */
+  brunoDialog!: BrunoDialog;
   private goalsColEl!: HTMLDivElement;
   private goalListEl!: HTMLUListElement;
 
@@ -350,6 +363,7 @@ export class BuilderHud<
     this.goalsIntroAnim?.cancel();
     this.goalsIntroAnim = null;
     this.hideCallout();
+    this.brunoDialog.destroy();
     window.removeEventListener('resize', this.syncHandler);
     window.removeEventListener('orientationchange', this.syncHandler);
     window.visualViewport?.removeEventListener('resize', this.syncHandler);
@@ -470,31 +484,9 @@ export class BuilderHud<
   private build(): void {
     this.root.innerHTML = '';
 
-    // ---- bruno slot + topbar (speech bubble) ----
-    const slot = document.createElement('div');
-    slot.className = 'bruno-slot';
-    this.root.appendChild(slot);
-
+    // ---- topbar: only the level picker and Park, at the top right (2026-10-12) ----
     const topbar = document.createElement('div');
     topbar.id = 'topbar';
-
-    const topbarMain = document.createElement('div');
-    topbarMain.className = 'topbar-main';
-    const title = document.createElement('div');
-    title.className = 'title';
-    const brunoText = document.createElement('div');
-    brunoText.className = 'bruno-text';
-    topbarMain.append(title, brunoText);
-    this.titleEl = title;
-    this.brunoTextEl = brunoText;
-
-    const hintBtn = document.createElement('button');
-    hintBtn.id = 'hint';
-    hintBtn.type = 'button';
-    hintBtn.className = 'hint-btn';
-    hintBtn.textContent = '💡 Hint';
-    hintBtn.addEventListener('click', () => this.cb.hint());
-    this.hintBtn = hintBtn;
 
     const picker = document.createElement('div');
     picker.className = 'level-picker';
@@ -529,7 +521,7 @@ export class BuilderHud<
     parkBtn.addEventListener('click', () => this.cb.exit());
     this.parkBtn = parkBtn;
 
-    topbar.append(topbarMain, hintBtn, picker, parkBtn);
+    topbar.append(picker, parkBtn);
     this.root.appendChild(topbar);
 
     // ---- dashboard ----
@@ -646,6 +638,17 @@ export class BuilderHud<
     const bottombar = document.createElement('div');
     bottombar.id = 'bottombar';
 
+    // The Hint button at the bar's left end (2026-10-12: moved from the top bar). A tap plays the
+    // level's next hint in Bruno's modal dialog (BuilderApp.hint).
+    const hintBtn = document.createElement('button');
+    hintBtn.id = 'hint';
+    hintBtn.type = 'button';
+    hintBtn.className = 'secondary';
+    hintBtn.textContent = '💡 Hint';
+    hintBtn.addEventListener('click', () => this.cb.hint());
+    bottombar.appendChild(hintBtn);
+    this.hintBtn = hintBtn;
+
     const toolGroup = document.createElement('div');
     toolGroup.className = 'tool-group';
     for (const tool of this.tools) {
@@ -715,6 +718,9 @@ export class BuilderHud<
     if (this.hud.winBanner) this.buildWinBanner();
     this.buildCallout();
     this.buildCoachHand();
+
+    // ---- Bruno's dialog box, over everything (src/ui/brunoDialog.ts) ----
+    this.brunoDialog = new BrunoDialog(this.root);
   }
 
   /** "Level complete!" over the world panel (`HudSpec.winBanner` only): confetti, the result
@@ -1309,8 +1315,6 @@ export class BuilderHud<
     this.lastBudgetUsed = null;
     this.lastSpendButton = null;
 
-    this.setText(this.titleEl, level.title);
-
     // ---- goals column ----
     this.goalListEl.innerHTML = '';
     this.goalItems = [];
@@ -1349,7 +1353,10 @@ export class BuilderHud<
       });
     }
 
-    this.playGoalsIntro();
+    // The goals intro waits for Bruno's lesson intro: the controller calls `playGoalsIntro` once
+    // the dialog closes. A previous level's run in flight stops here.
+    this.goalsIntroAnim?.cancel();
+    this.goalsIntroAnim = null;
 
     // ---- meter focus/dim styling (depends only on the level's goals) ----
     const freePlay = level.goals.length === 0;
@@ -1449,8 +1456,9 @@ export class BuilderHud<
   /** Level start with `hud.goalsOverlay` (2026-10-06, Gao: "show the goals more front and
    * center, then animate it to the top left"): the goal panel pops up big in the middle of the
    * world panel, holds so the child reads it, then glides and shrinks into its top-left spot
-   * (src/ui/goalsIntro.ts, shared with the coaster HUD). Skipped under prefers-reduced-motion. */
-  private playGoalsIntro(): void {
+   * (src/ui/goalsIntro.ts, shared with the coaster HUD). Skipped under prefers-reduced-motion.
+   * 2026-10-12: called by the controller once Bruno's lesson intro closes, not on level load. */
+  playGoalsIntro(): void {
     const el = this.goalsOverlayEl;
     if (!el) return;
     this.goalsIntroAnim?.cancel();
@@ -2012,45 +2020,18 @@ export class BuilderHud<
     const playMode = state.mode === 'play';
     const doneMode = state.mode === 'done';
 
-    // ---- Bruno's speech bubble ----
-    let brunoLine: string;
-    if (editMode) {
-      brunoLine = state.hintIndex >= 0 ? (level.hints[state.hintIndex] ?? level.bruno) : level.bruno;
-    } else if (playMode) {
-      brunoLine = this.hud.lines.play;
-    } else if (state.passed) {
-      brunoLine = this.hud.lines.pass;
-    } else if (state.outcome !== null && this.hud.failOutcomes.includes(state.outcome)) {
-      brunoLine = level.failHints[state.outcome] ?? this.hud.lines.doneNotPassed;
-    } else if (state.outcome !== null && state.canPlay) {
-      brunoLine = this.hud.lines.shotDone ?? this.hud.lines.doneNotPassed;
-    } else if (state.outcome !== null) {
-      brunoLine = this.hud.lines.doneNotPassed;
-    } else {
-      brunoLine = level.bruno;
-    }
-    // The coach's step wins over the level's line (and the play/done lines) while it is set;
-    // the 2 s refused/locked feedback below still wins over the coach.
-    const coached = !!state.coach?.text;
-    if (coached) brunoLine = state.coach!.text;
-    const showRefused = editMode && !!flags?.refused;
-    if (showRefused) brunoLine = this.hud.lines.refused ?? 'You cannot add that here.';
-    const showLocked = !!flags?.locked;
-    if (showLocked) brunoLine = this.hud.lines.locked ?? 'That one is locked for this puzzle.';
-    this.setText(this.brunoTextEl, brunoLine);
-    const isPass = doneMode && state.passed;
-    const isFail =
-      (doneMode && !coached && !state.passed && state.outcome !== null && this.hud.failOutcomes.includes(state.outcome)) ||
-      showRefused ||
-      showLocked;
-    this.brunoTextEl.classList.toggle('pass', isPass);
-    this.brunoTextEl.classList.toggle('fail', isFail);
+    // ---- Bruno's quick line (src/ui/brunoDialog.ts) ----
+    // The level's line and its hints play in the modal dialog (BuilderApp); everything else Bruno
+    // says shows in the compact box docked above the bottom bar: the play/done lines, the 2 s
+    // refused/locked feedback, and the coach's prompts (which stay while their step is active).
+    this.brunoDialog.setQuick(this.quickLine(state, flags), { region: this.quickRegion(state), avoid: this.quickAvoidRects(state) });
 
     // ---- tool row ----
     this.setHidden(this.toolGroupEl, this.tools.length === 0 || !state.canTune);
     for (const [id, btn] of this.toolButtons) btn.classList.toggle('active', state.tool === id);
 
-    // ---- hint button ----
+    // ---- hint button (bottom bar, left end) ----
+    this.setHidden(this.hintBtn, state.hintCount === 0);
     this.setDisabled(this.hintBtn, state.hintCount === 0 || playMode);
 
     // ---- meters ----
@@ -2248,7 +2229,74 @@ export class BuilderHud<
 
     // ---- overlays, last (they measure the buttons laid out above) ----
     this.syncWin(state);
-    this.syncUnlock(state);
+    // The shelf unlock pop-in and its callout wait for Bruno's lesson intro to close.
+    if (!this.brunoDialog.modalOpen) this.syncUnlock(state);
     this.syncCoachHand(state);
+  }
+
+  /** This frame's quick line (see `update`), or null for none. */
+  private quickLine(state: HudState<K, M, O, L>, flags?: { refused?: boolean; locked?: boolean }): QuickLine | null {
+    const level = state.level;
+    const lines = this.hud.lines;
+    // The 2 s refused/locked feedback wins over the coach, which wins over the run's lines.
+    if (state.mode === 'edit' && flags?.refused) return { text: lines.refused ?? 'You cannot add that here.', tone: 'fail' };
+    if (flags?.locked) return { text: lines.locked ?? 'That one is locked for this puzzle.', tone: 'fail' };
+    if (state.coach?.text) return { text: state.coach.text, sticky: true };
+    if (state.mode === 'play') return { text: lines.play };
+    if (state.mode !== 'done' || state.outcome === null) return null;
+    if (state.passed) return { text: lines.pass, tone: 'pass' };
+    if (this.hud.failOutcomes.includes(state.outcome)) {
+      return { text: level.failHints[state.outcome] ?? lines.doneNotPassed, tone: 'fail' };
+    }
+    if (state.canPlay) return { text: lines.shotDone ?? lines.doneNotPassed };
+    return { text: lines.doneNotPassed };
+  }
+
+  /** Where the quick line may sit: the world panel left of the open drawer, its bottom just above
+   * the bottom bar (or above the world scrollbar while that shows), its top under the goals panel
+   * when the bottom spot would cover the coach's hand. */
+  private quickRegion(state: HudState<K, M, O, L>): QuickRegion {
+    const goals = this.goalsOverlayEl ?? this.dashEl;
+    const top = goals ? goals.offsetTop + goals.offsetHeight + 10 : this.panelTop + 12;
+    const drawer = this.drawerMode && this.drawerOpen;
+    return {
+      left: PANEL_LEFT_X,
+      right: drawer ? DRAWER_LEFT_X : PANEL_RIGHT_X,
+      bottom: state.scroll !== null ? QUICK_BOTTOM_SCROLL : QUICK_BOTTOM,
+      top,
+      // While the drawer is open the camera is zoomed in on the part being built, low in the
+      // panel: the line goes up into the sky instead of over it.
+      prefer: drawer ? 'top' : 'bottom',
+    };
+  }
+
+  /** What the quick line keeps clear of: the coach's hand and its target, and the shelf unlock
+   * callout while it shows. */
+  private quickAvoidRects(state: HudState<K, M, O, L>): Rect[] {
+    const out: Rect[] = [];
+    const coach = this.coachAvoidRect(state);
+    if (coach) out.push(coach);
+    if (this.calloutKind !== null && !this.calloutEl.hidden) {
+      const r = this.visibleStageRect(this.calloutEl);
+      if (r) out.push(r);
+    }
+    return out;
+  }
+
+  /** The coach's hand and what it points at, in stage px (null when no hand shows): the DOM
+   * target's box plus the glove hanging below/right of the fingertip, or the in-scene hand around
+   * `HudState.coachPoint`. The quick line keeps clear of it. */
+  private coachAvoidRect(state: HudState<K, M, O, L>): Rect | null {
+    const step = state.coach;
+    if (!step) return null;
+    const el = this.coachTargetEl(step.target);
+    const rect = el ? this.visibleStageRect(el) : null;
+    if (rect) {
+      return { x: rect.x - 8, y: rect.y - 8, w: rect.w + COACH_HAND_W + 16, h: rect.h + COACH_HAND_H + 16 };
+    }
+    const p = state.coachPoint;
+    // The target (a widget pill, a part) sits around and above-left of the fingertip.
+    if (p) return { x: p.x - 150, y: p.y - 70, w: 150 + COACH_HAND_W + 30, h: 70 + COACH_HAND_H + 20 };
+    return null;
   }
 }

@@ -2,8 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, ORIGIN_X, GROUND_Y, PANEL_TOP_Y, PPM, WORLD_W, WORLD_H, STAGE_W, STAGE_H, RENDER_SCALE, toPx, toWorld } from './view';
 import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, EditTool } from '../core/types';
 import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
-import type { SpineGameObject } from '@esotericsoftware/spine-phaser-v4';
-import { wearBrunoSkins } from '../ui/brunoSkin';
+import { BrunoStage } from '../ui/brunoStage';
 import type { FrameState } from '../kit/camera';
 import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
 import { FULL_FRAME, RIDE_ZOOM, frameCentrePx, parallaxOffset, rideTarget, stepCamera } from './rideCamera';
@@ -45,11 +44,6 @@ const DEPTH_GROUND = 1;
 const DEPTH_SUPPORT = 1.5; // posts + ties
 const DEPTH_TRACK = 2; // rail outline/rail/highlight
 const DEPTH_POINTS = 3; // station house + control point handles + finish flag
-const DEPTH_BRUNO_SHADOW = 3.4;
-const DEPTH_BRUNO = 3.5;
-/** Feet position of Bruno in stage pixels; the HTML top bar leaves a transparent 76x72 px slot
- * (stage x 32..108, y 0..72) open for him. */
-const BRUNO_SLOT = { x: 70, y: 66 };
 const DEPTH_FUZZ = 4;
 /** The fuzz waiting in the station (edit mode): under the control-point handles, so the station
  * handle stays on top and draggable-looking. */
@@ -220,7 +214,8 @@ export class CoasterScene extends Phaser.Scene {
   private wheelCars: Phaser.GameObjects.Graphics[] = [];
   private wheelAngle = 0;
 
-  private bruno: SpineGameObject | null = null;
+  /** Bruno's modal dialog on the canvas: the dim and the big Bruno (src/ui/brunoStage.ts). */
+  private brunoStage!: BrunoStage;
 
   constructor() {
     super('coaster');
@@ -229,7 +224,7 @@ export class CoasterScene extends Phaser.Scene {
   preload(): void {
     // Loader failures (missing/renamed files) surface as a synchronous throw
     // from `this.add.spine(...)` in create(), which we catch there so the
-    // rest of the scene keeps working without Bruno.
+    // rest of the scene keeps working without Bruno (src/ui/brunoStage.ts).
     this.load.spineAtlas('floofs', 'spine/FloofFamily01.atlas', true);
     this.load.spineJson('engineer', 'spine/Engineer_skeleton.json');
     for (const s of FUZZ_SKINS) {
@@ -275,7 +270,8 @@ export class CoasterScene extends Phaser.Scene {
     this.finishGfx.setDepth(DEPTH_POINTS);
 
     this.createFuzz();
-    this.createBruno();
+    // 2026-10-12: Bruno left the top bar; he slides in over a dimmed stage when he talks.
+    this.brunoStage = new BrunoStage(this, (o) => this.onUi(o), 'CoasterScene');
 
     this.input.on('pointerdown', this.handlePointerDown, this);
     this.input.on('pointermove', this.handlePointerMove, this);
@@ -506,29 +502,6 @@ export class CoasterScene extends Phaser.Scene {
     return `skin-${this.skin}${excited ? '-excited' : ''}`;
   }
 
-  private createBruno(): void {
-    // A soft shadow under Bruno's feet, drawn once (he never moves) at a depth just below him.
-    // Both live on the UI camera: the top bar's slot is outside the world panel, and Bruno must not
-    // zoom with the ride camera.
-    const shadow = this.onUi(this.add.graphics());
-    shadow.setDepth(DEPTH_BRUNO_SHADOW);
-    shadow.fillStyle(0x000000, 0.25);
-    shadow.fillEllipse(BRUNO_SLOT.x, BRUNO_SLOT.y + 1, 34, 8);
-
-    try {
-      const bruno = this.onUi(this.add.spine(BRUNO_SLOT.x, BRUNO_SLOT.y, 'engineer', 'floofs'));
-      wearBrunoSkins(bruno); // the hard hat lives in its own skin (src/ui/brunoSkin.ts)
-      bruno.setScale(0.084); // about 66 px tall
-      bruno.setDepth(DEPTH_BRUNO);
-      bruno.animationState.setAnimation(0, 'engineer_idle', true);
-      bruno.setVisible(true); // Bruno is always visible, in edit and play mode alike
-      this.bruno = bruno;
-    } catch (err) {
-      console.warn('CoasterScene: Bruno (Spine) failed to load; continuing without Bruno.', err);
-      this.bruno = null;
-    }
-  }
-
   // ---------------- camera + backdrop (per frame) ----------------
 
   /** Applies `camCur` to the world camera: zoom RENDER_SCALE x frame zoom, centred on the frame. */
@@ -720,12 +693,20 @@ export class CoasterScene extends Phaser.Scene {
     this.fuzz.setScale(1, 1);
   }
 
-  /** Plays Bruno's wave once, then returns to the idle loop. No-op if Bruno failed to load. */
+  /** Dims the canvas and slides Bruno in from the left (the lesson intro; src/ui/brunoStage.ts). */
+  showBrunoStage(): Promise<void> {
+    return this.brunoStage.show();
+  }
+
+  /** Slides Bruno back out and undims the canvas. */
+  hideBrunoStage(): Promise<void> {
+    return this.brunoStage.hide();
+  }
+
+  /** Plays Bruno's wave once, then returns to the idle loop. No-op while he is off stage (between
+   * dialogs) or failed to load. */
   brunoWave(): void {
-    const bruno = this.bruno;
-    if (!bruno) return;
-    bruno.animationState.setAnimation(0, 'engineer_wave', false);
-    bruno.animationState.addAnimation(0, 'engineer_idle', true, 0);
+    this.brunoStage?.wave();
   }
 
   /** Swaps the fuzz picture (both the station fuzz and the rider). With `pop`, the station fuzz

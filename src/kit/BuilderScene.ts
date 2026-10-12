@@ -48,8 +48,7 @@ import type {
   Widget,
   WorldSpec,
 } from './types';
-import type { SpineGameObject } from '@esotericsoftware/spine-phaser-v4';
-import { wearBrunoSkins } from '../ui/brunoSkin';
+import { BrunoStage } from '../ui/brunoStage';
 
 interface Gesture {
   /** null when the pointer went down on empty space (still tracked, so pointerup can tell a tap
@@ -103,9 +102,6 @@ const EARTH_INSET = 6; // px above the panel's bottom edge where dark earth begi
 const EARTH_COLOR = 0x3f6b2a;
 const GROUND_GRASS_M = 0.3; // meters of grass right under world y = 0 when groundDepth > 0
 
-/** Bruno's slot: the HTML top bar leaves a transparent 76x72 px hole (stage x 32..108, y 0..72). */
-const BRUNO_SLOT = { x: 70, y: 66 };
-
 // depth layering, back to front
 const DEPTH_SKY = 0;
 const DEPTH_GROUND = 1;
@@ -118,8 +114,6 @@ const DEPTH_MARKS = 3.5; // padlocks, selection ring, markers/overlay
 const REMOVE_BADGE_R = 15;
 const REMOVE_BADGE_HIT = 1.3;
 const DEPTH_MARKS_TEXT = 3.6; // hline labels, icons
-const DEPTH_BRUNO_SHADOW = 3.4;
-const DEPTH_BRUNO = 3.6;
 /** `OverlayItem` kind 'sprite': a picture-backed effect drawn above the items/marks layers but
  * strictly below the widget graphics (DEPTH_WIDGETS = 3.7) and its own text/image cache
  * (DEPTH_WIDGETS + 0.05); DEPTH_MARKS_TEXT + 0.05 sits just under that without tying depths. */
@@ -401,7 +395,8 @@ export class BuilderScene extends Phaser.Scene {
    * `overlayTextCache` (see `drawOverlay` and its caller in `syncTransforms`). */
   private readonly overlaySpriteCache = new Map<string, Phaser.GameObjects.Image>();
 
-  private bruno: SpineGameObject | null = null;
+  /** Bruno's modal dialog on the canvas: the dim and the big Bruno (src/ui/brunoStage.ts). */
+  private brunoStage!: BrunoStage;
 
   // panel geometry: the 960 x (worldH * ppm: 480 for every course but the rover) stage-px window
   // (+ earth margin) the world camera draws into. `panelX1` is the VIEW's right edge (originX + viewW * ppm); `worldX1` is the stage x of
@@ -497,6 +492,8 @@ export class BuilderScene extends Phaser.Scene {
   /** A darker, alpha-reduced copy of `coachHand`, drawn first and offset (0, 4 px) down — the
    * glove's drop shadow. */
   private coachHandShadow?: Phaser.GameObjects.Image;
+  /** The in-scene hand's fingertip in stage px while it shows, else null (`coachPoint`). */
+  private coachStagePt: Vec2 | null = null;
 
   constructor(
     key: string,
@@ -602,7 +599,8 @@ export class BuilderScene extends Phaser.Scene {
     this.widgetGfx = this.onWorld(this.add.graphics());
     this.widgetGfx.setDepth(DEPTH_WIDGETS);
 
-    this.createBruno();
+    // 2026-10-12: Bruno left the top bar; he slides in over a dimmed stage when he talks.
+    this.brunoStage = new BrunoStage(this, (o) => this.onUi(o), 'BuilderScene');
 
     this.input.on('pointerdown', this.handlePointerDown, this);
     this.input.on('pointermove', this.handlePointerMove, this);
@@ -833,32 +831,21 @@ export class BuilderScene extends Phaser.Scene {
     }
   }
 
-  private createBruno(): void {
-    const shadow = this.onUi(this.add.graphics());
-    shadow.setDepth(DEPTH_BRUNO_SHADOW);
-    shadow.fillStyle(0x000000, 0.25);
-    shadow.fillEllipse(BRUNO_SLOT.x, BRUNO_SLOT.y + 1, 34, 8);
-
-    try {
-      const bruno = this.add.spine(BRUNO_SLOT.x, BRUNO_SLOT.y, 'engineer', 'floofs');
-      wearBrunoSkins(bruno); // the hard hat lives in its own skin (src/ui/brunoSkin.ts)
-      bruno.setScale(0.084); // about 66 px tall
-      bruno.setDepth(DEPTH_BRUNO);
-      bruno.animationState.setAnimation(0, 'engineer_idle', true);
-      bruno.setVisible(true);
-      this.bruno = this.onUi(bruno);
-    } catch (err) {
-      console.warn('BuilderScene: Bruno (Spine) failed to load; continuing without Bruno.', err);
-      this.bruno = null;
-    }
+  /** Dims the canvas and slides Bruno in from the left (the lesson intro, a hint;
+   * src/ui/brunoStage.ts). */
+  showBrunoStage(): Promise<void> {
+    return this.brunoStage.show();
   }
 
-  /** Plays Bruno's wave once, then returns to the idle loop. No-op if Bruno failed to load. */
+  /** Slides Bruno back out and undims the canvas. */
+  hideBrunoStage(): Promise<void> {
+    return this.brunoStage.hide();
+  }
+
+  /** Plays Bruno's wave once, then returns to the idle loop. No-op while he is off stage (between
+   * dialogs) or failed to load. */
   celebrate(): void {
-    const bruno = this.bruno;
-    if (!bruno) return;
-    bruno.animationState.setAnimation(0, 'engineer_wave', false);
-    bruno.animationState.addAnimation(0, 'engineer_idle', true, 0);
+    this.brunoStage?.wave();
   }
 
   // ---------------- camera controller ----------------
@@ -1296,6 +1283,7 @@ export class BuilderScene extends Phaser.Scene {
     }
     // Off camera (a focus zoom elsewhere, a scrolled wide world): no hand.
     if (p && !this.worldCam.worldView.contains(p.x, p.y)) p = null;
+    this.coachStagePt = p ? panelPxToStagePx(p, this.worldCam, RENDER_SCALE) : null;
     if (!p) {
       this.coachHand?.setVisible(false);
       this.coachHandShadow?.setVisible(false);
@@ -1335,6 +1323,13 @@ export class BuilderScene extends Phaser.Scene {
     hand.setPosition(p.x, p.y);
     hand.setAlpha(alpha);
     hand.setVisible(true);
+  }
+
+  /** Where the coach's in-scene hand points, in stage px (its fingertip; the glove hangs below
+   * and right of it), or null while no in-scene hand shows. The HUD keeps Bruno's quick line
+   * clear of it. */
+  coachPoint(): Vec2 | null {
+    return this.coachStagePt;
   }
 
   setSelected(partId: number | null): void {
