@@ -30,8 +30,9 @@ export const BRUNO_OUT_MS = 300;
  * box (brunoDialog.ts, style.css) starts right of him at x 390. */
 export const BRUNO_STAGE_X = 195;
 /** His feet sit this far above the panel's bottom edge; negative = below it, so the frame's clip
- * cuts his feet off a little (y 700 on the park courses -> feet at y 716). */
-export const BRUNO_FEET_ABOVE_BOTTOM = -16;
+ * cuts his feet off a little (y 700 on the park courses -> root at y 694; the rig's root sits above his soles, so the frame
+ * clips just their bottom edge). */
+export const BRUNO_FEET_ABOVE_BOTTOM = 6;
 export const BRUNO_STAGE_SCALE = 0.48;
 /** Where he slides in from: his feet this far left of the panel's left edge (all of him outside
  * the panel, so the camera's clip hides him). */
