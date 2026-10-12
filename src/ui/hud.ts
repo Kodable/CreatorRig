@@ -19,9 +19,6 @@ export interface HudCallbacks {
 }
 
 const STAGE_W = 1024;
-/** Bruno's quick line (src/ui/brunoDialog.ts): over the whole world panel (x 32..992), its bottom
- * just above the bottom bar. The coaster has no coach, so it never needs the top spot. */
-const QUICK_REGION = { left: 32, right: 992, bottom: 690, top: PANEL_TOP_Y + 12 };
 const G_MAX = 6; // g value that maps to a full (100%) intense-o-meter gauge
 
 /* 2026-10-07 (Gao: "put the same treatment of the goal, the stats, and the bottom for the coaster"):
@@ -125,6 +122,10 @@ export class Hud {
 
   /** Bruno's dialog box: the modal lesson intro (run by App) and the quick lines (`update`). */
   brunoDialog!: BrunoDialog;
+  /** The top row (level picker + Park); Bruno's quick line sits left of it. */
+  private topbarEl!: HTMLDivElement;
+  /** `topbarEl`'s left edge in stage px, or -1 to measure it again (once per level load). */
+  private pickerLeft = -1;
   private goalsOverlayEl!: HTMLDivElement;
   private goalsColEl!: HTMLDivElement;
   private goalListEl!: HTMLUListElement;
@@ -248,6 +249,7 @@ export class Hud {
 
     topbar.append(picker, parkBtn);
     this.root.appendChild(topbar);
+    this.topbarEl = topbar;
 
     // ---- goals overlay (over the world panel's top-left corner, every mode) ----
     // The outcome of a run needs no result card here: Bruno's quick line says it (update()).
@@ -572,6 +574,7 @@ export class Hud {
 
     // ---- level picker ----
     this.setText(this.pickerLabelEl, `Level ${this.levelIndex + 1} of ${all.length}`);
+    this.pickerLeft = -1; // the label's width moves the picker: measure again for the quick line
     this.setDisabled(this.pickerPrevBtn, this.levelIndex <= 0);
     this.setDisabled(this.pickerNextBtn, this.levelIndex >= all.length - 1);
   }
@@ -614,8 +617,10 @@ export class Hud {
     const playMode = state.mode === 'play';
     const doneMode = state.mode === 'done';
 
-    // ---- Bruno's quick line (src/ui/brunoDialog.ts; animates only when the text changes) ----
-    this.brunoDialog.setQuick(this.quickLine(state), { region: QUICK_REGION, avoid: [] });
+    // ---- Bruno's quick line (src/ui/brunoDialog.ts): the top row, left of the level picker;
+    // animates only when the text changes ----
+    if (this.pickerLeft < 0) this.pickerLeft = this.topbarEl.offsetLeft;
+    this.brunoDialog.setQuick(this.quickLine(state), this.pickerLeft);
 
     // ---- meters (the overlay shows once the fuzz rolls and keeps the final numbers) ----
     this.setHidden(this.metersColEl, editMode);

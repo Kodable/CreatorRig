@@ -1,67 +1,91 @@
 // The canvas half of Bruno's modal dialog (2026-10-12, Gao: "whenever a new level is opened, i
-// want the whole viewport to dim, then bruno animates in from left (ease out back)"), shared by
-// the coaster scene (src/game/CoasterScene.ts) and the builder kit's scene
-// (src/kit/BuilderScene.ts) so the two never diverge. The DOM half (the HUD dim, the text box,
-// the tap catcher) is src/ui/brunoDialog.ts; `BrunoDialogRunner` there sequences both.
+// want the whole viewport to dim, then bruno animates in from left (ease out back)"; then, the same
+// day: "i want him and the darken to be on the visual game frame only"), shared by the coaster
+// scene (src/game/CoasterScene.ts) and the builder kit's scene (src/kit/BuilderScene.ts) so the two
+// never diverge. The DOM half (the text box, the tap catcher) is src/ui/brunoDialog.ts;
+// `BrunoDialogRunner` there sequences both.
 //
-// Both scenes draw it with their UI camera (the unclipped one that shows the whole 1024x768 stage
-// and never zooms with the ride / follow camera): a black rect over the whole canvas, and the big
-// Spine Bruno above it, standing at the bottom-left with his hard hat on (brunoSkin.ts). Bruno is
-// hidden between dialogs: he no longer lives in the top bar.
+// Everything here lives on the scene's WORLD camera, whose viewport is clipped to the world panel
+// (the game frame), so the dim and Bruno can never draw over the top row or the bottom bar; the
+// panel's rounded corners come from the dim's own rounded rect (and, where a scene has them, the
+// UI camera's corner caps drawn on top). The world camera zooms and pans (the coaster's ride
+// camera, the kit's focus / follow / intro pan), so `sync()` (called by the scene every frame,
+// after its camera moved) pins the dim and Bruno to fixed STAGE positions inside the panel by
+// counter-transforming them against the camera's current view. Bruno is hidden between dialogs.
 import type Phaser from 'phaser';
 import type { SpineGameObject } from '@esotericsoftware/spine-phaser-v4';
 import { wearBrunoSkins } from './brunoSkin';
 import { prefersReducedMotion } from './goalsIntro';
 
-/** The dim: black at this alpha over the whole canvas (the DOM HUD dims to match, style.css). */
+/** The dim: black at this alpha over the world panel only. */
 export const STAGE_DIM_ALPHA = 0.55;
 /** The dim fades in / out over this long (ms). */
 export const DIM_MS = 250;
-/** Bruno slides in from the left edge (Back.easeOut) / back out (Quad.easeIn) over this long. */
+/** Bruno slides in from the panel's left edge (Back.easeOut) / back out (Quad.easeIn). */
 export const BRUNO_IN_MS = 550;
 export const BRUNO_OUT_MS = 300;
-/** Bruno's dialog spot: his feet in stage px, and the Spine scale (the rig is 782 units tall with
- * the hat, so 0.3 is about 235 px). The box (brunoDialog.ts) starts at x 240, right of him. */
-export const BRUNO_STAGE_X = 122;
-export const BRUNO_STAGE_Y = 750;
-export const BRUNO_STAGE_SCALE = 0.3;
-/** Where he slides in from: his feet this far left of the stage (all of him off screen). */
-export const BRUNO_OFF_X = -130;
-/** Depths on the UI camera: over everything else the UI camera draws (the corner caps). */
+/** Bruno's dialog spot, in stage px: his feet at the panel's bottom-left, and the Spine scale (the
+ * rig is 782 units tall with the hat, so 0.24 is about 190 px). The box (brunoDialog.ts) starts
+ * right of him at x 220. */
+export const BRUNO_STAGE_X = 112;
+/** His feet sit this far above the panel's bottom edge (y 700 on the park courses -> y 696). */
+export const BRUNO_FEET_ABOVE_BOTTOM = 4;
+export const BRUNO_STAGE_SCALE = 0.24;
+/** Where he slides in from: his feet this far left of the panel's left edge (all of him outside
+ * the panel, so the camera's clip hides him). */
+export const BRUNO_OFF_DX = -110;
+/** The panel's corner radius (both scenes draw the world panel with 12 px corners). */
+const PANEL_RADIUS = 12;
+/** Depths on the world camera: over everything the scene draws there (confetti is 4.5). */
 const DEPTH_DIM = 100;
 const DEPTH_SHADOW = 100.5;
 const DEPTH_BRUNO = 101;
 
-const STAGE_W = 1024;
-const STAGE_H = 768;
+/** The world panel in stage px. */
+export interface PanelRect { x0: number; y0: number; x1: number; y1: number }
 
 export class BrunoStage {
-  private readonly dim: Phaser.GameObjects.Rectangle;
+  private readonly dim: Phaser.GameObjects.Graphics;
   private readonly shadow: Phaser.GameObjects.Ellipse;
   private readonly bruno: SpineGameObject | null;
   private shown = false;
+  /** Bruno's feet x in STAGE px (tweened); `sync` maps it into the camera's view. */
+  private readonly pos = { x: 0 };
+  private readonly feetY: number;
+  private readonly offX: number;
 
   /**
-   * `onUi` assigns a game object to the scene's UI camera only. Bruno failing to load (a missing
-   * Spine file throws from `add.spine`) leaves the dim working without him.
+   * `onWorld` assigns a game object to the scene's world camera only (`worldCam`, clipped to
+   * `panel`). Bruno failing to load (a missing Spine file throws from `add.spine`) leaves the dim
+   * working without him.
    */
   constructor(
     private readonly scene: Phaser.Scene,
-    onUi: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
+    onWorld: <T extends Phaser.GameObjects.GameObject>(o: T) => T,
+    private readonly worldCam: Phaser.Cameras.Scene2D.Camera,
+    private readonly panel: PanelRect,
     logName: string,
   ) {
-    this.dim = onUi(scene.add.rectangle(STAGE_W / 2, STAGE_H / 2, STAGE_W + 40, STAGE_H + 40, 0x000000, 1));
+    this.feetY = panel.y1 - BRUNO_FEET_ABOVE_BOTTOM;
+    this.offX = panel.x0 + BRUNO_OFF_DX;
+    this.pos.x = this.offX;
+
+    // Drawn once in panel-local stage px (origin at the panel's top-left); `sync` positions and
+    // scales it onto the camera's view.
+    this.dim = onWorld(scene.add.graphics());
+    this.dim.fillStyle(0x000000, 1);
+    this.dim.fillRoundedRect(0, 0, panel.x1 - panel.x0, panel.y1 - panel.y0, PANEL_RADIUS);
     this.dim.setDepth(DEPTH_DIM);
     this.dim.setAlpha(0);
     this.dim.setVisible(false);
 
-    this.shadow = onUi(scene.add.ellipse(BRUNO_OFF_X, BRUNO_STAGE_Y + 2, 130, 22, 0x000000, 0.3));
+    this.shadow = onWorld(scene.add.ellipse(0, 0, 104, 18, 0x000000, 0.3));
     this.shadow.setDepth(DEPTH_SHADOW);
     this.shadow.setVisible(false);
 
     let bruno: SpineGameObject | null = null;
     try {
-      bruno = onUi(scene.add.spine(BRUNO_OFF_X, BRUNO_STAGE_Y, 'engineer', 'floofs'));
+      bruno = onWorld(scene.add.spine(0, 0, 'engineer', 'floofs'));
       wearBrunoSkins(bruno); // the hard hat lives in its own skin (brunoSkin.ts)
       bruno.setScale(BRUNO_STAGE_SCALE);
       bruno.setDepth(DEPTH_BRUNO);
@@ -79,52 +103,69 @@ export class BrunoStage {
     return this.shown;
   }
 
-  /** The object the slide tweens: Bruno, or his shadow when he failed to load. */
-  private mover(): { x: number } {
-    return this.bruno ?? this.shadow;
+  /**
+   * Pins the dim and Bruno to their stage spots inside the panel, whatever the world camera's
+   * zoom and scroll. The view is computed from the camera's scroll/zoom the way Phaser's
+   * `preRender` does, so it is this frame's view even before Phaser updates `worldView`. Call
+   * every frame after the scene moved its camera; cheap, and a no-op while nothing shows.
+   */
+  sync(): void {
+    if (!this.dim.visible) return;
+    const cam = this.worldCam;
+    const sx = cam.useBounds ? cam.clampX(cam.scrollX) : cam.scrollX;
+    const sy = cam.useBounds ? cam.clampY(cam.scrollY) : cam.scrollY;
+    const viewW = cam.width / cam.zoomX;
+    const viewH = cam.height / cam.zoomY;
+    const vx = sx + cam.width * cam.originX - viewW / 2;
+    const vy = sy + cam.height * cam.originY - viewH / 2;
+    const p = this.panel;
+    // World units per stage px: the panel's stage size spans the camera's whole view.
+    const k = viewW / (p.x1 - p.x0);
+    const kY = viewH / (p.y1 - p.y0);
+    this.dim.setPosition(vx, vy);
+    this.dim.setScale(k, kY);
+    const bx = vx + (this.pos.x - p.x0) * k;
+    const by = vy + (this.feetY - p.y0) * kY;
+    this.bruno?.setPosition(bx, by);
+    this.bruno?.setScale(BRUNO_STAGE_SCALE * k);
+    this.shadow.setPosition(bx + (this.bruno ? 6 * k : 0), by + 2 * k);
+    this.shadow.setScale(k);
   }
 
   private kill(): void {
     this.scene.tweens.killTweensOf(this.dim);
-    this.scene.tweens.killTweensOf(this.shadow);
-    if (this.bruno) this.scene.tweens.killTweensOf(this.bruno);
+    this.scene.tweens.killTweensOf(this.pos);
   }
 
-  private setX(x: number): void {
-    this.bruno?.setX(x);
-    this.shadow.setX(x + (this.bruno ? 8 : 0));
-  }
-
-  /** Dims the canvas and slides Bruno in from the left; resolves once he has landed (he then
-   * waves once). Under prefers-reduced-motion everything appears at once. */
+  /** Dims the panel and slides Bruno in from its left edge; resolves once he has landed (he then
+   * waves once). Called again while he is up (a newer level's intro), he slides in afresh over the
+   * dim that is already there. Under prefers-reduced-motion everything appears at once. */
   show(): Promise<void> {
     this.kill();
-    const wasShown = this.shown;
     this.shown = true;
     this.dim.setVisible(true);
     this.bruno?.setVisible(true);
     this.shadow.setVisible(true);
-    if (prefersReducedMotion() || wasShown) {
+    if (prefersReducedMotion()) {
       this.dim.setAlpha(STAGE_DIM_ALPHA);
-      this.setX(BRUNO_STAGE_X);
-      if (!wasShown) this.wave();
+      this.pos.x = BRUNO_STAGE_X;
+      this.sync();
+      this.wave();
       return Promise.resolve();
     }
-    this.setX(BRUNO_OFF_X);
-    this.dim.setAlpha(0);
-    this.scene.tweens.add({ targets: this.dim, alpha: STAGE_DIM_ALPHA, duration: DIM_MS, ease: 'Linear' });
+    const dimmed = this.dim.alpha >= STAGE_DIM_ALPHA - 1e-3;
+    this.pos.x = this.offX;
+    this.sync();
+    if (!dimmed) this.scene.tweens.add({ targets: this.dim, alpha: STAGE_DIM_ALPHA, duration: DIM_MS, ease: 'Linear' });
     return new Promise<void>((resolve) => {
-      const proxy = this.mover();
       this.scene.tweens.add({
-        targets: proxy,
+        targets: this.pos,
         x: BRUNO_STAGE_X,
         duration: BRUNO_IN_MS,
         // The slide starts as the dim is half way in.
-        delay: DIM_MS / 2,
+        delay: dimmed ? 0 : DIM_MS / 2,
         ease: 'Back.easeOut',
-        onUpdate: () => this.setX(proxy.x),
         onComplete: () => {
-          this.setX(BRUNO_STAGE_X);
           this.wave();
           resolve();
         },
@@ -143,21 +184,14 @@ export class BrunoStage {
       this.dim.setAlpha(0);
       this.bruno?.setVisible(false);
       this.shadow.setVisible(false);
-      this.setX(BRUNO_OFF_X);
+      this.pos.x = this.offX;
     };
     if (prefersReducedMotion()) {
       done();
       return Promise.resolve();
     }
     return new Promise<void>((resolve) => {
-      const proxy = this.mover();
-      this.scene.tweens.add({
-        targets: proxy,
-        x: BRUNO_OFF_X,
-        duration: BRUNO_OUT_MS,
-        ease: 'Quad.easeIn',
-        onUpdate: () => this.setX(proxy.x),
-      });
+      this.scene.tweens.add({ targets: this.pos, x: this.offX, duration: BRUNO_OUT_MS, ease: 'Quad.easeIn' });
       // The dim starts fading as Bruno is half way out, so the whole close takes ~400 ms.
       this.scene.tweens.add({
         targets: this.dim,

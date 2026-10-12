@@ -387,10 +387,6 @@ export interface HudState<K extends string, M, O extends string, L> {
   scroll: number | null;
   /** The coach's current step (see `CourseSpec.coach`), or null. */
   coach: CoachStep<K> | null;
-  /** 2026-10-12: where the coach's IN-SCENE hand points ('widget' / 'part' targets), in stage px
-   * (its fingertip; the glove hangs below and right of it), or null/absent while none shows. The
-   * HUD keeps Bruno's quick line (src/ui/brunoDialog.ts) clear of it. */
-  coachPoint?: Vec2 | null;
   /** Kinds this level unlocks on the shelf (`Level.introduces` entries `part:<kind>`): the HUD
    * plays the unlock callout (the button pops in with NEW and its blurb) once per level load. */
   unlocked: K[];

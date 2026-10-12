@@ -1,21 +1,21 @@
 // The pure parts of Bruno's dialog (src/ui/brunoDialog.ts): word splitting and the typing
-// schedule, the quick line's auto-hide time, the hint label, the text-change guard, where a quick
-// line goes, and the modal sequence (with fake stage/box halves; the tests run in node, no DOM).
+// schedule, the quick line's auto-hide time, the hint label, the text-change guard, the quick
+// box's size in the top row, and the modal sequence (with fake stage/box halves; the tests run in node, no DOM).
 import { describe, expect, it } from 'vitest';
 import {
   BrunoDialogRunner,
   LineGuard,
-  QUICK_MAX_W,
+  QUICK_MIN_W,
   hintLabel,
   makeDialogRunner,
-  placeQuick,
+  quickMaxWidth,
+  quickTop,
   quickLineMs,
   splitWords,
   typingMs,
   wordDelays,
   type BrunoBoxApi,
   type DialogLine,
-  type QuickRegion,
 } from './brunoDialog';
 
 describe('splitWords', () => {
@@ -77,66 +77,19 @@ describe('LineGuard', () => {
   });
 });
 
-describe('placeQuick', () => {
-  const REGION: QuickRegion = { left: 32, right: 992, bottom: 684, top: 200 };
-  /** A box whose natural width is `natural` px, one line (48 px tall) when it fits, two otherwise. */
-  const measure = (natural: number) => (maxW: number) => ({ w: Math.min(natural, maxW), h: natural > maxW ? 76 : 48 });
-
-  it('centres the box along the bottom of the free span, never wider than 560 px', () => {
-    expect(placeQuick(REGION, measure(300), [])).toEqual({ x: 362, y: 636, w: 300, h: 48 });
-    const wide = placeQuick(REGION, measure(900), []);
-    expect(wide.w).toBe(QUICK_MAX_W);
-    expect(wide.x + wide.w / 2).toBe(512);
-    expect(wide.y + wide.h).toBe(684);
+describe('the quick box in the top row', () => {
+  it('runs from the panel edge (x 32) to 14 px short of the level picker', () => {
+    expect(quickMaxWidth(683)).toBe(683 - 14 - 32);
+    expect(quickMaxWidth(712)).toBe(666);
   });
 
-  it('stays left of the open drawer', () => {
-    const r = placeQuick({ ...REGION, right: 652 }, measure(900), []);
-    expect(r.x).toBeGreaterThanOrEqual(44);
-    expect(r.x + r.w).toBeLessThanOrEqual(640);
+  it('never gets narrower than its minimum', () => {
+    expect(quickMaxWidth(100)).toBe(QUICK_MIN_W);
   });
 
-  it("moves right of the coach's hand when the centred spot would cover it", () => {
-    const avoid = { x: 300, y: 600, w: 150, h: 100 };
-    const r = placeQuick(REGION, measure(300), [avoid]);
-    expect(r.x).toBeGreaterThanOrEqual(462);
-    expect(r.y + r.h).toBe(684);
-  });
-
-  it('moves left of it when the right side is too narrow', () => {
-    const avoid = { x: 700, y: 600, w: 260, h: 100 };
-    const r = placeQuick({ ...REGION, left: 300 }, measure(300), [avoid]);
-    expect(r.x + r.w).toBeLessThanOrEqual(688);
-    expect(r.y + r.h).toBe(684);
-  });
-
-  it('goes to the top spot when neither bottom side is clear', () => {
-    const avoid = { x: 200, y: 560, w: 600, h: 140 };
-    expect(placeQuick(REGION, measure(300), [avoid]).y).toBe(200);
-  });
-
-  it('keeps the centred spot when the hand is elsewhere', () => {
-    const avoid = { x: 100, y: 300, w: 80, h: 80 };
-    expect(placeQuick(REGION, measure(300), [avoid])).toEqual(placeQuick(REGION, measure(300), []));
-  });
-
-  it('prefer top: centred under the goals panel, and dodges a callout there', () => {
-    const top: QuickRegion = { ...REGION, right: 652, prefer: 'top' };
-    const r = placeQuick(top, measure(300), []);
-    expect(r).toEqual({ x: 192, y: 200, w: 300, h: 48 });
-    const callout = { x: 386, y: 170, w: 260, h: 100 };
-    const moved = placeQuick(top, measure(300), [callout]);
-    expect(moved.y).toBe(200);
-    expect(moved.x + moved.w).toBeLessThanOrEqual(374);
-  });
-
-  it('keeps clear of every avoid rect at once', () => {
-    const rects = [
-      { x: 300, y: 600, w: 120, h: 100 },
-      { x: 600, y: 600, w: 120, h: 100 },
-    ];
-    const r = placeQuick(REGION, measure(250), rects);
-    for (const a of rects) expect(r.x + r.w <= a.x || r.x >= a.x + a.w || r.y + r.h <= a.y).toBe(true);
+  it('is centred on the top bar row (y 0..72)', () => {
+    expect(quickTop(48)).toBe(12);
+    expect(quickTop(56)).toBe(8);
   });
 });
 

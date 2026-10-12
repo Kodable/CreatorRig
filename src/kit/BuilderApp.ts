@@ -1175,7 +1175,6 @@ export class BuilderApp<
       paletteCosts,
       scroll: this.scrollState(),
       coach: this.coach,
-      coachPoint: this.scene.coachPoint?.() ?? null,
       unlocked: this.unlocked,
     };
   }

@@ -7,15 +7,18 @@
 //
 // Two modes, one look (a plain navy rounded box with a soft drop shadow, words typing in one by
 // one):
-// - MODAL (the lesson intro on every level load, and a hint): the whole viewport dims, the big
-//   canvas Bruno slides in from the left (src/ui/brunoStage.ts), the box rises along the bottom of
-//   the screen right of him with the level title (or "Hint 2 of 3") as a small orange label, the
-//   line types in, and a tap closes it. `BrunoDialogRunner` sequences the canvas side and this DOM
+// - MODAL (the lesson intro on every level load, and a hint): the world panel (the game frame)
+//   dims, Bruno slides in from its left edge (src/ui/brunoStage.ts; 2026-10-12 later, Gao: "i want
+//   him and the darken to be on the visual game frame only"), the box rises along the panel's
+//   bottom right of him with the level title (or "Hint 2 of 3") as a small orange label, the line
+//   types in, and a tap on the panel closes it. The top row (picker, Park) stays live: a level
+//   change replaces the dialog; the bottom bar shows but does not take taps. `BrunoDialogRunner` sequences the canvas side and this DOM
 //   side; the controllers (BuilderApp, src/app.ts) run it and start the level's other start
 //   effects (the goals intro, the rover's camera pan) once it closes.
-// - QUICK (every other line: play, pass/fail, refused, the rover coach's prompts): the same box,
-//   compact and non-modal, docked just above the bottom bar over the free part of the world panel
-//   with a small Bruno face at its left. A line animates only when its text changes (both HUDs
+// - QUICK (every other line: play, pass/fail, refused, the rover coach's prompts): a small box in
+//   the top row, left of the level picker (2026-10-12 later, Gao: "for other lines, let's try
+//   making the dialog box smaller and at the top"), with a small Bruno face at its left; it never
+//   covers the game. A line animates only when its text changes (both HUDs
 //   pass the same line every frame); play/pass/fail lines hide after `quickLineMs`, coach prompts
 //   stay while their step is active.
 import { prefersReducedMotion } from './goalsIntro';
@@ -29,17 +32,18 @@ export const WORD_FADE_MS = 150;
 /** The modal box rises/fades in, and fades out. */
 export const BOX_IN_MS = 200;
 export const BOX_OUT_MS = 150;
-/** The DOM HUD dims/undims over this long (the canvas dim, brunoStage.ts DIM_MS, matches it). */
+/** The DOM parts over the panel (the drawer, the meters) dim/undim over this long (the canvas
+ * dim, brunoStage.ts DIM_MS, matches it). */
 export const HUD_DIM_MS = 250;
 /** A quick line (not a coach prompt) stays `QUICK_BASE_MS + QUICK_PER_WORD_MS` per word. */
 export const QUICK_BASE_MS = 3000;
 export const QUICK_PER_WORD_MS = 250;
-/** The quick box's widest size, and the narrowest span it will squeeze into to dodge a coach
- * target (stage px). */
-export const QUICK_MAX_W = 560;
-export const QUICK_MIN_W = 260;
-/** Gap between the quick box and the edges it docks against (stage px). */
-const QUICK_MARGIN = 12;
+/** The quick box in the top row (stage px): its left edge (the world panel's), the gap it keeps
+ * from the level picker, the row's middle (the top bar is y 0..72) and its narrowest width. */
+export const QUICK_LEFT = 32;
+export const QUICK_GAP = 14;
+export const QUICK_ROW_MID = 36;
+export const QUICK_MIN_W = 240;
 
 /** The face beside a quick line: Bruno's head and hard hat, cut from his Spine rig (public/ui). */
 export const BRUNO_FACE_URL = 'ui/bruno_face.png';
@@ -91,71 +95,15 @@ export class LineGuard {
   }
 }
 
-export interface Rect { x: number; y: number; w: number; h: number }
-
-/** Where a quick line may go, in stage px: the free span of the world panel (`left`..`right`:
- * the whole panel, or left of the open drawer), the y its bottom docks at (just above the bottom
- * bar, or above the world scrollbar), the y its top docks at (under the goals panel), and which of
- * the two it tries first (`prefer`, default the bottom; the kit prefers the top while the drawer is
- * open and the camera is zoomed in on the part being built, low in the panel). */
-export interface QuickRegion { left: number; right: number; bottom: number; top: number; prefer?: 'bottom' | 'top' }
-
-function overlaps(a: Rect, b: Rect): boolean {
-  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+/** The quick box's widest size: from `QUICK_LEFT` to `QUICK_GAP` short of `pickerLeft` (the top
+ * row's level picker), never under `QUICK_MIN_W`. */
+export function quickMaxWidth(pickerLeft: number): number {
+  return Math.max(QUICK_MIN_W, Math.round(pickerLeft - QUICK_GAP - QUICK_LEFT));
 }
 
-/** How tall a band a dock row checks for blockers before measuring (a two-line quick box). */
-const QUICK_BAND_H = 80;
-
-/**
- * Places the quick box. `measure(maxW)` lays the box out no wider than `maxW` and returns its
- * size. For each dock row (the preferred one first, then the other): the free span minus the x
- * ranges of the `avoid` rects that reach into that row (the coach's hand and its target, the unlock
- * callout) leaves gaps; the gap holding the span's centre is tried first, then the wider ones, and
- * the box is centred in it. The first spot clear of every `avoid` rect wins; with none clear, the
- * preferred row's centred spot.
- */
-export function placeQuick(region: QuickRegion, measure: (maxW: number) => { w: number; h: number }, avoid: Rect[]): Rect {
-  const L = region.left + QUICK_MARGIN;
-  const R = region.right - QUICK_MARGIN;
-  const docks: ('bottom' | 'top')[] = region.prefer === 'top' ? ['top', 'bottom'] : ['bottom', 'top'];
-  const spot = (l: number, r: number, dock: 'bottom' | 'top'): Rect => {
-    const span = r - l;
-    const size = measure(Math.min(QUICK_MAX_W, span));
-    const x = Math.round(l + (span - size.w) / 2);
-    const y = dock === 'bottom' ? region.bottom - size.h : region.top;
-    return { x, y, w: size.w, h: size.h };
-  };
-  const first = spot(L, R, docks[0]!);
-  if (!avoid.some((a) => overlaps(first, a))) return first;
-  const mid = (L + R) / 2;
-  for (const dock of docks) {
-    const y0 = dock === 'bottom' ? region.bottom - QUICK_BAND_H : region.top;
-    const y1 = y0 + QUICK_BAND_H;
-    const blocks = avoid
-      .filter((a) => a.y < y1 && a.y + a.h > y0)
-      .map((a) => [a.x - QUICK_MARGIN, a.x + a.w + QUICK_MARGIN] as const)
-      .sort((p, q) => p[0] - q[0]);
-    const gaps: [number, number][] = [];
-    let from = L;
-    for (const [b0, b1] of blocks) {
-      if (b0 > from) gaps.push([from, Math.min(b0, R)]);
-      from = Math.max(from, b1);
-    }
-    if (from < R) gaps.push([from, R]);
-    const usable = gaps
-      .filter(([g0, g1]) => g1 - g0 >= QUICK_MIN_W)
-      .sort((p, q) => {
-        const pc = p[0] <= mid && mid <= p[1] ? 1 : 0;
-        const qc = q[0] <= mid && mid <= q[1] ? 1 : 0;
-        return qc - pc || q[1] - q[0] - (p[1] - p[0]);
-      });
-    for (const [g0, g1] of usable) {
-      const r = spot(g0, g1, dock);
-      if (!avoid.some((a) => overlaps(r, a))) return r;
-    }
-  }
-  return first;
+/** The quick box's top for a box `h` px tall, centred on the top row. */
+export function quickTop(h: number): number {
+  return Math.round(QUICK_ROW_MID - h / 2);
 }
 
 // ---- the modal sequence ------------------------------------------------------------------------
@@ -250,8 +198,6 @@ export function makeDialogRunner(
  * up (a coach prompt) instead of hiding after `quickLineMs`. */
 export interface QuickLine { text: string; tone?: 'pass' | 'fail' | null; sticky?: boolean }
 
-/** Where the quick line may sit this frame (see `placeQuick`). */
-export interface QuickLayout { region: QuickRegion; avoid: Rect[] }
 
 const NO_TIMER = undefined;
 
@@ -284,7 +230,8 @@ export class BrunoDialog implements BrunoBoxApi {
   private readonly guard = new LineGuard();
   private quickSticky = false;
   private quickTimer: ReturnType<typeof setTimeout> | undefined = NO_TIMER;
-  private quickKey = '';
+  /** The `pickerLeft` the quick box was last laid out for. */
+  private quickPickerLeft = -1;
 
   private readonly onKey = (e: KeyboardEvent): void => {
     if (!this.modal) return;
@@ -379,8 +326,9 @@ export class BrunoDialog implements BrunoBoxApi {
     this.hideQuick();
     clearTimeout(this.fadeTimer);
     this.catcherEl.hidden = false;
-    // style.css: `bd-dim` darkens the HUD, `bd-open` hides the DOM that would sit over the big
-    // Bruno (the bottom bar, the goals panel, ...), `bd-fade` animates the darkening.
+    // style.css: `bd-dim` darkens the DOM over the world panel (the drawer, the meters) to match
+    // the canvas dim, `bd-open` hides the DOM over Bruno and the box (the goals panel, the coach's
+    // hand, ...) and makes the bottom bar inert, `bd-fade` animates the darkening.
     this.root.classList.add('bd-fade', 'bd-dim', 'bd-open');
   }
 
@@ -511,11 +459,12 @@ export class BrunoDialog implements BrunoBoxApi {
   // ---- quick lines -----------------------------------------------------------------------------
 
   /**
-   * This frame's quick line (null = none). Called every frame: the line animates in only when its
-   * text changes, and is re-placed only when the text or the layout changes. Waits while the modal
-   * is up (a coach prompt then shows once it closes).
+   * This frame's quick line (null = none), and the stage x of the level picker's left edge, which
+   * the box stops short of. Called every frame: the line animates in only when its text changes,
+   * and is laid out again only when the text or `pickerLeft` changes. Waits while the modal is up
+   * (a coach prompt then shows once it closes).
    */
-  setQuick(line: QuickLine | null, layout: QuickLayout): void {
+  setQuick(line: QuickLine | null, pickerLeft: number): void {
     if (this.modal) return;
     const text = line && line.text.trim() !== '' ? line.text : null;
     if (this.guard.changed(text)) {
@@ -529,8 +478,8 @@ export class BrunoDialog implements BrunoBoxApi {
       this.quickEl.classList.toggle('fail', line.tone === 'fail');
       const words = this.fillWords(this.quickTextEl, text);
       this.quickEl.hidden = false;
-      this.quickKey = '';
-      this.layoutQuick(layout);
+      this.quickPickerLeft = -1;
+      this.layoutQuick(pickerLeft);
       if (prefersReducedMotion()) {
         this.showAllWords(this.quickTextEl);
       } else {
@@ -542,27 +491,17 @@ export class BrunoDialog implements BrunoBoxApi {
       if (!this.quickSticky) this.quickTimer = setTimeout(() => this.hideQuick(), quickLineMs(text));
       return;
     }
-    if (!this.quickEl.hidden) this.layoutQuick(layout);
+    if (!this.quickEl.hidden) this.layoutQuick(pickerLeft);
   }
 
-  /** Moves the quick box when the free span or the spot to avoid changed (rounded, so a bobbing
-   * hand does not re-lay it out every frame). */
-  private layoutQuick(layout: QuickLayout): void {
-    const r = layout.region;
-    const a = layout.avoid;
-    const key = `${r.left}|${r.right}|${r.bottom}|${Math.round(r.top / 8)}|${r.prefer ?? ''}|${a.map((q) => [q.x, q.y, q.w, q.h].map((v) => Math.round(v / 8)).join(',')).join(';')}`;
-    if (key === this.quickKey) return;
-    this.quickKey = key;
+  /** Sizes the quick box to the room left of the picker and centres it on the top row. */
+  private layoutQuick(pickerLeft: number): void {
+    if (pickerLeft === this.quickPickerLeft) return;
+    this.quickPickerLeft = pickerLeft;
     const el = this.quickEl;
-    const measure = (maxW: number): { w: number; h: number } => {
-      el.style.maxWidth = `${maxW}px`;
-      return { w: el.offsetWidth, h: el.offsetHeight };
-    };
-    const spot = placeQuick(r, measure, a);
-    // +2: offsetWidth rounds, and a max-width a fraction under the text's width would wrap it.
-    el.style.maxWidth = `${spot.w + 2}px`;
-    el.style.left = `${spot.x}px`;
-    el.style.top = `${spot.y}px`;
+    el.style.left = `${QUICK_LEFT}px`;
+    el.style.maxWidth = `${quickMaxWidth(pickerLeft)}px`;
+    el.style.top = `${quickTop(el.offsetHeight)}px`;
   }
 
   private hideQuick(): void {

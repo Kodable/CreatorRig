@@ -412,7 +412,7 @@ export class BuilderScene extends Phaser.Scene {
 
   // ---- camera: worldCam shows the panel (clipped to its viewport, bounded to its rect) and
   // pans/zooms per the CameraFrame state machine below; uiCam always shows the whole stage
-  // (Bruno, and anything else that must ignore the camera's zoom/pan) at RENDER_SCALE only.
+  // (the corner caps, and anything else that must ignore the camera's zoom/pan) at RENDER_SCALE only.
   private worldCam!: Phaser.Cameras.Scene2D.Camera;
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
   /** 'glide' = an exponential approach to `camTo` (the edit-mode scrollbar, see `glideTo`). */
@@ -492,8 +492,6 @@ export class BuilderScene extends Phaser.Scene {
   /** A darker, alpha-reduced copy of `coachHand`, drawn first and offset (0, 4 px) down — the
    * glove's drop shadow. */
   private coachHandShadow?: Phaser.GameObjects.Image;
-  /** The in-scene hand's fingertip in stage px while it shows, else null (`coachPoint`). */
-  private coachStagePt: Vec2 | null = null;
 
   constructor(
     key: string,
@@ -561,7 +559,7 @@ export class BuilderScene extends Phaser.Scene {
   create(): void {
     // High-DPI + camera zoom/pan: the world camera's viewport is clipped to the panel (in canvas
     // px) and its bounds are the panel's stage-px rect, so a camera zoom > 1 pans within the
-    // panel instead of spilling into the HUD. The HTML chrome and Bruno live on a second,
+    // panel instead of spilling into the HUD. The HTML chrome and the corner caps live on a second,
     // unclipped camera that always shows the whole 1024x768 stage at RENDER_SCALE only.
     const RS = RENDER_SCALE;
     this.worldCam = this.cameras.main;
@@ -600,7 +598,14 @@ export class BuilderScene extends Phaser.Scene {
     this.widgetGfx.setDepth(DEPTH_WIDGETS);
 
     // 2026-10-12: Bruno left the top bar; he slides in over a dimmed stage when he talks.
-    this.brunoStage = new BrunoStage(this, (o) => this.onUi(o), 'BuilderScene');
+    // 2026-10-12 (later): on the world camera, so the dim and Bruno stay inside the game frame.
+    this.brunoStage = new BrunoStage(
+      this,
+      (o) => this.onWorld(o),
+      this.worldCam,
+      { x0: this.panelX0, y0: this.panelY0, x1: this.panelX1, y1: this.panelY1 },
+      'BuilderScene',
+    );
 
     this.input.on('pointerdown', this.handlePointerDown, this);
     this.input.on('pointermove', this.handlePointerMove, this);
@@ -618,6 +623,7 @@ export class BuilderScene extends Phaser.Scene {
     // lags by one frame only while a zoom tween runs, which is invisible.
     this.onUpdate?.(delta);
     this.updateCamera(delta);
+    this.brunoStage.sync(); // after the camera moved: the dialog stage stays put in the frame
   }
 
   // ---------------- camera assignment ----------------
@@ -1283,7 +1289,6 @@ export class BuilderScene extends Phaser.Scene {
     }
     // Off camera (a focus zoom elsewhere, a scrolled wide world): no hand.
     if (p && !this.worldCam.worldView.contains(p.x, p.y)) p = null;
-    this.coachStagePt = p ? panelPxToStagePx(p, this.worldCam, RENDER_SCALE) : null;
     if (!p) {
       this.coachHand?.setVisible(false);
       this.coachHandShadow?.setVisible(false);
@@ -1323,13 +1328,6 @@ export class BuilderScene extends Phaser.Scene {
     hand.setPosition(p.x, p.y);
     hand.setAlpha(alpha);
     hand.setVisible(true);
-  }
-
-  /** Where the coach's in-scene hand points, in stage px (its fingertip; the glove hangs below
-   * and right of it), or null while no in-scene hand shows. The HUD keeps Bruno's quick line
-   * clear of it. */
-  coachPoint(): Vec2 | null {
-    return this.coachStagePt;
   }
 
   setSelected(partId: number | null): void {

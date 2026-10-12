@@ -297,40 +297,48 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
    2026-10-12, Gao: "whenever a new level is opened, i want the whole viewport to dim, then bruno
    animates in from left (ease out back). after that, a text box along the bottom of the screen
    appears when he talks, and i want the text to be animated in word by word."
-   The canvas dims itself and draws the big Bruno (src/ui/brunoStage.ts); the DOM HUD sits above the
-   canvas, so it dims here: `bd-dim` darkens every HUD element to match the canvas's 55% black, and
-   `bd-open` hides the DOM that would sit over Bruno at the bottom-left (the bottom bar, the goals
-   panel, the scrollbar, the coach's hand, the win banner, the skin tray, the unlock callout) until
-   the dialog is over. `.bd-layer` marks the dialog's own elements, which never dim. ---- */
-#ui.bd-fade > :not(.bd-layer) { transition: filter 250ms ease; }
+   Later the same day: "i want him and the darken to be on the visual game frame only". The canvas
+   dims the world panel only and draws Bruno inside it (src/ui/brunoStage.ts, on the world camera);
+   the HUD outside the panel keeps full brightness. Here: `bd-dim` darkens the DOM that sits over
+   the panel (the kit's drawer, the meters panel) to match the canvas's 55% black; `bd-open` hides
+   the DOM over Bruno and the box (the goals panel, the scrollbar, the coach's hand, the win banner,
+   the skin tray, the unlock callout) and leaves the bottom bar showing but inert, slightly faded,
+   until the dialog is over. The top row (picker, Park) stays live. `.bd-layer` marks the dialog's
+   own elements. The world panel is x 32..992, y --panel-top..700 (78 on the park courses). ---- */
+#ui.bd-fade > .meters-col.overlay { transition: filter 250ms ease; }
 /* The kit's properties drawer keeps its own slide (builder.css) while the dim animates. */
 #ui.bd-fade > .prop-drawer { transition: filter 250ms ease, transform 260ms cubic-bezier(.2, .8, .2, 1); }
-#ui.bd-dim > :not(.bd-layer) { filter: brightness(0.45); }
-#ui.bd-open > #bottombar, #ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll,
+#ui.bd-dim > .prop-drawer, #ui.bd-dim > .meters-col.overlay { filter: brightness(0.45); }
+#ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll,
 #ui.bd-open > .coach-hand, #ui.bd-open > .win-banner, #ui.bd-open > .skin-tray,
 #ui.bd-open > .skin-backdrop, #ui.bd-open > .unlock-callout-wrap {
   opacity: 0; visibility: hidden; transition: opacity 250ms ease, visibility 0s linear 250ms;
 }
+#bottombar { transition: opacity 200ms ease; }
+#ui.bd-open > #bottombar { opacity: 0.6; }
+#ui.bd-open > #bottombar, #ui.bd-open > #bottombar * { pointer-events: none !important; }
 
-/* The tap catcher: the whole stage, see-through; every tap during the dialog lands here. */
+/* The tap catcher: the world panel, see-through; every tap on the game frame during the dialog
+   lands here (the top row and the bottom bar are outside it). */
 .bd-catcher {
-  position: absolute; left: 0; top: 0; width: 1024px; height: 768px; z-index: 90;
+  position: absolute; left: 32px; top: var(--panel-top, 78px); width: 960px;
+  height: calc(700px - var(--panel-top, 78px)); z-index: 90; border-radius: 12px;
   pointer-events: auto; cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent;
 }
 
-/* The modal box: along the bottom of the screen right of Bruno (x 240..1000, bottom at y 752, it
-   grows upward for a third line). A plain navy rounded box with a soft drop shadow, no outline;
-   the level title (or "Hint 2 of 3") as a small orange label. */
+/* The modal box: inside the world panel along its bottom, right of Bruno (x 220..980, bottom at
+   y 688; it grows upward for a third line). A plain navy rounded box with a soft drop shadow, no
+   outline; the level title (or "Hint 2 of 3") as a small orange label. */
 .bd-box {
-  position: absolute; left: 240px; right: 24px; bottom: 16px; min-height: 124px; z-index: 95;
-  box-sizing: border-box; padding: 16px 30px 22px 28px; border-radius: 22px;
+  position: absolute; left: 220px; right: 44px; bottom: 80px; min-height: 112px; z-index: 95;
+  box-sizing: border-box; padding: 14px 30px 20px 26px; border-radius: 20px;
   background: rgba(23, 30, 58, 0.97); color: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
   display: flex; flex-direction: column; justify-content: center; gap: 6px;
   pointer-events: auto; cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent;
 }
 .bd-label { font-size: 15px; font-weight: 800; line-height: 1.1; letter-spacing: 0.02em; color: #ffb40f; }
 .bd-text { font-family: "Nunito", "Arial Rounded MT Bold", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-.bd-box .bd-text { font-size: 24px; font-weight: 700; line-height: 1.32; }
+.bd-box .bd-text { font-size: 22px; font-weight: 700; line-height: 1.32; }
 .bd-box.bd-in { animation: bd-box-in 200ms ease-out both; }
 .bd-box.bd-out { animation: bd-box-out 150ms ease-in both; }
 @keyframes bd-box-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
@@ -347,18 +355,19 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 .bd-all .bd-w { opacity: 1; animation: none; }
 @keyframes bd-word { from { opacity: 0; transform: translateY(6px) scale(0.85); } to { opacity: 1; transform: none; } }
 
-/* The quick line: the same box, compact and non-modal, with Bruno's face at its left. Placed from
-   JS (left/top/max-width) just above the bottom bar over the free part of the world panel; under
-   the coach's hand (z 45), over the win banner (z 40). A tap on it hides it early. */
+/* The quick line: a small box in the top row, left of the level picker (2026-10-12 later, Gao: "for
+   other lines, let's try making the dialog box smaller and at the top"): x 32 to just short of the
+   picker (max-width and top from JS, centred on y 36), one line, two at most (100 characters fit in
+   two at its narrowest, the rover's chapter picker). A tap on it hides it early. */
 .bd-quick {
-  position: absolute; left: 0; top: 0; z-index: 44; width: max-content; max-width: 560px;
-  box-sizing: border-box; display: flex; align-items: center; gap: 10px;
-  padding: 7px 20px 7px 8px; border-radius: 18px;
-  background: rgba(23, 30, 58, 0.95); color: #fff; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  position: absolute; left: 32px; top: 12px; z-index: 44; width: max-content; max-width: 640px; min-height: 46px;
+  box-sizing: border-box; display: flex; align-items: center; gap: 8px;
+  padding: 4px 16px 4px 6px; border-radius: 14px;
+  background: rgba(23, 30, 58, 0.95); color: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   pointer-events: auto; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
-.bd-face { flex: 0 0 auto; width: 54px; height: 54px; object-fit: contain; pointer-events: none; }
-.bd-quick .bd-text { min-width: 0; font-size: 19px; font-weight: 700; line-height: 1.3; }
+.bd-face { flex: 0 0 auto; width: 36px; height: 36px; object-fit: contain; pointer-events: none; }
+.bd-quick .bd-text { min-width: 0; font-size: 16px; font-weight: 700; line-height: 1.2; }
 .bd-quick.pass .bd-text { color: #a6ec8a; }
 .bd-quick.fail .bd-text { color: #ffa3dc; }
 .bd-quick.pass .bd-face { animation: bd-face-cheer 700ms ease-out 1; }
@@ -366,12 +375,12 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
   0%, 100% { transform: none; } 25% { transform: rotate(-10deg) scale(1.08); } 50% { transform: rotate(8deg) scale(1.08); } 75% { transform: rotate(-4deg); }
 }
 .bd-quick.bd-in { animation: bd-quick-in 180ms ease-out both; }
-@keyframes bd-quick-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes bd-quick-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
   .bd-box.bd-in, .bd-box.bd-out, .bd-quick.bd-in, .bd-typing .bd-w, .bd-cue.bd-show, .bd-quick.pass .bd-face { animation: none !important; }
-  #ui.bd-fade > :not(.bd-layer),
-  #ui.bd-open > #bottombar, #ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll,
+  #ui.bd-fade > .meters-col.overlay, #ui.bd-fade > .prop-drawer, #bottombar,
+  #ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll,
   #ui.bd-open > .coach-hand, #ui.bd-open > .win-banner, #ui.bd-open > .skin-tray,
   #ui.bd-open > .skin-backdrop, #ui.bd-open > .unlock-callout-wrap { transition: none; }
 }

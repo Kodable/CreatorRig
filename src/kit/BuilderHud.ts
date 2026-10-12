@@ -2,7 +2,7 @@
 // palette, driven by a HudSpec instead of Goldberg's hardcoded part/meter/line tables. Moved from
 // activities/goldberg/ui/goldbergHud.ts. 2026-10-12: Bruno and his bubble left the top bar (only the
 // level picker and Park stay there); he talks through src/ui/brunoDialog.ts (the modal lesson
-// intro / hint, and the quick lines docked above the bottom bar), and the Hint button moved to the
+// intro / hint inside the world panel, and the quick lines in the top row left of the picker), and the Hint button moved to the
 // bottom bar's left end.
 import type {
   CoachTarget,
@@ -21,7 +21,7 @@ import type {
 import { levelPickerLabel } from './chapters';
 import { hasShelfKinds, nonShelfKinds, shelfGroups } from './shelf';
 import { playGoalsIntro as animateGoalsIntro, prefersReducedMotion } from '../ui/goalsIntro';
-import { BrunoDialog, type QuickLine, type QuickRegion, type Rect } from '../ui/brunoDialog';
+import { BrunoDialog, type QuickLine } from '../ui/brunoDialog';
 import './builder.css';
 
 const STAGE_W = 1024;
@@ -39,14 +39,6 @@ const SCROLL_THUMB_MIN = 88;
  * 480 px panel, higher for a taller world (2026-10-06: the rover's, under `hud.goalsOverlay`). */
 const DEFAULT_PANEL_TOP = 210;
 const PANEL_BOTTOM = 690;
-/** Bruno's quick line docks its bottom here (just above the bottom bar, inside the world panel),
- * or at QUICK_BOTTOM_SCROLL while the world scrollbar (y 656..700) shows. The free span is the
- * world panel (x 32..992), or left of the open drawer (x 652). */
-const QUICK_BOTTOM = 684;
-const QUICK_BOTTOM_SCROLL = 650;
-const PANEL_LEFT_X = 32;
-const PANEL_RIGHT_X = 992;
-const DRAWER_LEFT_X = 652;
 /* The level-start goals intro's geometry and timing live in src/ui/goalsIntro.ts (2026-10-07: shared
    with the coaster HUD). */
 
@@ -162,6 +154,10 @@ export class BuilderHud<
   /** Bruno's dialog box: the modal lesson intro / hint, and the quick lines (src/ui/brunoDialog.ts).
    * The controller (BuilderApp) runs the modal; `update` feeds the quick line every frame. */
   brunoDialog!: BrunoDialog;
+  /** The top row (level picker + Park); Bruno's quick line sits left of it. */
+  private topbarEl!: HTMLDivElement;
+  /** `topbarEl`'s left edge in stage px, or -1 to measure it again (see `pickerLeftNow`). */
+  private pickerLeft = -1;
   private goalsColEl!: HTMLDivElement;
   private goalListEl!: HTMLUListElement;
 
@@ -523,6 +519,7 @@ export class BuilderHud<
 
     topbar.append(picker, parkBtn);
     this.root.appendChild(topbar);
+    this.topbarEl = topbar;
 
     // ---- dashboard ----
     // `hud.goalsOverlay` (2026-10-06, the rover): no dash on screen. The goals column (same
@@ -1370,6 +1367,7 @@ export class BuilderHud<
     // 2026-10-09: `Level.chapter` (e.g. several rover planets) reads "Mars · 3 of 12" instead of
     // "Level N of M" — see `levelPickerLabel`.
     this.setText(this.pickerLabelEl, levelPickerLabel(level, all));
+    this.pickerLeft = -1; // the label's width moves the picker: measure again for the quick line
     this.setDisabled(this.pickerPrevBtn, this.levelIndex <= 0);
     this.setDisabled(this.pickerNextBtn, this.levelIndex >= all.length - 1);
   }
@@ -2022,9 +2020,10 @@ export class BuilderHud<
 
     // ---- Bruno's quick line (src/ui/brunoDialog.ts) ----
     // The level's line and its hints play in the modal dialog (BuilderApp); everything else Bruno
-    // says shows in the compact box docked above the bottom bar: the play/done lines, the 2 s
-    // refused/locked feedback, and the coach's prompts (which stay while their step is active).
-    this.brunoDialog.setQuick(this.quickLine(state, flags), { region: this.quickRegion(state), avoid: this.quickAvoidRects(state) });
+    // says shows in the small box in the top row, left of the level picker: the play/done lines,
+    // the 2 s refused/locked feedback, and the coach's prompts (which stay while their step is
+    // active).
+    this.brunoDialog.setQuick(this.quickLine(state, flags), this.pickerLeftNow());
 
     // ---- tool row ----
     this.setHidden(this.toolGroupEl, this.tools.length === 0 || !state.canTune);
@@ -2252,51 +2251,10 @@ export class BuilderHud<
     return { text: lines.doneNotPassed };
   }
 
-  /** Where the quick line may sit: the world panel left of the open drawer, its bottom just above
-   * the bottom bar (or above the world scrollbar while that shows), its top under the goals panel
-   * when the bottom spot would cover the coach's hand. */
-  private quickRegion(state: HudState<K, M, O, L>): QuickRegion {
-    const goals = this.goalsOverlayEl ?? this.dashEl;
-    const top = goals ? goals.offsetTop + goals.offsetHeight + 10 : this.panelTop + 12;
-    const drawer = this.drawerMode && this.drawerOpen;
-    return {
-      left: PANEL_LEFT_X,
-      right: drawer ? DRAWER_LEFT_X : PANEL_RIGHT_X,
-      bottom: state.scroll !== null ? QUICK_BOTTOM_SCROLL : QUICK_BOTTOM,
-      top,
-      // While the drawer is open the camera is zoomed in on the part being built, low in the
-      // panel: the line goes up into the sky instead of over it.
-      prefer: drawer ? 'top' : 'bottom',
-    };
-  }
-
-  /** What the quick line keeps clear of: the coach's hand and its target, and the shelf unlock
-   * callout while it shows. */
-  private quickAvoidRects(state: HudState<K, M, O, L>): Rect[] {
-    const out: Rect[] = [];
-    const coach = this.coachAvoidRect(state);
-    if (coach) out.push(coach);
-    if (this.calloutKind !== null && !this.calloutEl.hidden) {
-      const r = this.visibleStageRect(this.calloutEl);
-      if (r) out.push(r);
-    }
-    return out;
-  }
-
-  /** The coach's hand and what it points at, in stage px (null when no hand shows): the DOM
-   * target's box plus the glove hanging below/right of the fingertip, or the in-scene hand around
-   * `HudState.coachPoint`. The quick line keeps clear of it. */
-  private coachAvoidRect(state: HudState<K, M, O, L>): Rect | null {
-    const step = state.coach;
-    if (!step) return null;
-    const el = this.coachTargetEl(step.target);
-    const rect = el ? this.visibleStageRect(el) : null;
-    if (rect) {
-      return { x: rect.x - 8, y: rect.y - 8, w: rect.w + COACH_HAND_W + 16, h: rect.h + COACH_HAND_H + 16 };
-    }
-    const p = state.coachPoint;
-    // The target (a widget pill, a part) sits around and above-left of the fingertip.
-    if (p) return { x: p.x - 150, y: p.y - 70, w: 150 + COACH_HAND_W + 30, h: 70 + COACH_HAND_H + 20 };
-    return null;
+  /** The top row's level picker's left edge in stage px (the quick line stops short of it),
+   * measured once per level load (the picker's label sets its width). */
+  private pickerLeftNow(): number {
+    if (this.pickerLeft < 0) this.pickerLeft = this.topbarEl.offsetLeft;
+    return this.pickerLeft;
   }
 }

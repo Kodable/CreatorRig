@@ -199,7 +199,7 @@ export class CoasterScene extends Phaser.Scene {
 
   // 2026-10-12: two cameras, like the builder kit (src/kit/BuilderScene.ts). The world camera is
   // clipped to the world panel and zooms in to follow the fuzz in play mode (rideCamera.ts); the UI
-  // camera always shows the whole stage at RENDER_SCALE, for Bruno and the panel's corner caps.
+  // camera always shows the whole stage at RENDER_SCALE, for the panel's corner caps (Bruno's dialog stage rides the world camera, src/ui/brunoStage.ts).
   private worldCam!: Phaser.Cameras.Scene2D.Camera;
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
   private camCur: FrameState = { ...FULL_FRAME };
@@ -242,7 +242,7 @@ export class CoasterScene extends Phaser.Scene {
     // viewport is clipped to the world panel (in canvas px) and zooms by RENDER_SCALE x the frame's
     // zoom, so stage coordinates (1024x768) stay valid for every game object and for the HTML HUD,
     // and a zoomed-in ride never spills over the top or bottom bar. The UI camera shows the whole
-    // stage at RENDER_SCALE only (Bruno, the corner caps). Taps map through the world camera
+    // stage at RENDER_SCALE only (the corner caps). Taps map through the world camera
     // (stagePoint), never pointer.worldX/worldY, which follow whichever camera hit-tested last.
     const RS = RENDER_SCALE;
     this.worldCam = this.cameras.main;
@@ -271,7 +271,8 @@ export class CoasterScene extends Phaser.Scene {
 
     this.createFuzz();
     // 2026-10-12: Bruno left the top bar; he slides in over a dimmed stage when he talks.
-    this.brunoStage = new BrunoStage(this, (o) => this.onUi(o), 'CoasterScene');
+    // 2026-10-12 (later): on the world camera, so the dim and Bruno stay inside the game frame.
+    this.brunoStage = new BrunoStage(this, (o) => this.onWorld(o), this.worldCam, { x0: PANEL_X0, y0: PANEL_Y0, x1: PANEL_X1, y1: PANEL_Y1 }, 'CoasterScene');
 
     this.input.on('pointerdown', this.handlePointerDown, this);
     this.input.on('pointermove', this.handlePointerMove, this);
@@ -290,6 +291,7 @@ export class CoasterScene extends Phaser.Scene {
     // jitters everything it follows).
     this.onUpdate?.(delta);
     this.updateCamera(delta);
+    this.brunoStage.sync(); // after the camera moved: the dialog stage stays put in the frame
     this.updateBackdrop(delta);
     this.updateStationPulse(time);
     if (this.trackDirty) {
