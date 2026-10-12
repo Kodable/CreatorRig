@@ -4,7 +4,7 @@ export const LEVELS: Level[] = [
   {
     id: 'drop',
     title: 'Vertical drop',
-    bruno: "I'm building a theme park for fuzzes, and fuzzes love a big drop! Drag the station up so the fall to the flag is at least 15 meters.",
+    bruno: "I'm building a park for fuzzes. Let's drag the station up for a 15 meter drop!",
     goals: [
       { metric: 'maxDrop', op: '>=', value: 15, label: 'Drop at least 15 m' },
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
@@ -17,13 +17,13 @@ export const LEVELS: Level[] = [
     hints: {
       rolledBack: "The fuzz rolled back! Keep every hill lower than the station.",
       stuck: "The fuzz got stuck. Let it roll straight down to the flag.",
-      fell: "The fuzz fell off the track! Just drag the station up and let it roll down to the flag."
+      fell: "Off the track! Let's drag the station up and roll straight to the flag."
     }
   },
   {
     id: 'complete',
     title: 'Complete the track',
-    bruno: "I built the first part! Tap the track or the sky to add points, and bring the rail down to the finish flag.",
+    bruno: "I built the first part. Let's tap the track or sky to add points to the flag.",
     goals: [
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
       { metric: 'reachedEnd', op: '==', value: 1, label: 'Fuzz reaches the end' }
@@ -37,13 +37,13 @@ export const LEVELS: Level[] = [
     hints: {
       rolledBack: "The fuzz rolled back. Keep the track going downhill toward the flag.",
       stuck: "The fuzz got stuck. Make the hills smaller so it can reach the flag.",
-      fell: "Too slow at the top! The fuzz fell off the track."
+      fell: "Too slow at the top. What would give the fuzz more speed?"
     }
   },
   {
     id: 'speed',
     title: 'Speed',
-    bruno: "Speedy fuzzes are happy fuzzes! The station is bolted down, so dive down low on the way to the flag. The deeper the dip, the faster: hit 18 meters per second.",
+    bruno: "Speedy fuzzes are happy fuzzes! Hit 18 m/s. What happens if we dip down low?",
     goals: [
       { metric: 'maxSpeed', op: '>=', value: 18, label: 'Reach 18 m/s' },
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
@@ -54,13 +54,13 @@ export const LEVELS: Level[] = [
     hints: {
       rolledBack: "The fuzz rolled back. Keep every hill lower than the station.",
       stuck: "Out of speed before the flag! Make the climb up to the flag smoother.",
-      fell: "The fuzz fell off! No loops needed: dive down low, then swoop up to the flag."
+      fell: "Off the track! No loops needed. Let's dive low, then swoop up to the flag."
     }
   },
   {
     id: 'length',
     title: 'Length',
-    bruno: "A long ride to the flag! Add ups and downs until the track is at least 80 meters long, and make sure the fuzz gets there.",
+    bruno: "A long ride! Can we stretch the track to 80 meters and still reach the flag?",
     goals: [
       { metric: 'length', op: '>=', value: 80, label: 'Track at least 80 m long' },
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
@@ -71,13 +71,13 @@ export const LEVELS: Level[] = [
     hints: {
       rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",
       stuck: "Not enough speed for that hill. Make each hill lower than the one before.",
-      fell: "The fuzz fell off! Use hills and dips to make the track longer."
+      fell: "Off the track! Let's find where it flew off and smooth that spot."
     }
   },
   {
     id: 'hang',
     title: 'Hang time',
-    bruno: "Over a hill top you float! After the first drop, build a hump and give the fuzz one whole second of floaty time on the way to the flag.",
+    bruno: "Fuzzes love to float! Can we give them one whole second of air over a hump?",
     goals: [
       { metric: 'hangTime', op: '>=', value: 1, label: '1 second of hang time' },
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
@@ -96,7 +96,7 @@ export const LEVELS: Level[] = [
   {
     id: 'loop',
     title: 'Loops',
-    bruno: "Pick the Loop tool, then tap the track to add a loop. Put it down low so the fuzz is fast enough to stick, then ride on to the flag!",
+    bruno: "Time for a loop! Pick the Loop tool and tap the track. Where will it be fast enough?",
     goals: [
       { metric: 'loopsCompleted', op: '>=', value: 1, label: 'Ride through a loop' },
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
@@ -107,13 +107,13 @@ export const LEVELS: Level[] = [
     hints: {
       rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",
       stuck: "Out of speed before the flag. Keep the track after the loop low.",
-      fell: "Too slow at the top! The fuzz fell off. Drag the loop lower, where the fuzz goes faster."
+      fell: "Too slow at the top! Let's move the loop lower, where the fuzz is faster."
     }
   },
   {
     id: 'intense',
     title: 'Intense-o-meter',
-    bruno: "Fast but gentle! Dip down to reach 15 meters per second, then come up to the flag. Round off the bottom of the dip so the fuzz stays under 4 g.",
+    bruno: "Fast but gentle! Reach 15 m/s, but stay under 4 g. How round can we make the dip?",
     goals: [
       { metric: 'maxSpeed', op: '>=', value: 15, label: 'Reach 15 m/s' },
       { metric: 'maxG', op: '<=', value: 4, label: 'Stay under 4 g' },
@@ -126,7 +126,7 @@ export const LEVELS: Level[] = [
     hints: {
       rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",
       stuck: "Out of speed before the flag! Make the climb up to the flag smoother.",
-      fell: "The fuzz fell off! No loops needed: one big round dip, then up to the flag."
+      fell: "Off the track! No loops needed. Let's try one big round dip, then up to the flag."
     }
   },
   // ---- Challenge levels: each mixes mechanics the seven levels above taught, several goals at
@@ -153,7 +153,7 @@ export const LEVELS: Level[] = [
   {
     id: 'thrill',
     title: 'Thrill ride',
-    bruno: "Challenge! Build a hump to catch air for one whole second, and round off the valleys so the fuzz stays under 4 g. End at the flag.",
+    bruno: "Challenge! One second of air, under 4 g, and end at the flag. Let's plan it.",
     goals: [
       { metric: 'hangTime', op: '>=', value: 1, label: '1 second of hang time' },
       { metric: 'maxG', op: '<=', value: 4, label: 'Stay under 4 g' },
@@ -166,13 +166,13 @@ export const LEVELS: Level[] = [
     hints: {
       rolledBack: "The fuzz rolled back. Keep the hump lower than the station.",
       stuck: "Not enough speed for that hump. Make it a little lower, and round off the valleys.",
-      fell: "The fuzz fell off! Build a hump to catch air, and round off the valleys with extra points."
+      fell: "Off the track! Let's find where it flew off and round that spot with extra points."
     }
   },
   {
     id: 'express',
     title: 'Fuzz express',
-    bruno: "Challenge! The express starts way up high. Hit 20 meters per second on a track at least 100 meters long, and get the fuzz to the end.",
+    bruno: "Challenge! We start way up high. Can we hit 20 m/s on a 100 meter track?",
     goals: [
       { metric: 'maxSpeed', op: '>=', value: 20, label: 'Reach 20 m/s' },
       { metric: 'length', op: '>=', value: 100, label: 'Track at least 100 m long' },
@@ -190,7 +190,7 @@ export const LEVELS: Level[] = [
   {
     id: 'grand',
     title: 'Grand finale',
-    bruno: "Grand finale! Build a loop off my tallest station, but don't squish the fuzz past 7 g. Where should the loop go?",
+    bruno: "Grand finale! A loop off my tallest station, under 7 g. Where should the loop go?",
     goals: [
       { metric: 'loopsCompleted', op: '>=', value: 1, label: 'Ride through a loop' },
       { metric: 'maxG', op: '<=', value: 7, label: 'Stay under 7 g' },
@@ -211,10 +211,19 @@ export const LEVELS: Level[] = [
     hints: {
       rolledBack: "Start higher! The fuzz rolled back to the station.",
       stuck: "Not enough speed for that hill. Try a bigger drop first.",
-      fell: "Too slow at the top! The fuzz fell off the track. Start higher or make the loop smaller."
+      fell: "Too slow at the top. Let's try a higher start, or a smaller loop."
     }
   }
 ];
+
+/** Bruno's coaster bubble lines that are not per level (src/ui/hud.ts): while the fuzz rides, on a
+ * pass, and when the ride reaches the end without passing. */
+export const COASTER_LINES = {
+  play: 'Here it goes. Watch the fuzz!',
+  pass: "Now that's a coaster. Great plan!",
+  endShortOfFlag: 'The fuzz got to the end, but the track does not reach the flag yet.',
+  end: 'The fuzz made it! Now check the goals.',
+} as const;
 
 export function findLevel(id: string): Level | undefined {
   return LEVELS.find(level => level.id === id);

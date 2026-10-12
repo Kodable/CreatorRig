@@ -45,7 +45,7 @@ describe('Europa levels', () => {
     const welcome = find('ice');
     expect(welcome.bruno).toMatch(/Europa/);
     expect(welcome.bruno).toMatch(/Jupiter/);
-    expect(welcome.bruno).toMatch(/ice/);
+    expect(welcome.bruno).toMatch(/ice/i);
     expect(welcome.bruno).toMatch(/ocean/);
     expect(welcome.bruno).toMatch(/gravity/i);
     const hints = welcome.hints.join(' ');

@@ -1,5 +1,6 @@
 import type { EditTool, Goal, GoalResult, HudState, Level, Metric } from '../core/types';
 import { GROUND_Y, PANEL_TOP_Y } from '../game/view';
+import { COASTER_LINES } from '../core/levels';
 import { playGoalsIntro } from './goalsIntro';
 import { FUZZ_SKINS, findSkin, type SkinId } from '../game/skins';
 
@@ -601,14 +602,14 @@ export class Hud {
     if (editMode) {
       brunoLine = level.bruno;
     } else if (playMode) {
-      brunoLine = 'Wheee! Go fuzz, go!';
+      brunoLine = COASTER_LINES.play;
     } else if (state.passed) {
-      brunoLine = 'Level complete! Great coaster!';
+      brunoLine = COASTER_LINES.pass;
     } else if (state.outcome === 'reachedEnd') {
       const atFinishGoal = state.goals.find((gr) => gr.goal.metric === 'atFinish');
       brunoLine = atFinishGoal && !atFinishGoal.pass
-        ? 'The fuzz got to the end, but the track does not reach the flag yet.'
-        : 'The fuzz made it! Now check the goals.';
+        ? COASTER_LINES.endShortOfFlag
+        : COASTER_LINES.end;
     } else if (state.outcome === 'rolledBack') {
       brunoLine = level.hints.rolledBack;
     } else if (state.outcome === 'stuck') {

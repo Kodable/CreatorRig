@@ -98,7 +98,7 @@ export const LEVELS: CatapultLevel[] = [
     introduces: ['power'],
     title: 'Fling it',
     bruno:
-      "My fuzz is ready to fly! That can just needs a good hard fling. Turn up the power and let's see it soar.",
+      "Let's knock that can down. How much power will it take?",
     goals: [{ metric: 'knockedDown', op: '>=', value: 1, label: 'Can knocked down' }],
     palette: [],
     shots: 3,
@@ -133,9 +133,9 @@ export const LEVELS: CatapultLevel[] = [
       },
     ],
     hints: [
-      'Low power barely gets the fuzz off the ground, it needs more oomph to reach that shelf.',
+      'Low power barely leaves the ground. What could reach that shelf?',
       'Tap the catapult, then check the rubber bands. Power is yours to tune.',
-      "Set power to Medium, then tap FIRE. That snips the string and sends the fuzz flying right into the can.",
+      "Try Medium power, then tap FIRE.",
     ],
     failHints: { outOfShots: 'Out of fuzzes! The can is still standing up there. Try turning up the power.' },
     markers: [{ kind: 'icon', p: { x: 14.5, y: 2.5 }, text: TARGET_ICON }],
@@ -224,10 +224,10 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       'That flat, low arc just smacks straight into the wall.',
-      'Tap the catapult and drag the lever knob to something steeper. Power is locked at High, so angle does all the work.',
+      'Power is locked at High. What else can we change? Try the lever knob.',
       'Set the angle to 60. That loops the fuzz well over the wall and back down onto the can.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! That wall keeps stopping me. Try a steeper angle.' },
+    failHints: { outOfShots: "Out of fuzzes. Good tests! Let's try a steeper angle." },
     markers: [{ kind: 'icon', p: { x: 17.5, y: 1 }, text: TARGET_ICON }],
     solution: [
       {
@@ -279,7 +279,7 @@ export const LEVELS: CatapultLevel[] = [
     id: 'weight',
     introduces: ['fuzz'],
     title: 'Heavy hitter',
-    bruno: "My fuzz keeps bouncing right off that block! I bet a heavier fuzz would knock it right over.",
+    bruno: "My fuzz keeps bouncing off that block. What would knock it over?",
     goals: [{ metric: 'knockedDown', op: '>=', value: 1, label: 'Block knocked down' }],
     palette: [],
     shots: 2,
@@ -305,11 +305,11 @@ export const LEVELS: CatapultLevel[] = [
       },
     ],
     hints: [
-      'That fuzz hits the block dead center but just bounces off, too light to budge a brick.',
-      "Tap the catapult, then pick a heavier fuzz. Power and angle are locked, so the fuzz is the answer here.",
+      "Good hit, but the fuzz bounced off. Why didn't the block move?",
+      "Power and angle are locked. Tap the catapult. Which fuzz hits hardest?",
       'Pick the heavy Metal fuzz. It hits hard enough to topple that brick block.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! That block will not fall over from a light tap, try something heavier.' },
+    failHints: { outOfShots: "Out of fuzzes. That block needs a harder hit. Let's try a heavier fuzz." },
     markers: [{ kind: 'icon', p: { x: 26.7, y: 1.5 }, text: TARGET_ICON }],
     solution: [
       {
@@ -342,7 +342,7 @@ export const LEVELS: CatapultLevel[] = [
     id: 'arm',
     introduces: ['arm'],
     title: 'Long arm',
-    bruno: "That target is so far away! I think this catapult's arm is too short to reach it.",
+    bruno: "That target is far away. What could help us reach it?",
     goals: [{ metric: 'hits', op: '>=', value: 1, label: 'Bullseye hit' }],
     palette: [],
     shots: 2,
@@ -369,10 +369,10 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       "Even at max power, this short arm just does not have the reach.",
-      'Power and angle are locked at Max and 45. Tap the catapult and check the arm chip instead.',
+      'Power and angle are locked at Max and 45. Tap the catapult and look at the Arm.',
       'Switch the arm to Long. The extra length and speed get the fuzz all the way out to the bullseye.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! That short arm just cannot reach, try a longer one.' },
+    failHints: { outOfShots: "Out of fuzzes. That arm can't reach. Let's try a longer one." },
     solution: [
       {
         id: 1,
@@ -405,7 +405,7 @@ export const LEVELS: CatapultLevel[] = [
     id: 'move',
     introduces: [],
     title: 'Roll closer',
-    bruno: 'That can is too far away for this angle. Roll my catapult closer along the ground until I can arc right over the wall.',
+    bruno: 'The wall is tall and the can is far. Where should my catapult stand?',
     goals: [{ metric: 'knockedDown', op: '>=', value: 1, label: 'Can knocked down' }],
     palette: [],
     shots: 3,
@@ -450,8 +450,8 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       'From way back here, that six-meter wall blocks the shot no matter the angle.',
-      'Drag the catapult closer, it can roll along the ground between the gold guides.',
-      'Roll it up near the wall and set a steep angle, like 75, to loop straight over and down onto the can.',
+      'Drag the catapult closer. It rolls along the ground between the gold guides.',
+      'Roll it up near the wall and try a steep angle, like 75. It loops over onto the can.',
     ],
     failHints: { outOfShots: 'Out of fuzzes! Try rolling the catapult closer to the wall first.' },
     markers: [{ kind: 'icon', p: { x: 16.5, y: 1 }, text: TARGET_ICON }],
@@ -512,7 +512,7 @@ export const LEVELS: CatapultLevel[] = [
     id: 'donut',
     introduces: ['fuzz:Donut'],
     title: 'Three at once',
-    bruno: "Meet the Donut! At the top of the flight it splits into three little donuts. Two cans, one shot. Can you do it?",
+    bruno: "Meet the Donut! It splits in three at the top. Can we knock down two cans with one shot?",
     goals: [{ metric: 'knockedDown', op: '>=', value: 2, label: 'Cans knocked down' }],
     palette: [],
     shots: 1,
@@ -536,7 +536,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       'The Donut splits into three at the top of the arc. Each little donut flies a little differently.',
-      'The low one drops short, the high one flies long. Get the top of the arc just before the cans.',
+      'The low one falls short and the high one flies long. Split it just before the cans.',
       'Try High power at 30 degrees. The three little donuts spread out right across the shelves.',
     ],
     failHints: { outOfShots: 'Not enough cans down! Change the power and angle so the Donut splits right before the shelves.' },
@@ -570,7 +570,7 @@ export const LEVELS: CatapultLevel[] = [
   {
     id: 'both',
     title: 'Bullseye',
-    bruno: 'See that target way out there? Line up the power and the angle just right and my fuzz will land dead center.',
+    bruno: "See that target way out there? Let's land my fuzz dead center.",
     goals: [{ metric: 'hits', op: '>=', value: 1, label: 'Bullseye hit' }],
     palette: [],
     shots: 3,
@@ -595,11 +595,11 @@ export const LEVELS: CatapultLevel[] = [
       },
     ],
     hints: [
-      "Low power barely leaves the stall, that target is way out there.",
-      'Nothing is locked this time, both power and angle are yours to tune.',
+      "Low power barely leaves the stall. That target is way out there.",
+      'Nothing is locked this time. Power and angle are yours to tune.',
       'Try Max power at 45 degrees. That sends the fuzz all the way out to the bullseye.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! Try more power, that target is further than it looks.' },
+    failHints: { outOfShots: "Out of fuzzes. That target is farther than it looks. Let's add power." },
     solution: [
       {
         id: 1,
@@ -630,7 +630,7 @@ export const LEVELS: CatapultLevel[] = [
   {
     id: 'tower',
     title: 'Timber!',
-    bruno: 'Look at that tower of blocks with a can on top! One good hit low down should send the whole thing tumbling.',
+    bruno: 'A tower of blocks with a can on top! Where should we hit it?',
     goals: [{ metric: 'knockedDown', op: '>=', value: 4, label: 'Targets knocked down' }],
     palette: [],
     shots: 2,
@@ -653,9 +653,9 @@ export const LEVELS: CatapultLevel[] = [
     hints: [
       "That soft, low toss does not even reach the tower.",
       'Aim for the middle of the stack and hit it hard. Knock it loose and the rest comes down with it.',
-      'Set power to High, angle to 45, and pick the Metal fuzz. That hard shot sends the whole tower tumbling.',
+      'Try High power, angle 45 and the Metal fuzz. That sends the whole tower tumbling.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! That soft toss will not even reach the tower, hit it hard.' },
+    failHints: { outOfShots: "Out of fuzzes. Let's hit the tower harder this time." },
     markers: [{ kind: 'icon', p: { x: 19.5, y: 4.4 }, text: TARGET_ICON }],
     solution: [
       {
@@ -712,7 +712,7 @@ export const LEVELS: CatapultLevel[] = [
       'Pick a heavy fuzz so it hits hard, then aim a fast, flat shot right at the tower.',
       'Try High power, 30 degrees and the Metal fuzz. The whole stack comes crashing down.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! Some of the tower is still above the line. Hit it harder!' },
+    failHints: { outOfShots: "Out of fuzzes! Some of the tower is still above the line. Let's hit it harder." },
     markers: [{ kind: 'hline', y: 1.5, color: 0xffc629, label: 'Nothing above this line!' }],
     solution: [
       {
@@ -742,7 +742,7 @@ export const LEVELS: CatapultLevel[] = [
   {
     id: 'chain',
     title: 'Chain reaction',
-    bruno: "Five dominoes in a row! Knock the first one and watch them all go. Every one has to end up below the line.",
+    bruno: "Five dominoes in a row! Which one should we hit to drop them all?",
     goals: [{ metric: 'aboveLine', op: '==', value: 0, label: 'Nothing left above the line' }],
     palette: [],
     shots: 2,
@@ -765,7 +765,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       'That toss lands short. The fuzz has to reach the very first domino.',
-      'Hit the FIRST domino. If you hit one in the middle, the ones behind it stay standing.',
+      'Hit the first domino. If you hit one in the middle, the ones behind it stay standing.',
       'Try Medium power at 30 degrees. That tips the first domino and the rest follow.',
     ],
     failHints: { outOfShots: 'Out of fuzzes! Some dominoes are still standing. Aim for the first one in the row.' },
@@ -900,14 +900,14 @@ export const LEVELS: CatapultLevel[] = [
   {
     id: 'dominoes',
     title: 'Domino drop',
-    bruno: 'Dominoes, then a tower! Tip them into it, or hit the tower yourself. Just get it below the line.',
+    bruno: 'Dominoes, then a tower. How many ways can we bring it down?',
     goals: [{ metric: 'aboveLine', op: '==', value: 0, label: 'Nothing left above the line' }],
     palette: [],
     shots: 3,
     line: 3.5,
     parts: [stackCatapult(STACK_PRESET), ...dominoesStack()],
     hints: [
-      'That light little toss does not do much.',
+      'A light toss. What would hit harder?',
       'Knock any domino and it pushes the rest into the tower. Or hit the tower straight on!',
       'Try a heavier fuzz first, then more power. Lots of settings bring it down.',
     ],

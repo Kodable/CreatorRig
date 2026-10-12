@@ -106,7 +106,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     id: 'jump',
     planet: 'mars',
     title: 'Crevasse jump',
-    bruno: 'Welcome to Mars! Gravity is weak here, so Kevin falls slower, jumps farther and bounces higher. But look at this HUGE crevasse!',
+    bruno: 'Welcome to Mars! Low gravity: Kevin falls slower and jumps farther. Can we clear that crevasse?',
     terrain: withRampToLip(flat(), 9, 15, 1, 8, -0.5),
     budget: 9,
     extentW: 30,
@@ -116,7 +116,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
       { metric: 'upsideDown', op: '==', value: 0, label: 'Land on the wheels' },
     ],
     hints: [
-      'On Mars the rover jumps farther than at home, but at wheel speed it still drops into this crevasse.',
+      'Wheels alone are too slow to jump this crevasse.',
       'Faster means farther. On Mars even a little fan pushes the rover hard!',
       'Two round wheels and a fan on the back fly right over.',
     ],
@@ -150,7 +150,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     id: 'rubble',
     planet: 'mars',
     title: 'Rubble field',
-    bruno: 'Rubble AND rock steps, and Kevin is in a hurry! On Mars every bump throws the rover up high.',
+    bruno: "Rubble and rock steps, and Kevin's in a hurry. On Mars every bump bounces high.",
     terrain: withStairs(withCobbles(flat(), 6, 12, 0.2, 0.6), 16, 4, 0.15, 0.6),
     budget: 10,
     extentW: 30,
@@ -162,11 +162,11 @@ export const MARS_LEVELS: VehicleLevel[] = [
     ],
     hints: [
       'Stiff round wheels bounce off the rubble and stop. Pointy wheels climb, but slowly.',
-      'Springs soak up the rubble AND the bump of every step.',
+      'Springs soak up the rubble and the bump of every step.',
       'Two round wheels on springs roll over everything, fast.',
     ],
     failHints: {
-      stuck: 'Stuck at the rubble! Which mount soaks up bumps?',
+      stuck: 'Stuck at the rubble! What soaks up bumps?',
       timeout: 'Too slow for Kevin! Try springs, or a push.',
     },
     solution: [
@@ -228,7 +228,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     id: 'sand',
     planet: 'mars',
     title: 'Soft sand',
-    bruno: 'Sand! It is soft: round and square wheels sink and slow down. Star wheels paddle through. Heavy rovers sink more.',
+    bruno: 'Soft sand! Some wheels sink, and heavy rovers sink more. Which wheels can paddle through?',
     terrain: withSlope(flat(), 12, 12 + 1 / Math.tan((15 * Math.PI) / 180), 1),
     surfaces: [sand(8, 20)],
     budget: 9,
@@ -318,7 +318,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     hints: [
       'Stiff wheels bump into a rock and stop.',
       'Springs bounce the wheels over rocks. Star wheels grip the sand.',
-      'Two star wheels on springs grip AND bounce.',
+      'Two star wheels on springs grip and bounce.',
     ],
     failHints: {
       stuck: 'Stuck at a rock! What makes wheels bounce over bumps?',
@@ -360,7 +360,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
       'Two star wheels on springs crawl through the whole garden.',
     ],
     failHints: {
-      stuck: 'Stuck! Springs bounce over rocks. Tipped over? Not so fast!',
+      stuck: "Stuck? Springs help over rocks. Tipped over? Let's go a bit slower.",
       timeout: 'Too slow! Star wheels grip sand best. A gentle push helps.',
     },
     solution: [
@@ -393,7 +393,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     id: 'flip',
     planet: 'mars',
     title: 'Topsy-turvy',
-    bruno: 'Giant cliffs with sand at the edges! The rover will tip onto its roof. Stick wheels on top too, so it can drive upside down!',
+    bruno: 'Giant cliffs! The rover will land on its roof. How can it keep driving?',
     terrain: FLIP_TERRAIN,
     surfaces: FLIP_SAND,
     budget: 12,
@@ -403,7 +403,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     timeout: LONG_TIMEOUT,
     hints: [
       'Wheels on the bottom just spin in the air when the rover lands on its roof.',
-      'Wheels on TOP of the dome touch the ground when the rover is upside down. They drive it, too!',
+      'Wheels on top of the dome touch the ground when the rover is upside down. They drive it, too!',
       'Try four round wheels: two on the bottom and two on top, like a sandwich.',
     ],
     failHints: {
@@ -450,7 +450,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     ],
     failHints: {
       stuck: 'Stuck on the canyon wall! Stick something on the back to push.',
-      fell: 'Whoa, it rolled off! Wheels at the front and the back keep it steady.',
+      fell: 'It rolled off. Wheels at the front and the back keep it steady.',
       timeout: 'Too slow for Kevin! Round wheels roll fastest.',
     },
     solution: [
@@ -486,13 +486,13 @@ export const MARS_LEVELS: VehicleLevel[] = [
     timeout: LONG_TIMEOUT,
     hints: [
       'Stiff wheels bounce off the stairs and the bumps.',
-      'Springs soak up stairs, drops AND bumps.',
+      'Springs soak up stairs, drops and bumps.',
       'Two round wheels on springs ride the whole ridge.',
     ],
     failHints: {
-      stuck: 'Stuck! Springs help with stairs and bumps. Landed on its roof? Wheels on top keep it going!',
-      fell: 'Whoa, it rolled off! Wheels at the front and the back keep it steady.',
-      timeout: 'Too slow for Kevin! Round wheels on springs are quick AND bouncy.',
+      stuck: 'Stuck? Springs help with stairs and bumps. On its roof? Wheels on top keep it going.',
+      fell: 'It rolled off. Wheels at the front and the back keep it steady.',
+      timeout: 'Too slow for Kevin! Round wheels on springs are quick and bouncy.',
     },
     solution: [
       ['wheelCircle', -45, 'spring'],
@@ -518,7 +518,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     id: 'hops',
     planet: 'mars',
     title: 'Crater hops',
-    bruno: 'Ramp, gap, ramp, gap! Mars lets you jump farther, so these gaps are extra wide. And the last one is HUGE.',
+    bruno: 'Ramp, gap, ramp, gap! The last gap is the biggest. How do we jump farther?',
     terrain: HOPS_TERRAIN,
     budget: 15,
     extentW: 84,
@@ -560,7 +560,7 @@ export const MARS_LEVELS: VehicleLevel[] = [
     id: 'marathon',
     planet: 'mars',
     title: 'Mars marathon',
-    bruno: 'The big one! Rubble, steps, a jump, dunes and rocks, all the way across Mars. And Kevin is in a hurry!',
+    bruno: "The big one! Rubble, steps, a jump, dunes and rocks across Mars, and Kevin's in a hurry.",
     terrain: MARATHON_TERRAIN,
     surfaces: MARATHON_SAND,
     rocks: MARATHON_ROCKS,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { brunoVoiceProblems } from '../../core/brunoVoice';
 import { BUILD_WIDGET, roverCoach } from './coach';
 import type { RoverCoachContext, RoverCoachStep } from './coach';
 import { vehicleSpec } from './spec';
@@ -95,7 +96,7 @@ describe('roverCoach: level 1 (wheels) walks every tap', () => {
     expect(buildCost(partsOn(level, ROUND2))).toBe(level.budget);
     const s = coach('wheels', ROUND2, { selected: 1 })!;
     expect(s.id).toBe('coins');
-    expect(s.text).toContain('Out of coins! Each part costs coins — see the coin counter.');
+    expect(s.text).toContain('Parts cost coins, and we used them all.');
     expect(s.target).toEqual({ type: 'bar', button: 'play' });
     // Four square wheels spend it too.
     const four: Stick[] = [['wheelSquare', -45], ['wheelSquare', -135], ['wheelSquare', -90], ['wheelSquare', -20]];
@@ -120,7 +121,7 @@ describe('roverCoach: level 1 (wheels) walks every tap', () => {
 describe('roverCoach: levels 2-5 wait for the first run, then point at the one new thing', () => {
   it('shape: round wheels tripped -> the NEW Star wheel (BUILD first while the drawer is closed)', () => {
     expect(coach('shape', ROUND2)).toBeNull();
-    const text = 'Round wheels trip here. Try the NEW Star wheel!';
+    const text = 'Round wheels trip here. Try the new Star wheel!';
     expect(coach('shape', ROUND2, { runs: 1 })).toEqual({ id: 'star-build', text, target: { type: 'widget', id: BUILD_WIDGET } });
     expect(coach('shape', ROUND2, { runs: 1, selected: 'rover' })).toEqual({ id: 'star', text, target: { type: 'shelf', kind: 'wheelStar' } });
     expect(coach('shape', ROUND2, { runs: 1, selected: 0 })?.id).toBe('star');
@@ -145,15 +146,15 @@ describe('roverCoach: levels 2-5 wait for the first run, then point at the one n
 
   it('weight: no weight -> a Melon on the FRONT; a weight on top (45..135 degrees) -> drag it to the front', () => {
     expect(coach('weight', ROUND2)).toBeNull();
-    const text = 'The boulder is heavy. Add a Melon on the FRONT to ram it!';
+    const text = 'The boulder is heavy. Add a Melon on the front to ram it!';
     expect(coach('weight', ROUND2, { runs: 1 })).toEqual({ id: 'melon-build', text, target: { type: 'widget', id: BUILD_WIDGET } });
     expect(coach('weight', ROUND2, { runs: 1, selected: 'rover' })).toEqual({ id: 'melon', text, target: { type: 'shelf', kind: 'watermelon' } });
     expect(coach('weight', [...ROUND2, ['watermelon', 90]], { runs: 1 })).toEqual({
       id: 'front',
-      text: 'Drag the melon to the FRONT of the rover.',
+      text: 'Drag the melon to the front of the rover.',
       target: { type: 'part', partId: 22 },
     });
-    expect(coach('weight', [...ROUND2, ['beans', 45]], { runs: 1 })?.text).toBe('Drag the beans to the FRONT of the rover.');
+    expect(coach('weight', [...ROUND2, ['beans', 45]], { runs: 1 })?.text).toBe('Drag the beans to the front of the rover.');
     expect(coach('weight', [...ROUND2, ['feather', 135]], { runs: 1 })?.id).toBe('front');
     for (const deg of [0, 40, 140, 180]) expect(coach('weight', [...ROUND2, ['watermelon', deg]], { runs: 1 }), `${deg}`).toBeNull();
     expect(coach('weight', [...ROUND2, ['watermelon', 90]], { runs: 1, passed: true })).toBeNull();
@@ -161,7 +162,7 @@ describe('roverCoach: levels 2-5 wait for the first run, then point at the one n
 
   it('power: too steep -> a Fan on the BACK', () => {
     expect(coach('power', ROUND2)).toBeNull();
-    const text = 'Too steep! Add a Fan on the BACK for a push.';
+    const text = 'Too steep! Add a Fan on the back for a push.';
     expect(coach('power', ROUND2, { runs: 2 })).toEqual({ id: 'fan-build', text, target: { type: 'widget', id: BUILD_WIDGET } });
     expect(coach('power', ROUND2, { runs: 2, selected: 0 })).toEqual({ id: 'fan', text, target: { type: 'shelf', kind: 'fan' } });
     expect(coach('power', [...ROUND2, ['stove', 180]], { runs: 1 })).toBeNull();
@@ -195,7 +196,7 @@ describe('roverCoach: scope', () => {
     }
   });
 
-  it('every step on levels 1-5 points at something on screen; coin talk only in the coins step (and the spring +1 price)', () => {
+  it('every step on levels 1-5 points at something on screen, keeps Bruno voice rules (src/core/brunoVoice.ts); coin talk only in the coins step (and the spring +1 price)', () => {
     const ids = new Set<string>();
     for (const level of LEVELS.slice(0, 5)) {
       for (const c of situations(level.id)) {
@@ -204,6 +205,7 @@ describe('roverCoach: scope', () => {
         ids.add(s.id);
         expectTargetOnScreen(c, s);
         if (/coin/i.test(s.text)) expect(['coins', 'spring'], s.text).toContain(s.id);
+        expect(brunoVoiceProblems(s.text), s.text).toEqual([]);
       }
     }
     expect([...ids].sort()).toEqual(

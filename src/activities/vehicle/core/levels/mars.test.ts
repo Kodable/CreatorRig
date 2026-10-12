@@ -53,9 +53,12 @@ describe('Mars levels', () => {
   });
 
   it('the meet-sand and meet-rocky-sand levels say their rules in Bruno\'s line', () => {
-    expect(find('sand').bruno).toMatch(/soft/);
-    expect(find('sand').bruno).toMatch(/[Ss]tar wheels paddle/);
+    // 2026-10-12 voice audit: the sand intro states the rule (soft, heavy sinks more) and asks which
+    // wheels paddle; the answer (star wheels) moved to the hint ladder.
+    expect(find('sand').bruno).toMatch(/soft/i);
+    expect(find('sand').bruno).toMatch(/paddle/);
     expect(find('sand').bruno).toMatch(/[Hh]eavy rovers sink more/);
+    expect(find('sand').hints.join(' ')).toMatch(/[Ss]tar wheels .*paddle/);
     expect(find('rocky').bruno).toMatch(/[Ss]and is soft and rocks are hard/);
   });
 

@@ -562,7 +562,7 @@ export const vehicleSpec: CourseSpec<PartKind, Metrics, Outcome, VehicleLevel> =
     barlessMetrics: ['reachedFinish'],
     lines: {
       play: 'Drive, rover, drive!',
-      pass: 'Kevin made it! What a rover!',
+      pass: 'Kevin made it. What a rover!',
       doneNotPassed: 'The rover stopped. Check the goals, then change your build.',
       freePlay: 'Build any rover you like and go exploring!',
       launch: '▶ DRIVE',

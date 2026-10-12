@@ -64,7 +64,7 @@ function wheelsCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   if (!sel) return step('drive', 'Tap DRIVE and watch it go!', DRIVE_TARGET);
   const budget = ctx.level.budget;
   if (budget !== undefined && buildCost(ctx.parts) >= budget) {
-    return step('coins', 'Out of coins! Each part costs coins — see the coin counter. Now tap DRIVE!', DRIVE_TARGET);
+    return step('coins', 'Parts cost coins, and we used them all. Now tap DRIVE!', DRIVE_TARGET);
   }
   return step('drive2', 'Now tap DRIVE!', DRIVE_TARGET);
 }
@@ -74,7 +74,7 @@ function wheelsCoach(ctx: RoverCoachContext): RoverCoachStep | null {
 /** Stone steps: round wheels trip; the star is the new part. */
 function shapeCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   if (ctx.parts.some((p) => p.kind === 'wheelStar')) return null;
-  return shelfStep(ctx, 'star', 'Round wheels trip here. Try the NEW Star wheel!', 'wheelStar');
+  return shelfStep(ctx, 'star', 'Round wheels trip here. Try the new Star wheel!', 'wheelStar');
 }
 
 /** Bumpy road: stiff wheels bounce; a spring soaks it up. Done once any part is on a spring. */
@@ -94,7 +94,7 @@ function mountCoach(ctx: RoverCoachContext): RoverCoachStep | null {
 function weightCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   const weights = ctx.parts.filter((p) => isWeight(p.kind));
   if (weights.length === 0) {
-    return shelfStep(ctx, 'melon', 'The boulder is heavy. Add a Melon on the FRONT to ram it!', 'watermelon');
+    return shelfStep(ctx, 'melon', 'The boulder is heavy. Add a Melon on the front to ram it!', 'watermelon');
   }
   const rover = ctx.parts.find((p) => p.kind === 'rover');
   if (!rover) return null;
@@ -103,13 +103,13 @@ function weightCoach(ctx: RoverCoachContext): RoverCoachStep | null {
     return deg >= 45 - 1e-6 && deg <= 135 + 1e-6;
   });
   if (!onTop) return null;
-  return step('front', `Drag the ${LABELS[onTop.kind].toLowerCase()} to the FRONT of the rover.`, { type: 'part', partId: onTop.id });
+  return step('front', `Drag the ${LABELS[onTop.kind].toLowerCase()} to the front of the rover.`, { type: 'part', partId: onTop.id });
 }
 
 /** Big hill: wheels slip; a fan on the back pushes. */
 function powerCoach(ctx: RoverCoachContext): RoverCoachStep | null {
   if (ctx.parts.some((p) => isPower(p.kind))) return null;
-  return shelfStep(ctx, 'fan', 'Too steep! Add a Fan on the BACK for a push.', 'fan');
+  return shelfStep(ctx, 'fan', 'Too steep! Add a Fan on the back for a push.', 'fan');
 }
 
 const AFTER_FIRST_RUN: Record<string, (ctx: RoverCoachContext) => RoverCoachStep | null> = {

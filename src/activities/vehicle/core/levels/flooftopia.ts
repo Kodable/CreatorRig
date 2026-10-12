@@ -21,7 +21,7 @@ export const FLOOFTOPIA_LEVELS: VehicleLevel[] = [
     // 2026-10-05 playtest review (Jon): the coach (../coach.ts) carries the taps (BUILD, a Round
     // wheel, another, DRIVE); Bruno's line just sets the scene. 2026-10-09: and welcomes the child
     // to Flooftopia, where the intros now are.
-    bruno: "Welcome to Flooftopia! Kevin's rover needs wheels. Let's add some!",
+    bruno: "Welcome to Flooftopia! Kevin's rover needs wheels. Let's add some.",
     terrain: withHill(flat(), 11, 17, 1.2),
     budget: 4,
     extentW: 30,
@@ -33,7 +33,7 @@ export const FLOOFTOPIA_LEVELS: VehicleLevel[] = [
       'Stick two round wheels on the bottom of the dome, one at the front and one at the back.',
     ],
     failHints: {
-      stuck: 'The rover is stuck. Does it have wheels touching the ground? Try one at the front AND one at the back.',
+      stuck: "Stuck! Are the wheels touching the ground? Let's try one at the front and one at the back.",
     },
     solution: [
       ['wheelCircle', -45],
@@ -88,7 +88,7 @@ export const FLOOFTOPIA_LEVELS: VehicleLevel[] = [
       'Two round wheels on springs soak up the bumps.',
     ],
     failHints: {
-      stuck: 'Did the bumps tip it over? Try putting the wheels on springs. Springs soak up bumps.',
+      stuck: 'Did the bumps tip it over? What could soak them up?',
     },
     solution: [
       ['wheelCircle', -45, 'spring'],
@@ -114,8 +114,8 @@ export const FLOOFTOPIA_LEVELS: VehicleLevel[] = [
     scenery: (terrain) => [boulderAt(terrain, 3, 14, '1.6x1.2', 'rock')],
     hints: [
       'Wheels alone just bump into the boulder and stop.',
-      'Try a feather, then beans, then a watermelon on the front of the dome. Which one shoves the boulder?',
-      'The watermelon is the heaviest. Stick it on the front, level with Kevin, and ram the boulder away.',
+      'Try a feather, then beans, then a melon on the front of the dome. Which one shoves the boulder?',
+      'The melon is the heaviest. Stick it on the front, level with Kevin, and ram the boulder away.',
     ],
     failHints: {
       stuck: 'The boulder will not budge. Ram it with something heavier on the front!',
@@ -136,7 +136,7 @@ export const FLOOFTOPIA_LEVELS: VehicleLevel[] = [
     id: 'power',
     planet: 'flooftopia',
     title: 'Big hill',
-    bruno: 'This hill is SO steep! Build your rover and try to DRIVE up.',
+    bruno: "That's a steep hill. Let's build and try to DRIVE up.",
     terrain: withHill(flat(), 10, 16, 2.5),
     budget: 8,
     extentW: 30,
@@ -144,7 +144,7 @@ export const FLOOFTOPIA_LEVELS: VehicleLevel[] = [
     introduces: unlock('power'),
     hints: [
       'Wheels slip on a hill this steep, even with more of them.',
-      'A fan, a stove or a jet pushes the rover away from where it is stuck on.',
+      'A fan, a stove or a jet can push the rover.',
       'Put a fan on the back of the dome. It pushes the rover forward, up the hill.',
     ],
     failHints: {
