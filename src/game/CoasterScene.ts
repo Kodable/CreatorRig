@@ -3,6 +3,7 @@ import { COLORS, ORIGIN_X, GROUND_Y, PANEL_TOP_Y, PPM, WORLD_W, WORLD_H, STAGE_W
 import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, EditTool } from '../core/types';
 import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
 import type { SpineGameObject } from '@esotericsoftware/spine-phaser-v4';
+import { wearBrunoSkins } from '../ui/brunoSkin';
 import type { FrameState } from '../kit/camera';
 import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
 import { FULL_FRAME, RIDE_ZOOM, frameCentrePx, parallaxOffset, rideTarget, stepCamera } from './rideCamera';
@@ -516,6 +517,7 @@ export class CoasterScene extends Phaser.Scene {
 
     try {
       const bruno = this.onUi(this.add.spine(BRUNO_SLOT.x, BRUNO_SLOT.y, 'engineer', 'floofs'));
+      wearBrunoSkins(bruno); // the hard hat lives in its own skin (src/ui/brunoSkin.ts)
       bruno.setScale(0.084); // about 66 px tall
       bruno.setDepth(DEPTH_BRUNO);
       bruno.animationState.setAnimation(0, 'engineer_idle', true);

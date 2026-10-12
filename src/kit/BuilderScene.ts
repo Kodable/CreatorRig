@@ -49,6 +49,7 @@ import type {
   WorldSpec,
 } from './types';
 import type { SpineGameObject } from '@esotericsoftware/spine-phaser-v4';
+import { wearBrunoSkins } from '../ui/brunoSkin';
 
 interface Gesture {
   /** null when the pointer went down on empty space (still tracked, so pointerup can tell a tap
@@ -840,6 +841,7 @@ export class BuilderScene extends Phaser.Scene {
 
     try {
       const bruno = this.add.spine(BRUNO_SLOT.x, BRUNO_SLOT.y, 'engineer', 'floofs');
+      wearBrunoSkins(bruno); // the hard hat lives in its own skin (src/ui/brunoSkin.ts)
       bruno.setScale(0.084); // about 66 px tall
       bruno.setDepth(DEPTH_BRUNO);
       bruno.animationState.setAnimation(0, 'engineer_idle', true);
