@@ -25,17 +25,17 @@ export const DIM_MS = 250;
 export const BRUNO_IN_MS = 550;
 export const BRUNO_OUT_MS = 300;
 /** Bruno's dialog spot, in stage px: his feet at the panel's bottom-left, and the Spine scale (the
- * rig is 782 units tall with the hat, so 0.36 is about 280 px; 2026-10-12, Gao: "make bruno even
- * bigger, have his feet cut off a little bit at the bottom"). The box (brunoDialog.ts, style.css)
- * starts right of him at x 300. */
-export const BRUNO_STAGE_X = 150;
+ * rig is 782 units tall with the hat, so 0.48 is about 375 px; 2026-10-12, Gao: "make bruno even
+ * bigger, have his feet cut off a little bit at the bottom", then "he can be even bigger"). The
+ * box (brunoDialog.ts, style.css) starts right of him at x 390. */
+export const BRUNO_STAGE_X = 195;
 /** His feet sit this far above the panel's bottom edge; negative = below it, so the frame's clip
- * cuts his feet off a little (y 700 on the park courses -> feet at y 712). */
-export const BRUNO_FEET_ABOVE_BOTTOM = -12;
-export const BRUNO_STAGE_SCALE = 0.36;
+ * cuts his feet off a little (y 700 on the park courses -> feet at y 716). */
+export const BRUNO_FEET_ABOVE_BOTTOM = -16;
+export const BRUNO_STAGE_SCALE = 0.48;
 /** Where he slides in from: his feet this far left of the panel's left edge (all of him outside
  * the panel, so the camera's clip hides him). */
-export const BRUNO_OFF_DX = -170;
+export const BRUNO_OFF_DX = -230;
 /** The panel's corner radius (both scenes draw the world panel with 12 px corners). */
 const PANEL_RADIUS = 12;
 /** Depths on the world camera: over everything the scene draws there (confetti is 4.5). */
