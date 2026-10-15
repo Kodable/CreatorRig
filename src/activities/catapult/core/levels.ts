@@ -28,10 +28,6 @@
 import { defaultProps } from './catalog';
 import type { CatapultLevel, PlacedPart } from './types';
 
-/** The 🎯 marker over a target block. 2026-10-15 (Gao: "remove the target icon on the beans, its
- * unnecessary"): the cans (the rover's can of beans) carry no marker any more; only the weight
- * level's block keeps one. */
-const TARGET_ICON = '🎯';
 
 /** A locked, position-locked block (the stack levels 12-15 are built from these). */
 function stackBlock(id: number, x: number, y: number, size = '1x1', material = 'wood'): PlacedPart {
@@ -311,7 +307,6 @@ export const LEVELS: CatapultLevel[] = [
       'Pick the heavy Metal fuzz. It hits hard enough to topple that brick block.',
     ],
     failHints: { outOfShots: "Out of fuzzes. That block needs a harder hit. Let's try a heavier fuzz." },
-    markers: [{ kind: 'icon', p: { x: 26.7, y: 1.5 }, text: TARGET_ICON }],
     solution: [
       {
         id: 1,
