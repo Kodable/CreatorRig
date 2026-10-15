@@ -438,12 +438,13 @@ describe('catapult build', () => {
     expect(world.getTransform(disc.id).position).toEqual({ x: 20, y: 5 });
   });
 
-  it('can builds a dynamic box coloured by the color prop', async () => {
+  it('can builds a dynamic 0.4 x 0.8 box drawn with the can of beans (the color prop is the fill fallback)', async () => {
     world = await createWorld({ gravity: { x: 0, y: -10 } });
     const part: PlacedPart = { id: 3, kind: 'can', x: 10, y: 3, props: { color: 'Blue' } };
     const handle = buildPart(world, part);
     expect(handle.visuals[0]!.color).toBe(0x05aeed);
     expect(handle.visuals[0]!.shape).toEqual({ kind: 'box', w: 0.4, h: 0.8 });
+    expect(handle.visuals[0]!.textureKey).toBe('can-beans');
   });
 
   describe('stringAnchor: the trigger string (product direction 2026-09-22: tied off the arm\'s ' +

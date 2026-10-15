@@ -531,6 +531,9 @@ function buildCatapult(world: PhysicsWorld, part: PlacedPart): PartHandle {
   };
 }
 
+/** The can's picture key (spec.ts's `textures`): the rover's can of beans. */
+export const CAN_TEXTURE = 'can-beans';
+
 function buildCan(world: PhysicsWorld, part: PlacedPart): PartHandle {
   const w = 0.4;
   const h = 0.8;
@@ -543,7 +546,12 @@ function buildCan(world: PhysicsWorld, part: PlacedPart): PartHandle {
     kind: part.kind,
     bodies: [{ id, role: 'can' }],
     joints: [],
-    visuals: [{ partId: part.id, body: id, shape, color, role: 'can', locked: !!part.locked, lockPosition: !!part.lockPosition }],
+    // 2026-10-15 (Gao): every can is drawn with the rover's can of beans (spec.ts's `can-beans`
+    // texture sizes it to the box's height, at its own aspect). The colour stays as the fill
+    // fallback should the picture fail to load.
+    visuals: [
+      { partId: part.id, body: id, shape, color, role: 'can', locked: !!part.locked, lockPosition: !!part.lockPosition, textureKey: CAN_TEXTURE },
+    ],
     bounds: boxBounds(part.x, part.y, w, h),
   };
 }

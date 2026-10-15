@@ -11,6 +11,7 @@ import {
   BAND_ASPECTS,
   BASE_ART,
   bandSegments,
+  CAN_TEXTURE,
   catapultPocketAtRest,
   crossbarPoseFor,
   cupCoverBox,
@@ -204,14 +205,60 @@ describe('catapultSpec: no dash, a 612 px scene', () => {
     expect(690 - catapultSpec.world.worldH * catapultSpec.world.ppm).toBe(78);
   });
 
-  it('the park picture keeps its 30 x 15 m rectangle over y 0..15 at its own 2:1 aspect (3356 x 1678 ' +
-    'px), and the sky above it is the picture\'s own flat top colour', () => {
-    const [park, ...rest] = catapultSpec.world.backgrounds!;
-    expect(rest).toEqual([]);
-    expect(park).toEqual({ url: 'bg/park.jpg', x: 15, y: 7.5, w: 30, h: 15 });
-    expect(park!.w / park!.h).toBeCloseTo(3356 / 1678, 9);
-    // park.jpg's top rows are one flat (158, 190, 249): no seam where the picture ends at y 15.
-    expect(catapultSpec.world.sky).toEqual({ top: 0x9ebef9, bottom: 0x9ebef9 });
+  it('the backdrop is the coaster\'s theme park (2026-10-15): sky, three clouds, far hills, the ' +
+    'ferris wheel and the trees, back to front, all from public/bg/coaster/', () => {
+    const bgs = catapultSpec.world.backgrounds!;
+    expect(bgs.map((b) => b.url)).toEqual([
+      'bg/coaster/sky.jpg',
+      'bg/coaster/cloud1.png',
+      'bg/coaster/cloud2.png',
+      'bg/coaster/cloud3.png',
+      'bg/coaster/catapult-far.png',
+      'bg/coaster/wheel.png',
+      'bg/coaster/catapult-mid.png',
+    ]);
+    expect(bgs.some((b) => b.url.includes('park.jpg'))).toBe(false);
+    const at = (name: string) => bgs.find((b) => b.url.endsWith(name))!;
+    // The sky fills the visible sky, ground line to the panel's top edge.
+    const sky = at('sky.jpg');
+    expect(sky.x).toBe(15);
+    expect(sky.w).toBe(30);
+    expect(sky.y - sky.h / 2).toBe(0);
+    expect(sky.y + sky.h / 2).toBe(WORLD_H - 1.5);
+    // The full-width bands keep the coaster's stage-px heights (32 px/m) and its ground line 10 px
+    // over their bottoms: the hills and trees rise from world y 0.
+    for (const [name, px] of [['catapult-far.png', 300], ['catapult-mid.png', 230]] as const) {
+      const b = at(name);
+      expect(b.w).toBe(30);
+      expect(b.h).toBeCloseTo(px / 32, 9);
+      expect(b.y - b.h / 2).toBeCloseTo(-10 / 32, 9);
+    }
+    // The wheel stands on the ground between the catapult and the near targets: its picture spans 92 px over the hub to 110 px under it, the hub 104 px up as on the
+    // coaster, so the feet (106 px under the hub) end 2 px under y 0.
+    const wheel = at('wheel.png');
+    expect(wheel.h).toBeCloseTo(202 / 32, 9);
+    expect(wheel.y + wheel.h / 2 - 92 / 32).toBeCloseTo(104 / 32, 9);
+    expect(wheel.y - wheel.h / 2 + 4 / 32).toBeCloseTo(-2 / 32, 9);
+    expect(wheel.x).toBe(10);
+    expect(wheel.alpha).toBe(0.7);
+    // The clouds float in the sky, inside the world.
+    for (const name of ['cloud1.png', 'cloud2.png', 'cloud3.png']) {
+      const c = at(name);
+      expect(c.y - c.h / 2).toBeGreaterThan(6);
+      expect(c.y + c.h / 2).toBeLessThan(WORLD_H - 1.5);
+    }
+    // The kit sky under the picture is sky.jpg's own top/bottom colours.
+    expect(catapultSpec.world.sky).toEqual({ top: 0x2869c5, bottom: 0xb8dffa });
+  });
+
+  it('the cans are the rover\'s can of beans, drawn 0.8 m tall at its own aspect on the 0.4 x 0.8 m box', () => {
+    const tex = catapultSpec.textures![CAN_TEXTURE]!;
+    expect(tex.url).toBe('parts/catapult/can-beans.png');
+    // The 267 x 534 canvas stretched to the box (1:2) and scaled: 0.8 m of the 534 px rows are the
+    // beans' 324, so the beans are 0.8 m tall and 0.8 * 267 / 324 m wide.
+    const drawnH = 0.8 * tex.scale!;
+    expect(drawnH * (324 / 534)).toBeCloseTo(0.8, 9);
+    expect(0.4 * tex.scale!).toBeCloseTo((0.8 * 267) / 324, 9);
   });
 });
 

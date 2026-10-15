@@ -8,13 +8,14 @@
 // fuzzes, each its own weight, the Donut splitting in three at the top of its arc. The machine is
 // drawn with the art lead's real exports (core/build.ts's ART_PPM block). See src/kit/types.ts for
 // the frozen CourseSpec contract this course plugs into.
-import type { CourseSpec, PlacedPart, RenderItem, ResultCard, Vec2, Widget } from '../../kit/types';
+import type { CourseSpec, PlacedPart, RenderItem, ResultCard, Vec2, Widget, WorldSpec } from '../../kit/types';
 import type { PartKind, Metrics, Outcome, CatapultLevel } from './core/types';
 import { ARM, BAND_COUNT, CATALOG, FUZZ, FUZZ_NAMES, PART_LIMIT, blockSize, defaultProps, fuzzName } from './core/catalog';
 import {
   armAngleFor,
   BAND_ASPECTS,
   bandSegments,
+  CAN_TEXTURE,
   catapultPocketAtRest,
   crossbarPoseFor,
   fireSpot,
@@ -51,9 +52,48 @@ const FOCUS_CY_ABOVE = 1.5 + riseFor(FOCUS_ZOOM);
  * 490 px viewport, + riseFor(1.6) = 1.289 m since 2026-10-07 (1.789 m; see `follow`). */
 const FOLLOW_ZOOM = 1.6;
 const FOLLOW_DY = 0.5 + riseFor(FOLLOW_ZOOM);
-/** park.jpg's own sky (158, 190, 249): the picture's top 650 of its 1678 px rows are this one flat
- * blue, so a kit sky of exactly it carries the picture on up past its top edge without a seam. */
-const PARK_SKY = 0x9ebef9;
+/** 2026-10-15 (Gao: "add the roller coaster course bg into it"): the coaster's theme-park backdrop
+ * (public/bg/coaster/, README "Theme-park backdrop"), laid out in world metres so it reads as on
+ * the coaster. Both panels are 960 stage px wide (30 m here at 32 px/m), so every layer keeps the
+ * coaster's stage-px sizes and its height over the ground line (the coaster's ground is stage y
+ * 690, its panel bottom 700; here world y 0). The catapult's copies of the far hills, the trees
+ * and the ferris wheel are 4x stage px (the coaster's are 2x) for the 3.6x build view; the trees
+ * are re-placed and the wheel is a still picture of the coaster's code-drawn one (a Pillow
+ * script, compose_catapult.py, not in the repo). Back to front: */
+const BG = 'bg/coaster/';
+/** px (stage) -> m. */
+const M = (px: number): number => px / PPM;
+/** The top of the visible sky (world y): the panel's top edge, 1.5 m of ground below y 0. */
+const SKY_TOP_Y = WORLD_H - 1.5;
+const COASTER_BACKDROP: NonNullable<WorldSpec['backgrounds']> = [
+  // The sky gradient + cloud puffs (1920 x 1244, the coaster's whole 622 px panel), over the
+  // visible sky y 0 .. 17.625 (a 9 % squash of a soft gradient: nothing to see).
+  { url: `${BG}sky.jpg`, x: 15, y: SKY_TOP_Y / 2, w: 30, h: SKY_TOP_Y },
+  // The coaster's three clouds at their start positions (stage x 300 / 720 / 860 and y 300 / 175
+  // / 420, i.e. 390 / 515 / 270 px over the ground line), half their 2x size; still (the kit has
+  // no drifting layers).
+  { url: `${BG}cloud1.png`, x: M(300 - 32), y: M(690 - 300), w: M(170), h: M(35.5) },
+  { url: `${BG}cloud2.png`, x: M(720 - 32), y: M(690 - 175), w: M(170), h: M(49) },
+  { url: `${BG}cloud3.png`, x: M(860 - 32), y: M(690 - 420), w: M(130), h: M(29.5) },
+  // Hazy hills + a tree line: the coaster's 300 px band, its ground line 10 px over its bottom.
+  { url: `${BG}catapult-far.png`, x: 15, y: M(300 / 2 - 10), w: 30, h: M(300) },
+  // The ferris wheel, standing on the ground in the open sky between the catapult (x 3.5 .. 6) and
+  // the near targets: hub 104 px (3.25 m) up as on the coaster, rim radius 84 px; the picture spans
+  // stage px -100 .. 100 across and -92 .. 110 down from the hub (the feet 2 px under the ground
+  // line). At x 10 its cars clear the 3.6x build view (which shows up to ~2.7 m right of the
+  // catapult) but for the left rim. 70 % opaque on top of the coaster's colour haze: the 1.6x
+  // follow camera makes it big right where every shot starts, and the fuzz must stay the boldest
+  // thing there.
+  { url: `${BG}wheel.png`, x: 10, y: M(104 - 9), w: M(200), h: M(202), alpha: 0.7 },
+  // The trees (the coaster's 230 px band, ground line 10 px over its bottom), re-placed at x 1,
+  // 23.6 and 29.3 m: none behind the catapult, the wheel or the near targets (only the bullseye
+  // poles at 23.5 and 28.5 cross a trunk; their discs, 4 .. 5 m up, clear the treetops).
+  { url: `${BG}catapult-mid.png`, x: 15, y: M(230 / 2 - 10), w: 30, h: M(230) },
+];
+/** sky.jpg's own top and bottom rows (40, 105, 197) / (184, 223, 250), for the kit sky under it. */
+const COASTER_SKY = { top: 0x2869c5, bottom: 0xb8dffa };
+/** The coaster's grass strip (ground.png, (44, 190, 75)) for the kit ground band's grass. */
+const COASTER_GRASS = 0x2cbe4b;
 
 /** Where the part a property value swaps in sits on the machine (world meters, centre + width),
  * for the drawer's "part flies to the machine" animation. Only the catapult part has targets. */
@@ -243,28 +283,22 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
   tuneBetweenRuns: true,
   spawn: { x: 15, y: 6 },
   // Stakeholder feedback 2026-09-22: "make the ground thicker so we can zoom in better to the
-  // catapult (it's really low on the screen)." The kit's own ground strip now draws the band (see
-  // `groundRenderItem`'s removal from sim.ts's renderItems - the ground BODY/physics is
-  // unchanged); groundStrip's colours are sampled from public/bg/park.jpg's own bottom edge
-  // (a grass green around #05-0a8f3d there) over a warm earth brown matching the old
-  // catapult-drawn ground fill (0x5a3d1e), so the thicker band reads as more of the same ground,
-  // not a different material.
+  // catapult (it's really low on the screen)." The kit's own ground strip draws the band (the
+  // ground BODY/physics is sim.ts's, unchanged): the coaster's grass green over a warm earth brown
+  // matching the old catapult-drawn ground fill (0x5a3d1e).
   //
   // 2026-10-07: the world is WORLD_H = 19.125 m tall (was 15; core/build.ts): no dash
-  // (`hud.goalsOverlay`), so the 612 px panel starts at stage y 78 and shows y -1.5 .. 17.625. The
-  // park picture keeps its 30 x 15 m rectangle over y 0 .. 15: its own 2:1 aspect (3356 x 1678 px,
-  // nothing stretched) and its horizon, trees and grass exactly where they were on screen. The
-  // 2.625 m of panel above its top edge (the 480 px panel's top at y 13.5 used to cut its top 1.5 m
-  // off) is the kit's sky set to the picture's own flat top colour (PARK_SKY), so the sky simply
-  // runs on up behind the goals and meters overlays.
+  // (`hud.goalsOverlay`), so the 612 px panel starts at stage y 78 and shows y -1.5 .. 17.625.
+  // 2026-10-15: the backdrop is the coaster's theme park (COASTER_BACKDROP above; it was the park
+  // picture public/bg/park.jpg as a 30 x 15 m rectangle).
   world: {
     worldW: 30,
     worldH: WORLD_H,
     ppm: PPM,
     groundDepth: 1.5,
-    groundStrip: { top: 0x0d8f3d, bottom: 0x5a3d1e },
-    sky: { top: PARK_SKY, bottom: PARK_SKY },
-    backgrounds: [{ url: 'bg/park.jpg', x: 15, y: 7.5, w: 30, h: 15 }],
+    groundStrip: { top: COASTER_GRASS, bottom: 0x5a3d1e },
+    sky: COASTER_SKY,
+    backgrounds: COASTER_BACKDROP,
   },
 
   roles: {
@@ -361,6 +395,11 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
     'real-gear': { url: 'parts/catapult/real-gear.png' },
     'real-cup': { url: 'parts/catapult/real-cup.png' },
     'real-lever': { url: 'parts/catapult/real-lever.png' },
+    // 2026-10-15 (Gao): the cans are the rover's can of beans (public/parts/rover/real/
+    // weight-beans.png, 267 x 324) centred on a transparent 267 x 534 canvas: the 0.4 x 0.8 m can
+    // box stretches the 1:2 canvas, so a scale of 534 / 324 draws the beans 0.8 m tall at their own
+    // aspect (0.659 m wide), centred on the box (core/build.ts's CAN_TEXTURE).
+    [CAN_TEXTURE]: { url: 'parts/catapult/can-beans.png', scale: 534 / 324 },
     // Overlay sprites (core/sim.ts): the rubber bands and the trigger string, and their hooks.
     ...bandTextures(),
     'real-hook': { url: 'parts/catapult/real-hook.png' },
