@@ -78,7 +78,9 @@ export interface PartHandle<K extends string = string> {
  * from the sim (glue ticks, wind arrows, a blast flash). World meters. */
 export type OverlayItem =
   | { kind: 'line'; a: Vec2; b: Vec2; color: number; width?: number; alpha?: number }
-  | { kind: 'dot'; p: Vec2; r: number; color: number; alpha?: number }
+  /** A filled circle of radius `r` stage px (scaled by the camera zoom), or `screen` px on screen
+   * at any zoom (counter-scaled, like a label: a dotted preview arc). */
+  | { kind: 'dot'; p: Vec2; r: number; color: number; alpha?: number; screen?: boolean }
   | { kind: 'hline'; y: number; color: number; label?: string }
   | { kind: 'flag'; p: Vec2 }
   | { kind: 'icon'; p: Vec2; text: string }
@@ -287,6 +289,10 @@ export interface CourseSim<M, O extends string> {
   updatePart?(part: PlacedPart): boolean;
   /** After a run ended: true when Play may run again on this same sim (a multi-shot course). */
   canReplay?(): boolean;
+  /** Shows the course's own shot preview again (2026-10-15, the catapult's fading dotted arc):
+   * the controller calls it once per level load, when Bruno's lesson intro has closed and the
+   * level's first build is ready, so the child sees it after the dialog, not under it. */
+  showPreview?(): void;
   readonly outcome: O;
   destroy(): void;
 }
@@ -446,6 +452,11 @@ export interface CoachContext<K extends string, L> {
   passed: boolean;
   /** How many runs were started on this level load. */
   runs: number;
+  /** What the child has done on this level load, so a step can advance on the action and stay
+   * done (2026-10-15, the catapult's coach): every property code they set (a drawer option or an
+   * in-scene widget, even to the value it already had) and 'move' once they dragged a part. Never
+   * shrinks until the next level load. Optional for hand-built test contexts (= nothing yet). */
+  changed?: string[];
 }
 
 // ---- course spec -------------------------------------------------------------------------

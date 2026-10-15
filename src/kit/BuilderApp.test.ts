@@ -543,6 +543,100 @@ describe('BuilderApp: the coach', () => {
     expect(frame(scene, hud).coach).toBeNull();
     expect(scene.coach).toBeNull();
   });
+
+  it('CoachContext.changed: each prop code the child set (once, in order) and move after a drag; a level load clears it', async () => {
+    const seen: CoachContext<K, L>[] = [];
+    const rows = [
+      { code: 'color', label: 'Color', options: [{ value: 'red', label: 'Red' }] },
+      { code: 'size', label: 'Size', options: [{ value: 'big', label: 'Big' }] },
+    ];
+    const { app, scene, hud } = boot(makeSpec(SINGLE, {
+      catalog: { box: { label: 'Box', icon: '■', descriptors: rows } },
+      coach: (ctx) => (seen.push(ctx), null),
+    }));
+    await flush();
+    frame(scene, hud);
+    expect(seen.at(-1)!.changed).toEqual([]);
+    scene.onPartTapped!(1);
+    app.setProp('color', 'red');
+    app.setProp('color', 'red'); // the same value again: still the one entry
+    frame(scene, hud);
+    expect(seen.at(-1)!.changed).toEqual(['color']);
+    scene.onPartMoved!(1, 0, 0); // no real move
+    frame(scene, hud);
+    expect(seen.at(-1)!.changed).toEqual(['color']);
+    scene.onPartMoved!(1, 1, 0);
+    app.setProp('size', 'big');
+    frame(scene, hud);
+    expect(seen.at(-1)!.changed).toEqual(['color', 'move', 'size']);
+    app.selectLevel('one');
+    await flush();
+    frame(scene, hud);
+    expect(seen.at(-1)!.changed).toEqual([]);
+  });
+
+  it("waits for Bruno's lesson intro to close: no step (and no hand) while the dialog is up", async () => {
+    let asked = 0;
+    const spec = makeSpec(SINGLE, {
+      coach: () => (asked++, { id: 'tap', text: 'Tap it', target: { type: 'part', partId: 1 } }),
+    });
+    const { scene, hud, tap } = bootWithDialog(spec);
+    await flush();
+    expect(frame(scene, hud).coach).toBeNull();
+    expect(scene.coach).toBeNull();
+    expect(asked).toBe(0);
+    await tap();
+    expect(frame(scene, hud).coach?.id).toBe('tap');
+    expect(scene.coach).toEqual({ target: { type: 'part', partId: 1 }, stepId: 'tap' });
+  });
+});
+
+describe('BuilderApp: CourseSim.showPreview', () => {
+  it("is called once per level load, after Bruno's lesson intro closes (never under it), and not again on a rebuild", async () => {
+    let calls = 0;
+    class PreviewSim extends FakeSim {
+      showPreview(): void {
+        calls++;
+      }
+    }
+    const spec = makeSpec(SINGLE, { createSim: async () => new PreviewSim() });
+    const { app, tap } = bootWithDialog(spec);
+    await flush();
+    expect(calls).toBe(0);
+    await tap();
+    expect(calls).toBe(1);
+    app.play();
+    app.stop();
+    await flush();
+    expect(calls).toBe(1);
+    app.selectLevel('one');
+    await flush();
+    expect(calls).toBe(1);
+    await tap();
+    expect(calls).toBe(2);
+  });
+
+  it('waits for the first build when the dialog closes before it is ready', async () => {
+    let calls = 0;
+    let release: (() => void) | null = null;
+    class PreviewSim extends FakeSim {
+      showPreview(): void {
+        calls++;
+      }
+    }
+    const spec = makeSpec(SINGLE, {
+      createSim: () => new Promise((r) => {
+        release = () => r(new PreviewSim());
+      }),
+    });
+    const { tap } = bootWithDialog(spec);
+    await flush();
+    await tap();
+    expect(calls).toBe(0);
+    release!();
+    await flush();
+    expect(calls).toBe(1);
+  });
 });
 
 describe('BuilderApp: HudState.unlocked', () => {

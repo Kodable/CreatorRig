@@ -106,6 +106,9 @@ export class BuilderApp<
   private runsThisLevel = 0;
   /** The coach's step this frame (`spec.coach`), or null; sent in `HudState.coach`. */
   private coach: CoachStep<K> | null = null;
+  /** `CoachContext.changed`: prop codes the child set and 'move' once they dragged a part, since
+   * the level loaded (in first-done order). */
+  private changedThisLevel: string[] = [];
   /** `HudState.unlocked`: this level's `part:<kind>` introduces entries that are in its palette.
    * Recomputed on `loadLevel` only. */
   private unlocked: K[] = [];
@@ -148,6 +151,9 @@ export class BuilderApp<
   private lessonGen = 0;
   /** The level loaded last has had its first build (the intro pan may start). */
   private levelBuilt = false;
+  /** `CourseSim.showPreview` is still owed for this level load (after the lesson intro closes and
+   * the first build is ready, whichever comes last). */
+  private previewPending = false;
 
   private readonly onVisibilityChange = (): void => {
     // A long background pause would otherwise accumulate a burst of steps.
@@ -242,6 +248,7 @@ export class BuilderApp<
     this.liveDragId = null;
     this.runsThisLevel = 0;
     this.coach = null;
+    this.changedThisLevel = [];
     this.unlocked = (level.introduces ?? [])
       .filter((e) => e.startsWith('part:'))
       .map((e) => e.slice('part:'.length) as K)
@@ -273,6 +280,7 @@ export class BuilderApp<
     }
 
     this.levelBuilt = false;
+    this.previewPending = true;
     this.hud.setLevel(level, this.spec.levels);
     this.scene.setEditable(true);
     this.scene.setMarkers(level.markers ?? []);
@@ -307,11 +315,20 @@ export class BuilderApp<
    * it when it is). */
   private afterLessonIntro(): void {
     this.hud.playGoalsIntro?.();
+    this.flushPreview();
     if (this.pendingIntro && this.levelBuilt && this.mode === 'edit') {
       const intro = this.pendingIntro;
       this.pendingIntro = null;
       this.scene.playIntro(intro.from, intro.to, intro.ms);
     }
+  }
+
+  /** Calls the owed `CourseSim.showPreview` once the lesson intro is closed and a build is ready
+   * (edit mode only: a shot already started has no use for it). */
+  private flushPreview(): void {
+    if (!this.previewPending || this.lessonOpen || !this.levelBuilt || !this.sim || this.mode !== 'edit') return;
+    this.previewPending = false;
+    this.sim.showPreview?.();
   }
 
   /** Bruno's lesson intro or a hint is on screen. */
@@ -349,6 +366,7 @@ export class BuilderApp<
     this.scene.syncTransforms(sim.snapshot());
     this.scene.setSelected(this.selectedId);
     this.levelBuilt = true;
+    this.flushPreview();
     if (this.pendingIntro && this.mode === 'edit' && !this.lessonOpen) {
       const intro = this.pendingIntro;
       this.pendingIntro = null;
@@ -602,6 +620,7 @@ export class BuilderApp<
     }
     if (pushUndo) this.pushUndo();
     part.props = { ...part.props, [code]: value };
+    this.noteChanged(code);
     this.applyTuneUpdate(part);
   }
 
@@ -686,7 +705,13 @@ export class BuilderApp<
     }
     this.selectedId = id;
     if (inEdit) this.resolveOverlap(id);
+    if (dx !== 0 || dy !== 0) this.noteChanged('move');
     this.applyTuneUpdate(part);
+  }
+
+  /** Records a coach-visible action (`CoachContext.changed`) once per level load. */
+  private noteChanged(what: string): void {
+    if (!this.changedThisLevel.includes(what)) this.changedThisLevel.push(what);
   }
 
   /** `spec.dragSnap` for the scene's drag ghost: the world-meter delta from part `id`'s stored
@@ -980,7 +1005,7 @@ export class BuilderApp<
     if (key === this.widgetKey) return;
     this.widgetKey = key;
     if (canTune && part && this.spec.widgets) {
-      // A widget without a code (the FIRE button) always shows; one that drives a not-yet-known
+      // A widget without a code (a FIRE or BUILD button) always shows; one that drives a not-yet-known
       // concept is dropped entirely, not merely disabled.
       const list: Widget[] = this.spec.widgets(part, this.parts, this.level)
         .filter((w) => !w.code || isKnown(this.known, w.code))
@@ -1084,11 +1109,12 @@ export class BuilderApp<
   }
 
   /** Asks `spec.coach` for this frame's step (edit/tune mode, and done mode for the win step;
-   * never while a run plays) and points the scene's hand at an in-scene target. The HUD draws
+   * never while a run plays, nor while Bruno's lesson intro or a hint is up: the first step pops
+   * in once the dialog closes) and points the scene's hand at an in-scene target. The HUD draws
    * the hand for shelf/drawer/bar targets and shows the text as Bruno's quick line. */
   private updateCoach(): void {
     if (!this.spec.coach) return;
-    const ask = this.canTune() || this.mode === 'done';
+    const ask = (this.canTune() || this.mode === 'done') && !this.lessonOpen;
     this.coach = ask
       ? this.spec.coach({
           level: this.level,
@@ -1097,6 +1123,7 @@ export class BuilderApp<
           mode: this.mode,
           passed: this.passed,
           runs: this.runsThisLevel,
+          changed: [...this.changedThisLevel],
         }) ?? null
       : null;
     const t = this.coach?.target;

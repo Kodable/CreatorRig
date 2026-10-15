@@ -463,25 +463,79 @@ describe('CatapultSim: overlay', () => {
     sim.destroy();
   });
 
-  it('never emits the old dotted trajectory preview by default (showPreview unset)', async () => {
+  it('the shot preview (2026-10-15): no dots when the sim is built (the kit shows it after Bruno\'s ' +
+    'intro), the dotted arc on showPreview() and on every change (updatePart), full for 0.8 s, then ' +
+    'fading out, gone by 1.5 s', async () => {
+    let now = 100;
     const cp = catapult();
     const level = makeLevel([cp], 3);
-    const sim = await createCatapultSim([cp], level);
-    expect(sim.snapshot().overlay?.some((o) => o.kind === 'dot')).toBe(false);
-    sim.play();
-    for (let i = 0; i < 60; i++) {
-      sim.step();
-      expect(sim.snapshot().overlay?.some((o) => o.kind === 'dot')).toBe(false);
-    }
+    const sim = await createCatapultSim([cp], level, () => now);
+    const cores = () => (sim.snapshot().overlay ?? []).filter((o): o is Extract<OverlayItem, { kind: 'dot' }> => o.kind === 'dot' && o.color === 0xffffff);
+    expect(cores()).toEqual([]);
+    sim.showPreview();
+    const shown = cores();
+    expect(shown.length).toBeGreaterThan(5);
+    expect(shown.every((d) => d.alpha === 0.95)).toBe(true);
+    // It starts at the release point the shot itself uses.
+    const { tip } = catapultRelease(cp);
+    expect(shown[0]!.p.x).toBeCloseTo(tip.x, 9);
+    expect(shown[0]!.p.y).toBeCloseTo(tip.y, 9);
+    now += 0.8;
+    expect(cores()[0]!.alpha).toBeCloseTo(0.95, 9);
+    now += 0.35;
+    expect(cores()[0]!.alpha).toBeCloseTo(0.95 * 0.5, 6);
+    now += 0.4;
+    expect(cores()).toEqual([]);
+    // A change shows it again, for the new settings: more power flies farther.
+    sim.updatePart({ ...cp, props: { ...cp.props, power: 'Max' } });
+    const far = cores();
+    expect(far.at(-1)!.p.x).toBeGreaterThan(shown.at(-1)!.p.x + 2);
     sim.destroy();
   });
 
-  it('emits the dotted preview when the level opts in via showPreview', async () => {
+  it('the shot preview ends where the shot really first lands, and at the first thing in the way', async () => {
+    const cp = catapult({ power: 'Medium' });
+    const sim = await createCatapultSim([cp], makeLevel([cp], 3), () => 0);
+    sim.showPreview();
+    const arc = (sim.snapshot().overlay ?? []).filter((o): o is Extract<OverlayItem, { kind: 'dot' }> => o.kind === 'dot' && o.color === 0xffffff);
+    const end = arc.at(-1)!.p;
+    // The real shot's fuzz first reaches the ground within a dot's spacing of the arc's end.
+    const range = await measureRange({ power: 'Medium' });
+    const { tip } = catapultRelease(cp);
+    expect(Math.abs(end.x - (tip.x + range))).toBeLessThan(0.6);
+    expect(end.y).toBeLessThan(0.6);
+    sim.destroy();
+
+    // A 6 m wall in front: a Medium shot's arc stops at its face, high off the ground.
+    const cp2 = catapult({ power: 'Medium' });
+    const wall: PlacedPart = { id: id(), kind: 'wall', x: 10, y: 3, props: { height: '6' } };
+    const sim2 = await createCatapultSim([cp2, wall], makeLevel([cp2, wall], 3), () => 0);
+    sim2.showPreview();
+    const arc2 = (sim2.snapshot().overlay ?? []).filter((o): o is Extract<OverlayItem, { kind: 'dot' }> => o.kind === 'dot' && o.color === 0xffffff);
+    expect(arc2.length).toBeGreaterThan(3);
+    const end2 = arc2.at(-1)!.p;
+    expect(end2.x).toBeLessThan(10);
+    expect(end2.x).toBeGreaterThan(9 - 0.6);
+    expect(end2.y).toBeGreaterThan(1);
+    sim2.destroy();
+  });
+
+  it('the shot preview never shows during a shot; between shots it waits for the next change', async () => {
+    let now = 0;
     const cp = catapult();
-    const level = { ...makeLevel([cp], 3), showPreview: true };
-    const sim = await createCatapultSim([cp], level);
-    const overlay = sim.snapshot().overlay;
-    expect(overlay?.some((o) => o.kind === 'dot')).toBe(true);
+    const sim = await createCatapultSim([cp], makeLevel([cp], 3), () => now);
+    sim.showPreview();
+    sim.play();
+    for (let i = 0; i < 30; i++) {
+      sim.step();
+      expect(sim.snapshot().overlay?.some((o) => o.kind === 'dot')).toBe(false);
+    }
+    await runUntilNotRunning(sim);
+    expect(sim.outcome).toBe('shot');
+    expect(sim.snapshot().overlay?.some((o) => o.kind === 'dot')).toBe(false);
+    now += 0.1;
+    sim.updatePart({ ...cp, props: { ...cp.props, angle: '60' } });
+    expect(sim.snapshot().overlay?.some((o) => o.kind === 'dot')).toBe(true);
     sim.destroy();
   });
 

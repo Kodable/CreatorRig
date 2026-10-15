@@ -1,5 +1,5 @@
 // Fuzz Fling: "Bruno's carnival stall." The child tunes a catapult (power, angle, fuzz, arm),
-// presses Launch, and flings fuzzes at cans, block towers and a bullseye. Units are meters, y up,
+// taps FIRE, and flings fuzzes at cans, block towers and a bullseye. Units are meters, y up,
 // ground top at y = 0, world 30 x 19.125 m (15 m until 2026-10-07: the taller world is all sky,
 // see build.ts WORLD_H), walls at x 0 and 30. See core/types.ts for the frozen
 // shapes and core/sim.ts for how a shot resolves.

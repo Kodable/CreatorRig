@@ -1,7 +1,7 @@
 // Covers `catapultSpec.partTargets`: the drawer's "part flies to the machine" animation needs at
 // least one on-screen target per property value, and that target has to sit inside the play
-// field, not off in the weeds somewhere. Also covers the two in-scene widgets left (FIRE, the
-// angle lever/dial).
+// field, not off in the weeds somewhere. Also covers the one in-scene widget left (the angle
+// lever/dial; FIRE moved to the bottom bar on 2026-10-15).
 import { describe, expect, it } from 'vitest';
 import { catapultSpec } from './spec';
 import { CATALOG, FUZZ, FUZZ_NAMES } from './core/catalog';
@@ -21,7 +21,6 @@ import {
   PIVOT_DX,
   PIVOT_DY,
   REST_ANGLE,
-  stringAnchor,
   WORLD_H,
   WORLD_W,
 } from './core/build';
@@ -96,52 +95,28 @@ describe('catapultSpec.partTargets', () => {
   });
 });
 
-// Product direction 2026-09-22: the PULL ring is gone. Two in-scene widgets remain - a plain
-// FIRE tap button and the angle lever's drag handle - everything else tunes from the drawer.
+// Product direction 2026-09-22: the PULL ring is gone. 2026-10-15 (Gao): the in-scene FIRE tap
+// button is gone too - FIRE is the bottom bar's yellow button - so the angle lever's drag handle is
+// the only in-scene widget; everything else tunes from the drawer.
 describe('catapultSpec.widgets', () => {
   it('returns [] for a non-catapult part', () => {
     const shelf: PlacedPart = { id: 2, kind: 'shelf', x: 5, y: 0, props: { length: '2' } };
     expect(catapultSpec.widgets!(shelf, [], {} as never)).toEqual([]);
   });
 
-  it('returns exactly two widgets: FIRE (tap) and angle (dial) - no pull widget any more', () => {
-    const part = catapultPart(15, 0);
-    const widgets = catapultSpec.widgets!(part, [], {} as never);
-    expect(widgets).toHaveLength(2);
-    expect(widgets.some((w) => w.kind === 'pull')).toBe(false);
-  });
-
-  it('FIRE: a tap widget with action play, at fireSpot(part) - just right of the string - for ' +
-    'both arms', () => {
+  it('returns exactly one widget, the angle dial: no in-scene FIRE (no play action), no pull widget', () => {
     for (const arm of ['Short', 'Long']) {
-      const part = catapultPart(15, 0, arm);
-      const fire = catapultSpec.widgets!(part, [], {} as never).find((w) => w.id === 'fire')!;
-      expect(fire.kind).toBe('tap');
-      if (fire.kind !== 'tap') continue;
-      expect(fire.action).toBe('play');
-      const spot = fireSpot(part);
-      expect(fire.at.x).toBeCloseTo(spot.x, 9);
-      expect(fire.at.y).toBeCloseTo(spot.y, 9);
-      expect(fire.icon).toBe('✂️');
-      expect(fire.label).toBe('FIRE');
-      expect(fire.color).toBe(0x61bb46);
-      expect(fire.size).toBe(72);
+      const widgets = catapultSpec.widgets!(catapultPart(15, 0, arm), [], {} as never);
+      expect(widgets.map((w) => w.id)).toEqual(['angle']);
+      expect(widgets.some((w) => w.kind === 'pull' || w.action === 'play' || w.id === 'fire')).toBe(false);
     }
   });
 
-  it('FIRE: clear of the string (a small gap to its left) and of the cart\'s base (a small gap ' +
-    'before its left edge, part.x - 0.8) at zoom 3.6, for both arms', () => {
-    const zoom = 3.6;
-    const ppm = 32;
-    for (const arm of ['Short', 'Long']) {
-      const part = catapultPart(15, 0, arm);
-      const fire = catapultSpec.widgets!(part, [], {} as never).find((w) => w.id === 'fire')!;
-      if (fire.kind !== 'tap') continue;
-      const { a } = stringAnchor(part);
-      const buttonHalfW = fire.size! / (ppm * zoom) / 2;
-      expect(fire.at.x - buttonHalfW).toBeGreaterThan(a.x); // clear of the string, small gap
-      expect(fire.at.x + buttonHalfW).toBeLessThan(part.x - 0.8); // clear of the cart's base
-    }
+  it('FIRE is the bottom bar\'s yellow button: it reads FIRE for the first shot and between shots', () => {
+    expect(catapultSpec.hud.lines.launch).toBe('▶ FIRE');
+    expect(catapultSpec.hud.lines.playAgain).toBe('▶ FIRE');
+    expect(catapultSpec.hud.playInBar).not.toBe(false);
+    expect(catapultSpec.hud.lines.shotDone).toContain('FIRE');
   });
 
   it('angle: a dial widget with code angle, radiusM = LEVER_LENGTH, arc from armAngleFor(15) to ' +
@@ -305,7 +280,7 @@ describe('catapultSpec.focusFrame: the machine framed left of the drawer', () =>
   it('the uncovered view (the 960 x 622 px viewport at 32 px/m, minus the open drawer\'s 340 px on the ' +
     'right) holds the whole machine - the arm, cup and base pictures with >= 0.1 m to spare (whole ' +
     'boxes, transparent corners included) - and the loaded Metal fuzz\'s body, the lever knob at ' +
-    'every angle and the FIRE button with >= 0.3 m, the lever\'s pad with >= 0.1 m, for both arms', () => {
+    'every angle and the snip spot (where FIRE was) with >= 0.3 m, the lever\'s pad with >= 0.1 m, for both arms', () => {
       const zoom = 3.6;
       const viewW = 960 / 32 / zoom;
       // The 612 px panel (WORLD_H * 32) plus the kit's 10 px earth margin (490 before 2026-10-07).
@@ -345,9 +320,9 @@ describe('catapultSpec.focusFrame: the machine framed left of the drawer', () =>
           for (const p of boxCorners(pos, angle, LEVER_ART)) inside(p, `lever ${deg}`, 0.1);
         }
 
-        // The FIRE button itself; its caption draws a little further into the ground band below,
-        // to about y - 0.34 - still over 0.25 m above the view's bottom edge.
-        inside(fireSpot(part), 'FIRE', 0.3);
+        // The snip burst's spot (the old in-scene FIRE button's, 2026-10-15: FIRE is on the bar);
+        // the old caption line, about y - 0.34, still over 0.25 m above the view's bottom edge.
+        inside(fireSpot(part), 'snip', 0.3);
         expect(part.y - 0.34).toBeGreaterThan(frame.cy - viewH / 2 + 0.25);
       }
   });

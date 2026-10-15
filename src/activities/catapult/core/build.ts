@@ -321,10 +321,10 @@ export const FIRE_DX = 0.375;
  * its bowl's edge dips about 0.04 m behind the button's top-left rim (the button draws on top). */
 export const FIRE_DY = 0.15;
 
-/** Where the FIRE button sits, and - once a shot fires - where the snip burst appears in its
- * place (stakeholder feedback 2026-09-22: "the fire button should be next to the string to be
- * cut"). Depends on the arm prop via `stringAnchor`, so spec.ts's widget and sim.ts's cut effect
- * always agree on one geometry. */
+/** Where the snip burst appears once a shot fires, just right of the string's tie-down point.
+ * Until 2026-10-15 the in-scene FIRE button sat here too (stakeholder feedback 2026-09-22: "the
+ * fire button should be next to the string to be cut"); FIRE is the bottom bar's button now.
+ * Depends on the arm prop via `stringAnchor`. */
 export function fireSpot(part: PlacedPart): Vec2 {
   const { a } = stringAnchor(part);
   return { x: a.x + FIRE_DX, y: part.y + FIRE_DY };

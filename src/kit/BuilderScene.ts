@@ -1634,7 +1634,7 @@ export class BuilderScene extends Phaser.Scene {
         case 'dot': {
           const p = this.view.toPx(item.p);
           g.fillStyle(item.color, item.alpha ?? 1);
-          g.fillCircle(p.x, p.y, item.r);
+          g.fillCircle(p.x, p.y, item.screen ? item.r * this.pxScale : item.r);
           break;
         }
         case 'hline': {

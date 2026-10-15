@@ -36,10 +36,13 @@ import type {
   Vec2,
 } from './types';
 import { createWorld, FIXED_DT, FIXED_SUBSTEPS } from '../../../physics';
+import { dotsAlong, flightPath, previewAlpha, previewOverlay } from './preview';
 import type { PhysicsWorld, Transform } from '../../../physics/types';
 
 /** Ticks the pre-roll runs before a shot may be fired, so cans settle onto their shelves. */
 export const SETTLE_TICKS = 60;
+/** The world's gravity (m/s^2, y up); the shot preview flies under the same pull. */
+export const GRAVITY_Y = -10;
 /** Clamp on the arm's rest-to-release swing time (seconds); a very fast/slow implied speed from
  * REST_ANGLE, the release angle and the arm's own speed gets pulled back into this range. */
 export const MIN_SWING_TIME = 0.12;
@@ -184,11 +187,18 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
    * draws the limp lower piece + a brief snip burst instead of the tied string (product direction
    * 2026-09-22: FIRE snips the string, the rubber bands do the flinging). */
   private stringCut = false;
+  /** The shot preview (preview.ts): its dots for the current settings, and when it was last shown
+   * (`clock` seconds; -Infinity = not since the last shot). Cosmetic only. */
+  private previewDots: Vec2[] = [];
+  private previewShownAt = -Infinity;
 
   constructor(
     private readonly world: PhysicsWorld,
     private readonly level: CatapultLevel,
     private readonly parts: PlacedPart[],
+    /** Seconds, for the preview's fade only (never the physics): the page clock by default, a
+     * fake one in tests. */
+    private readonly clock: () => number = () => performance.now() / 1000,
   ) {
     this.shotsLeftInternal = level.shots > 0 ? level.shots : Infinity;
 
@@ -266,8 +276,55 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     // is tied again regardless of whatever state it was in before (only edit/done mode calls this,
     // never mid-swing).
     this.stringCut = false;
+    // Every change that moves the shot (power, angle - each notch of a live lever drag - fuzz,
+    // arm, a drag of the catapult) lands here: show where it flies now.
+    this.showPreview();
 
     return true;
+  }
+
+  /** `CourseSim.showPreview`: computes the dotted arc for the current settings and shows it from
+   * now (full for PREVIEW_HOLD, then fading). Called by `updatePart` and by the kit once Bruno's
+   * lesson intro has closed on a level load. Not during a shot. */
+  showPreview(): void {
+    if (this.currentOutcome === 'running') return;
+    const { tip, v } = catapultRelease(this.catapultPart);
+    this.previewDots = dotsAlong(flightPath(tip, v, GRAVITY_Y, (a, b) => this.castFuzz(a, b)));
+    this.previewShownAt = this.clock();
+  }
+
+  /** First hit of the loaded fuzz moving a -> b against this world's colliders (0..1 of the way),
+   * or null: three rays, its centre and both sides (+/- its radius across the motion), so a
+   * grazing touch counts. The catapult's own bodies never stop it. */
+  private castFuzz(a: Vec2, b: Vec2): number | null {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) return null;
+    const r = fuzzSpec(this.catapultPart.props).r;
+    const n = { x: -dy / len, y: dx / len };
+    let best: number | null = null;
+    for (const off of [0, r, -r]) {
+      const f = this.castPastCatapult({ x: a.x + n.x * off, y: a.y + n.y * off }, { x: dx, y: dy });
+      if (f !== null && (best === null || f < best)) best = f;
+    }
+    return best;
+  }
+
+  /** `world.castRay` that looks through the catapult's own colliders (the arm, the base). */
+  private castPastCatapult(origin: Vec2, tr: Vec2): number | null {
+    const own = new Set(this.catapultHandle.bodies.map((b) => b.id));
+    let from = 0;
+    for (let i = 0; i < 4 && from < 1; i++) {
+      const o = { x: origin.x + tr.x * from, y: origin.y + tr.y * from };
+      const rest = 1 - from;
+      const hit = this.world.castRay(o, { x: tr.x * rest, y: tr.y * rest });
+      if (!hit) return null;
+      const f = from + hit.fraction * rest;
+      if (!own.has(hit.body)) return f;
+      from = f + 1e-3;
+    }
+    return null;
   }
 
   /** Rebuilds the kinematic arm at REST with a freshly loaded fuzz (its gear and cup cover ride
@@ -316,6 +373,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     this.armAngle = REST_ANGLE;
     this.released = false;
     this.world.setAngularVelocity(this.armId, -this.omegaAbs);
+    this.previewShownAt = -Infinity; // the arc is for planning, never shown over the flight
 
     this.swinging = true;
     this.currentOutcome = 'running';
@@ -383,6 +441,10 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     for (const id of this.world.bodies()) transforms.set(id, this.world.getTransform(id));
 
     const overlay: OverlayItem[] = [];
+    if (this.currentOutcome !== 'running') {
+      // The shot preview first, under everything else in the overlay.
+      overlay.push(...previewOverlay(this.previewDots, previewAlpha(this.clock() - this.previewShownAt)));
+    }
     if (this.currentOutcome === 'running' && this.activeFuzz) {
       const t = transforms.get(this.activeFuzz.id);
       if (t) {
@@ -398,9 +460,6 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
       }
     }
     // The loaded fuzz's name is shown by the fuzz shelf widget (spec.ts), not by a label here.
-    if (this.level.showPreview && this.currentOutcome !== 'running') {
-      overlay.push(...this.trajectoryOverlay());
-    }
     overlay.push(...this.burstOverlay());
     overlay.push(...this.bandOverlay());
     overlay.push(...this.stringOverlay());
@@ -790,9 +849,8 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     // The string is always cut at the very start of a shot (in the same `play()` call that
     // resets `shotElapsed` to 0), so `shotElapsed` doubles as the snip burst's own age.
     if (this.shotElapsed < 0.6) {
-      // Right where FIRE just was (stakeholder feedback 2026-09-22): the button and the string's
-      // tie-down/cut point share the same spot (`fireSpot`), so the child sees the snip exactly
-      // where they tapped instead of somewhere else on the machine.
+      // By the string's tie-down/cut point (`fireSpot`; the in-scene FIRE button sat there until
+      // 2026-10-15, FIRE is the bottom bar's button now), so the snip shows where the cut is.
       items.push(this.snipSprite(fireSpot(this.catapultPart), this.shotElapsed));
     }
     return items;
@@ -866,17 +924,6 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     }
   }
 
-  private trajectoryOverlay(): OverlayItem[] {
-    const { tip, v } = catapultRelease(this.catapultPart);
-    const dots: OverlayItem[] = [];
-    for (let t = 0.1; t <= 4 + 1e-9; t += 0.12) {
-      const p: Vec2 = { x: tip.x + v.x * t, y: tip.y + v.y * t - 5 * t * t };
-      if (p.y < 0 || p.x > 30) break;
-      dots.push({ kind: 'dot', p, r: 3, color: 0xffffff, alpha: 0.6 });
-    }
-    return dots;
-  }
-
   private rotatedBoxBounds(t: Transform, info: ShapeInfo): { x: number; y: number; w: number; h: number } {
     const c = Math.cos(t.angle);
     const s = Math.sin(t.angle);
@@ -912,9 +959,9 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   }
 }
 
-export async function createCatapultSim(parts: PlacedPart[], level: CatapultLevel): Promise<CatapultSim> {
-  const world = await createWorld({ gravity: { x: 0, y: -10 } });
-  const sim = new CatapultSim(world, level, parts);
+export async function createCatapultSim(parts: PlacedPart[], level: CatapultLevel, clock?: () => number): Promise<CatapultSim> {
+  const world = await createWorld({ gravity: { x: 0, y: GRAVITY_Y } });
+  const sim = new CatapultSim(world, level, parts, clock);
   sim.settle();
   return sim;
 }

@@ -1,8 +1,11 @@
 // Catapult course spec: the child sets power (rubber bands), the fuzz and the arm length in the
-// properties drawer, drags the angle lever on the machine itself, then taps the in-scene FIRE
-// button to snip the trigger string and launch within a shot budget, knocking down cans and block
-// towers, sometimes chasing a bullseye. Product direction 2026-09-22: the PULL ring is gone - FIRE
-// is a plain button, angle is a lever dragged on the machine, power is visible rubber bands.
+// properties drawer, drags the angle lever on the machine itself, then taps FIRE (the bottom
+// bar's yellow button) to snip the trigger string and launch within a shot budget, knocking down
+// cans and block towers, sometimes chasing a bullseye. Product direction 2026-09-22: the PULL ring
+// is gone - FIRE is a plain button, angle is a lever dragged on the machine, power is visible
+// rubber bands. 2026-10-15 (Gao: "remove the fire button from in-world, and put fire on the yellow
+// button at the bottom"): the in-scene FIRE button is gone; the bar's Play button reads FIRE and
+// fires each shot (`hud.lines.launch` / `playAgain`). Intro levels have a coach (coach.ts).
 // Huddle 2026-09-22: line levels ask for nothing left above a line, and the camera stays on the
 // collapse. Stakeholder direction 2026-10-01: weight and shot type merge into one Fuzz row - five
 // fuzzes, each its own weight, the Donut splitting in three at the top of its arc. The machine is
@@ -18,7 +21,6 @@ import {
   CAN_TEXTURE,
   catapultPocketAtRest,
   crossbarPoseFor,
-  fireSpot,
   LEVER_LENGTH,
   PIVOT_DX,
   PIVOT_DY,
@@ -27,6 +29,7 @@ import {
 } from './core/build';
 import { createCatapultSim } from './core/sim';
 import { LEVELS } from './core/levels';
+import { catapultCoach } from './coach';
 
 /** Stage px per world meter (`world.ppm`). */
 const PPM = 32;
@@ -208,9 +211,10 @@ function placedAboveLine(parts: PlacedPart<PartKind>[], level: CatapultLevel): n
   }).length;
 }
 
-/** The two in-scene widgets left (product direction 2026-09-22): a plain FIRE button (a string
- * ties the arm down; FIRE snips it) and the angle lever's drag handle. Power (rubber bands), the
- * fuzz and the arm are set from the properties drawer instead. */
+/** The one in-scene widget left: the angle lever's drag handle. Power (rubber bands), the fuzz and
+ * the arm are set from the properties drawer; FIRE is the bottom bar's yellow button since
+ * 2026-10-15 (it was an in-scene tap button by the trigger string, `action: 'play'`; the string's
+ * snip burst still plays there, core/build.ts `fireSpot`). */
 function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
   if (part.kind !== 'catapult') return [];
   const { x, y } = part;
@@ -218,21 +222,6 @@ function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
   const angleOptions = CATALOG.catapult.descriptors.find((d) => d.code === 'angle')!.options;
 
   return [
-    {
-      kind: 'tap',
-      id: 'fire',
-      action: 'play',
-      // Stakeholder feedback 2026-09-22: "the fire button should be next to the string to be
-      // cut". `fireSpot` (build.ts) sits just right of the string's new tie-down point (the arm's
-      // underside, near the tip - see stringAnchor), between the string and the cart, computed
-      // from this part's own arm so it moves with the Short/Long chip. See the final report for
-      // the fit check against the string, the cart and the arm above it, for both arms.
-      at: fireSpot(part),
-      size: 72,
-      icon: '✂️',
-      label: 'FIRE',
-      color: 0x61bb46,
-    },
     {
       kind: 'dial',
       id: 'angle',
@@ -340,7 +329,8 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
   //  - top: the lever's pad at 15 degrees, y + 3.38 (the knob itself, LEVER_LENGTH out, tops out at
   //    y + 3.05; its 72 px handle reaches about y + 3.36)
   //  - bottom: the FIRE button's caption (~16 px under the button, in the ground band), about
-  //    y - 0.34 (an estimate: the caption's own text height)
+  //    y - 0.34 (an estimate: the caption's own text height). 2026-10-15: FIRE moved to the bottom
+  //    bar; the frame stays as fitted (the snip burst still plays at that spot).
   // Horizontal span 5.05 m of the 5.382 m, so the old 0.3 m margin all round no longer fits at 3.6
   // (that would take zoom 3.4); the picture edges get about 0.16 m instead, the parts the child
   // touches far more: cx = x + 0.7 leaves (x - 3.31) - (x + 0.7 - 4.167) = 0.16 m left of the Long
@@ -374,6 +364,9 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
       : null,
 
   widgets: catapultWidgets,
+
+  // Tap tutorials on the five intro levels (coach.ts): tap the catapult, the new control, FIRE.
+  coach: catapultCoach,
 
   partTargets: catapultPartTargets,
 
@@ -523,10 +516,12 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
       pass: 'It worked. Good plan!',
       doneNotPassed: 'The fuzz landed. Now check the goals.',
       freePlay: 'Fling fuzzes at anything you like!',
-      launch: '▶ Start experiment',
-      playAgain: '▶ Run it again',
+      // 2026-10-15: FIRE is the bar's yellow button: one tap = one shot, from the first shot
+      // (edit mode) and again between shots (done mode while shots are left, `canReplay`).
+      launch: '▶ FIRE',
+      playAgain: '▶ FIRE',
       reset: '↺ Reset',
-      shotDone: 'Not yet! Change something and launch again.',
+      shotDone: 'Not yet! Change something and tap FIRE again.',
       refused: "That won't fit there. Let's try another spot.",
       locked: 'That one is bolted down for this experiment!',
     },

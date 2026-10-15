@@ -53,9 +53,6 @@ export interface CatapultLevel extends Level<PartKind, Metrics, Outcome> {
   /** Other catapult tunings (prop overrides onto `solution`'s catapult) that each pass on their
    * own, for lenient levels where many settings work. Proven by levels.test.ts. */
   altSolutions?: Record<string, string>[];
-  /** Unused escape hatch: when true, `snapshot().overlay` also emits the old dotted trajectory
-   * preview (edit/done mode only). Default off - the stakeholder asked for the dots gone. */
-  showPreview?: boolean;
   /** World y of a "nothing may stay above this" line (huddle 2026-09-22: once there are real
    * structures, knock them below the line any way you like). Drives the `aboveLine` metric; the
    * level draws it with an 'hline' marker. */
