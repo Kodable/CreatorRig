@@ -4,7 +4,7 @@ import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, Edit
 import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
 import { OPEN_RULES, canGrab, clearedPoints, dragTarget, samePoints, type EditRules } from '../core/editRules';
 import { dragHandPose, tapHandFrame } from '../core/coach';
-import { airCounterText, goalWords, longestStretch, type AirPreview, type AirStretch } from '../core/airPreview';
+import { airCounterText, longestStretch, type AirPreview, type AirStretch } from '../core/airPreview';
 import { BrunoStage } from '../ui/brunoStage';
 import type { FrameState } from '../kit/camera';
 import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
@@ -79,7 +79,7 @@ export type SceneCoach = { kind: 'drag'; index: number; risePx: number } | { kin
    under the longest one (green once it meets the goal). The ride, every level: while the fuzz is
    airborne (seat g under 0.3) it eases up off the rail with a soft shadow left on the rail and a
    trail of sparkles; on levels with an air time goal a counter over it counts the ride's air time
-   up and pops the goal in words ("1 second!") the moment it is met. Cosmetic: the sim and the
+   up and pops (gold, a sparkle burst) the moment the goal is met. Cosmetic: the sim and the
    metrics never see any of it. */
 const AIR_GLOW = 0xffffff;       // the soft halo under the floaty stretch
 const AIR_EDGE = 0x1f6fc2;       // the floaty stretch's rail: a blue edge...
@@ -100,7 +100,7 @@ const LIFT_MAX_PX = 24;
 /** The counter waits this long after the float ends, then fades (ms). */
 const COUNTER_HOLD_MS = 700;
 const COUNTER_FADE_MS = 250;
-/** The goal words ("1 second!") stay up this long after the goal is met (ms). */
+/** The counter stays gold this long after the goal is met (ms). */
 const GOAL_POP_HOLD_MS = 1300;
 
 // world panel: a single rounded sky/ground panel, x 32..992, y 78..700 (2026-10-07: was 210..700;
@@ -958,8 +958,8 @@ export class CoasterScene extends Phaser.Scene {
     }
   }
 
-  /** The goal met mid-ride: the counter says it in words, grows and settles, and a little burst of
-   * sparkles goes off around the fuzz. */
+  /** The goal met mid-ride: the counter (still the time) grows and settles in gold, and a little
+   * burst of sparkles goes off around the fuzz. */
   private popAirGoal(): void {
     this.goalPopAt = this.nowMs;
     this.counterSeenAt = this.nowMs;
@@ -972,8 +972,8 @@ export class CoasterScene extends Phaser.Scene {
 
   /**
    * The float counter over the fuzz (levels with an air time goal): shown while floating and for a
-   * beat after, counting the ride's air time in tenths; the goal words while the pop holds; then it
-   * fades. White on navy while it counts, gold for the goal words, green once the goal is met.
+   * beat after, counting the ride's air time in tenths; then it fades. White on navy while it counts,
+   * gold while the goal pop holds, green once the goal is met.
    */
   private updateAirCounter(): void {
     const c = this.airCounter;
@@ -989,7 +989,7 @@ export class CoasterScene extends Phaser.Scene {
       c.setVisible(false);
       return;
     }
-    const text = airCounterText(this.rideAir, this.airGoal, popping);
+    const text = airCounterText(this.rideAir);
     if (c.text !== text) c.setText(text);
     const met = this.rideAir >= this.airGoal - 1e-9;
     c.setColor(popping ? '#ffd23d' : met ? '#b8f59a' : '#ffffff');

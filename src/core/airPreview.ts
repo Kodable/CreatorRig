@@ -85,15 +85,9 @@ export function longestStretch(stretches: readonly AirStretch[]): AirStretch | n
   return best;
 }
 
-/** The float counter's text: tenths of a second while it counts ("0.4 s"), the goal in words the
- * moment it is reached ("Half a second!", "1 second!"). */
-export function airCounterText(air: number, goal: number | null, reachedNow: boolean): string {
-  if (reachedNow && goal !== null) return goalWords(goal);
+/** The float counter's text: the ride's air time in tenths of a second ("0.4 s"). Only the time,
+ * also the moment the goal is met (2026-10-15, Gao: "the half a second text is unnecessary, just
+ * show the time"; the scene still pops and colours the number then). */
+export function airCounterText(air: number): string {
   return `${(Math.floor(air * 10 + 1e-6) / 10).toFixed(1)} s`;
-}
-
-export function goalWords(goal: number): string {
-  if (Math.abs(goal - 0.5) < 1e-9) return 'Half a second!';
-  if (Math.abs(goal - 1) < 1e-9) return '1 second!';
-  return `${goal} seconds!`;
 }

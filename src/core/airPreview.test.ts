@@ -108,10 +108,10 @@ describe('air time preview (2026-10-15)', () => {
   });
 
   it('the float counter counts in tenths and says the goal in words when it is reached', () => {
-    expect(airCounterText(0.43, 0.5, false)).toBe('0.4 s');
-    expect(airCounterText(0.8, 1, false)).toBe('0.8 s');
-    expect(airCounterText(0.5, 0.5, true)).toBe('Half a second!');
-    expect(airCounterText(1.01, 1, true)).toBe('1 second!');
+    expect(airCounterText(0.43)).toBe('0.4 s');
+    expect(airCounterText(0.8)).toBe('0.8 s');
+    expect(airCounterText(0.5)).toBe('0.5 s'); // the goal moment shows the time too, no words
+    expect(airCounterText(1.01)).toBe('1.0 s');
   });
 
   it('kids see "air time", never "hang time"', () => {
