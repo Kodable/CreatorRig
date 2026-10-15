@@ -4,8 +4,6 @@ import {
   flightPath,
   PREVIEW_CORE_R,
   PREVIEW_DT,
-  PREVIEW_FADE,
-  PREVIEW_HOLD,
   PREVIEW_MAX_T,
   PREVIEW_RIM_R,
   PREVIEW_SPACING,
@@ -86,15 +84,10 @@ describe('the shot preview: dots', () => {
 });
 
 describe('the shot preview: the fade', () => {
-  it('full for PREVIEW_HOLD (~0.8 s), then linear to nothing over PREVIEW_FADE (~0.7 s); nothing before it is shown', () => {
-    expect(PREVIEW_HOLD).toBeCloseTo(0.8, 9);
-    expect(PREVIEW_FADE).toBeGreaterThanOrEqual(0.6);
-    expect(PREVIEW_FADE).toBeLessThanOrEqual(0.8);
+  it('full strength from the moment it is shown until FIRE hides it; nothing before it is shown (2026-10-15: no fade)', () => {
     expect(previewAlpha(0)).toBe(1);
-    expect(previewAlpha(PREVIEW_HOLD)).toBe(1);
-    expect(previewAlpha(PREVIEW_HOLD + PREVIEW_FADE / 2)).toBeCloseTo(0.5, 9);
-    expect(previewAlpha(PREVIEW_HOLD + PREVIEW_FADE)).toBe(0);
-    expect(previewAlpha(10)).toBe(0);
+    expect(previewAlpha(1.5)).toBe(1);
+    expect(previewAlpha(600)).toBe(1);
     expect(previewAlpha(-1)).toBe(0);
     expect(previewAlpha(Infinity)).toBe(0);
     expect(previewAlpha(NaN)).toBe(0);

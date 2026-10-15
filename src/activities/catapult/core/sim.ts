@@ -284,7 +284,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   }
 
   /** `CourseSim.showPreview`: computes the dotted arc for the current settings and shows it from
-   * now (full for PREVIEW_HOLD, then fading). Called by `updatePart` and by the kit once Bruno's
+   * now until FIRE. Called by `updatePart` and by the kit once Bruno's
    * lesson intro has closed on a level load. Not during a shot. */
   showPreview(): void {
     if (this.currentOutcome === 'running') return;
@@ -921,6 +921,8 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
       // 'cleared'/'outOfShots' leave the arm resting where it stopped, string cut, run over.
       this.reloadArm();
       this.stringCut = false;
+      // The arc for the next shot, from the settled world (it stays until FIRE).
+      this.showPreview();
     }
   }
 

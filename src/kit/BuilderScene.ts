@@ -586,7 +586,9 @@ export class BuilderScene extends Phaser.Scene {
     this.createPanel(initialLook);
     this.redrawBackgrounds(initialLook.backgrounds);
     this.drawnLook = initialLook;
-    if (this.wide) this.createCornerCaps();
+    // Every course (2026-10-15): a picture backdrop (the catapult's coaster sky) covers the sky's
+    // own rounded corners, and the build camera zooms, so the caps round the viewport itself.
+    this.createCornerCaps();
 
     this.itemsGfx = this.onWorld(this.add.graphics());
     this.itemsGfx.setDepth(DEPTH_ITEMS);
@@ -789,11 +791,11 @@ export class BuilderScene extends Phaser.Scene {
     this.redrawBackgrounds(resolved.backgrounds);
   }
 
-  /** Wide worlds only: the world camera scrolls, so the panel's rounded corners (drawn into the
-   * sky/ground graphics at world x 0 and worldW) would scroll away. Four navy caps on the UI
-   * camera (the canvas background colour) round the 960 px viewport itself instead, with the same
-   * per-row insets the sky uses, so at either end of the world they coincide with the drawn
-   * corners. Never created for a single-screen world (its picture stays exactly as before). */
+  /** The panel's rounded corners: four navy caps on the UI camera (the canvas background colour)
+   * round the 960 px viewport itself, with the same per-row insets the sky uses. First for wide
+   * worlds only (the world camera scrolls the drawn corners away); since 2026-10-15 for every
+   * course, because a picture backdrop covers the sky's own corners (Gao: "the rounded top
+   * corners of the game view is not rounded anymore") and zoomed build views move them. */
   private createCornerCaps(): void {
     const caps = this.onUi(this.add.graphics());
     caps.setDepth(DEPTH_SKY);

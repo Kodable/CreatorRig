@@ -2,18 +2,15 @@
 // shows the trajectory" ... "i want the preview"; this overrides the 2026-09-16 "no guideline arc"
 // note): a dotted arc of where the fuzz will fly from the current settings, from the cup's release
 // point to the first thing it would touch (a can, a block, a shelf, a wall, the ground). It shows
-// for PREVIEW_HOLD seconds after each change that moves the shot (and once on level load, after
-// Bruno's intro), then fades out over PREVIEW_FADE seconds, so it hints without doing the
-// thinking. Pure: the sim hands in the release point and velocity (build.ts `catapultRelease`,
+// after each change that moves the shot, once on level load (after Bruno's intro) and again
+// between shots, and stays at full strength until FIRE (2026-10-15, Gao: "make the dotted line not
+// fade out until fired"; it first faded after 1.5 s). Pure: the sim hands in the release point and velocity (build.ts `catapultRelease`,
 // exactly what the shot uses) and a ray cast against its own world's colliders; nothing here
 // touches the physics, so shots and metrics are unchanged.
 import type { OverlayItem, Vec2 } from '../../../kit/types';
 
 /** Metres of arc between two dots. */
 export const PREVIEW_SPACING = 0.45;
-/** Seconds the arc shows at full strength after a change, then seconds it takes to fade out. */
-export const PREVIEW_HOLD = 0.8;
-export const PREVIEW_FADE = 0.7;
 /** The flight is sampled every PREVIEW_DT seconds for at most PREVIEW_MAX_T (a Low shot lands in
  * ~1 s, a Max 45-degree one crosses the 30 m world in ~2 s). */
 export const PREVIEW_DT = 1 / 60;
@@ -73,12 +70,12 @@ export function dotsAlong(path: Vec2[], spacing = PREVIEW_SPACING): Vec2[] {
   return out;
 }
 
-/** The arc's strength `age` seconds after it was shown: 1 for PREVIEW_HOLD, then linear to 0 over
- * PREVIEW_FADE; 0 before it was shown (negative age) and after. */
+/** The arc's strength `age` seconds after it was shown: 1 while shown (until FIRE), 0 before it was
+ * shown or once FIRE hid it. */
 export function previewAlpha(age: number): number {
-  if (!(age >= 0)) return 0;
-  if (age <= PREVIEW_HOLD) return 1;
-  return Math.max(0, 1 - (age - PREVIEW_HOLD) / PREVIEW_FADE);
+  // Shown (a finite age since showPreview) = full strength; never shown or hidden by FIRE
+  // (previewShownAt = -Infinity, so age = Infinity) = nothing.
+  return age >= 0 && Number.isFinite(age) ? 1 : 0;
 }
 
 /** The dots as overlay items at strength `alpha` (per dot its dark rim, then its white core);

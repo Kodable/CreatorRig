@@ -464,8 +464,8 @@ describe('CatapultSim: overlay', () => {
   });
 
   it('the shot preview (2026-10-15): no dots when the sim is built (the kit shows it after Bruno\'s ' +
-    'intro), the dotted arc on showPreview() and on every change (updatePart), full for 0.8 s, then ' +
-    'fading out, gone by 1.5 s', async () => {
+    'intro), the dotted arc on showPreview() and on every change (updatePart), at full strength until ' +
+    'FIRE (no fade since 2026-10-15)', async () => {
     let now = 100;
     const cp = catapult();
     const level = makeLevel([cp], 3);
@@ -482,10 +482,8 @@ describe('CatapultSim: overlay', () => {
     expect(shown[0]!.p.y).toBeCloseTo(tip.y, 9);
     now += 0.8;
     expect(cores()[0]!.alpha).toBeCloseTo(0.95, 9);
-    now += 0.35;
-    expect(cores()[0]!.alpha).toBeCloseTo(0.95 * 0.5, 6);
-    now += 0.4;
-    expect(cores()).toEqual([]);
+    now += 60;
+    expect(cores()[0]!.alpha).toBeCloseTo(0.95, 9); // still there a minute later: it waits for FIRE
     // A change shows it again, for the new settings: more power flies farther.
     sim.updatePart({ ...cp, props: { ...cp.props, power: 'Max' } });
     const far = cores();
@@ -520,7 +518,7 @@ describe('CatapultSim: overlay', () => {
     sim2.destroy();
   });
 
-  it('the shot preview never shows during a shot; between shots it waits for the next change', async () => {
+  it('the shot preview never shows during a shot; between shots it is back for the next shot (2026-10-15) and follows a change', async () => {
     let now = 0;
     const cp = catapult();
     const sim = await createCatapultSim([cp], makeLevel([cp], 3), () => now);
@@ -532,7 +530,7 @@ describe('CatapultSim: overlay', () => {
     }
     await runUntilNotRunning(sim);
     expect(sim.outcome).toBe('shot');
-    expect(sim.snapshot().overlay?.some((o) => o.kind === 'dot')).toBe(false);
+    expect(sim.snapshot().overlay?.some((o) => o.kind === 'dot')).toBe(true);
     now += 0.1;
     sim.updatePart({ ...cp, props: { ...cp.props, angle: '60' } });
     expect(sim.snapshot().overlay?.some((o) => o.kind === 'dot')).toBe(true);
