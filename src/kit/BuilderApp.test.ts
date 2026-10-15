@@ -604,7 +604,7 @@ describe('BuilderApp: the coach gesture', () => {
 });
 
 describe('BuilderApp: CourseSim.showPreview', () => {
-  it("is called once per level load, after Bruno's lesson intro closes (never under it), and not again on a rebuild", async () => {
+  it("is called once per level load, after Bruno's lesson intro closes (never under it), and again after Stop/Reset rebuilds the level", async () => {
     let calls = 0;
     class PreviewSim extends FakeSim {
       showPreview(): void {
@@ -620,12 +620,12 @@ describe('BuilderApp: CourseSim.showPreview', () => {
     app.play();
     app.stop();
     await flush();
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     app.selectLevel('one');
     await flush();
-    expect(calls).toBe(1);
-    await tap();
     expect(calls).toBe(2);
+    await tap();
+    expect(calls).toBe(3);
   });
 
   it('waits for the first build when the dialog closes before it is ready', async () => {

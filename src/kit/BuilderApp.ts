@@ -151,8 +151,8 @@ export class BuilderApp<
   private lessonGen = 0;
   /** The level loaded last has had its first build (the intro pan may start). */
   private levelBuilt = false;
-  /** `CourseSim.showPreview` is still owed for this level load (after the lesson intro closes and
-   * the first build is ready, whichever comes last). */
+  /** `CourseSim.showPreview` is still owed: on a level load (after the lesson intro closes and the
+   * first build is ready, whichever comes last) and after Stop/Reset rebuilds the level. */
   private previewPending = false;
 
   private readonly onVisibilityChange = (): void => {
@@ -851,7 +851,10 @@ export class BuilderApp<
       this.scene.trackPoint(null);
       this.scene.focusFrame(null);
     }
-    // The world must go back to the rest pose.
+    // The world must go back to the rest pose. The rebuilt sim shows its preview again (2026-10-15,
+    // Gao: "after i fire once, the dotted line doesnt show up anymore" — Reset rebuilt the catapult
+    // level without it until the next change).
+    this.previewPending = true;
     void this.rebuild();
   }
 
