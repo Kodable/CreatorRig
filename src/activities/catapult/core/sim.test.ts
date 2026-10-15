@@ -445,21 +445,25 @@ describe('CatapultSim: overlay', () => {
     sim.destroy();
   });
 
-  it('shows a live "range" label once the fuzz is released, while running', async () => {
+  it('no "range" label over the flying fuzz (2026-10-15); the fuzz tumbles in flight in the drawing only, ' +
+    'and the physics body never spins', async () => {
     const cp = catapult();
     const level = makeLevel([cp], 3);
     const sim = await createCatapultSim([cp], level);
     sim.play();
-    let sawRangeLabel = false;
-    for (let i = 0; i < 60; i++) {
+    let drawnTurn = 0;
+    let bodyTurn = 0;
+    for (let i = 0; i < 40; i++) {
       sim.step();
-      const overlay = sim.snapshot().overlay;
-      if (overlay?.some((o) => o.kind === 'label' && o.id === 'range')) {
-        sawRangeLabel = true;
-        break;
-      }
+      const snap = sim.snapshot();
+      expect(snap.overlay?.some((o) => o.kind === 'label' && o.id === 'range')).toBe(false);
+      const fuzz = (sim as unknown as { fuzzBodies: { id: number }[] }).fuzzBodies[0];
+      if (!fuzz) continue;
+      drawnTurn = snap.transforms.get(fuzz.id)!.angle;
+      bodyTurn = (sim as unknown as { world: { getTransform(id: number): { angle: number } } }).world.getTransform(fuzz.id).angle;
     }
-    expect(sawRangeLabel).toBe(true);
+    expect(Math.abs(drawnTurn)).toBeGreaterThan(0.3); // drawn: tumbling
+    expect(bodyTurn).toBe(0); // physics: no spin before it touches anything
     sim.destroy();
   });
 

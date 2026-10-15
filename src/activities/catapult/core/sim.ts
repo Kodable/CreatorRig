@@ -97,6 +97,9 @@ function wrapSym(angle: number, symmetry: number): number {
   return a;
 }
 
+/** The flying fuzz's cosmetic tumble rate (rad/s): about two-thirds of a turn a second. */
+export const FLIGHT_SPIN = 4;
+
 interface FuzzBody {
   id: BodyId;
   r: number;
@@ -114,6 +117,15 @@ interface FuzzBody {
    * airborne, so rolling resistance only acts once something is actually being rolled against -
    * a freshly spawned fuzz flies a pure ballistic arc. */
   contacts: Set<BodyId>;
+  /** Drawing only (2026-10-15, Gao: "the fuzz looks really static when thrown, make them spin a
+   * little"): the extra angle the fuzz is drawn at. It grows by FLIGHT_SPIN rad/s while the fuzz
+   * is in its first flight (nothing touched yet), tumbling forward the way it flies, then holds, so
+   * the physics' own roll carries on from there. The body never spins: shots are unchanged. */
+  spin: number;
+  /** -1 flying right (a clockwise, forward tumble), +1 flying left. */
+  spinDir: number;
+  /** The fuzz has touched something: its cosmetic tumble stops growing. */
+  landed: boolean;
 }
 
 export class CatapultSim implements CourseSim<Metrics, Outcome> {
@@ -447,6 +459,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     // that took a hard enough hit during it are taken out.
     this.breakingNow = this.cratesToBreak(result.impacts);
     this.updateFuzzContacts(result.contacts);
+    this.updateFlightSpin();
     this.handleContacts(result.contacts);
     this.breakCrates();
     this.updateLatches();
@@ -471,26 +484,19 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   snapshot(): SimSnapshot<Outcome> {
     const transforms = new Map<BodyId, Transform>();
     for (const id of this.world.bodies()) transforms.set(id, this.world.getTransform(id));
+    // The fuzzes are drawn with their cosmetic tumble added (FuzzBody.spin; physics untouched).
+    for (const f of this.fuzzBodies) {
+      const t = transforms.get(f.id);
+      if (t && f.spin !== 0) transforms.set(f.id, { position: t.position, angle: t.angle + f.spin });
+    }
 
     const overlay: OverlayItem[] = [];
     if (this.currentOutcome !== 'running') {
       // The shot preview first, under everything else in the overlay.
       overlay.push(...previewOverlay(this.previewDots, previewAlpha(this.clock() - this.previewShownAt)));
     }
-    if (this.currentOutcome === 'running' && this.activeFuzz) {
-      const t = transforms.get(this.activeFuzz.id);
-      if (t) {
-        const range = t.position.x - this.activeFuzz.tipX;
-        overlay.push({
-          kind: 'label',
-          id: 'range',
-          p: { x: t.position.x, y: t.position.y + 0.8 },
-          body: this.activeFuzz.id,
-          offset: { x: 0, y: 0.8 },
-          text: `${range.toFixed(1)} m`,
-        });
-      }
-    }
+    // No distance label over the flying fuzz any more (2026-10-15, Gao: "remove the meter tracker
+    // on top of the fuzz"); the meters panel still shows the distance.
     // The loaded fuzz's name is shown by the fuzz shelf widget (spec.ts), not by a label here.
     overlay.push(...this.debrisOverlay());
     overlay.push(...this.burstOverlay());
@@ -612,6 +618,9 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
       prevVy: velocity.y,
       tipX: o.tipX,
       contacts: new Set(),
+      spin: 0,
+      spinDir: velocity.x >= 0 ? -1 : 1,
+      landed: false,
     };
     this.fuzzBodies.push(fuzz);
     this.shotFuzzes.push(fuzz);
@@ -692,6 +701,18 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   /** Tracks, per fuzz, the set of other bodies it's currently touching (from this step's raw
    * contact events): `began` adds, `!began` removes. Ground/shelf/can/block/wall/post/bullseye
    * all count - "anything" per the coordinator's correction. */
+  /** The cosmetic tumble (see `FuzzBody.spin`): sim time only, so it replays the same. */
+  private updateFlightSpin(): void {
+    for (const f of this.fuzzBodies) {
+      if (f.landed) continue;
+      if (f.contacts.size > 0) {
+        f.landed = true;
+        continue;
+      }
+      f.spin += f.spinDir * FLIGHT_SPIN * FIXED_DT;
+    }
+  }
+
   private updateFuzzContacts(contacts: { bodyA: BodyId; bodyB: BodyId; began: boolean }[]): void {
     if (this.fuzzBodies.length === 0) return;
     const byId = new Map(this.fuzzBodies.map((f) => [f.id, f] as const));
