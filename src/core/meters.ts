@@ -40,6 +40,11 @@ export class RunMeters {
     this.outcome = 'running';
   }
 
+  /** Seconds airborne so far this run (the float counter over the fuzz, CoasterScene). */
+  airTime(): number {
+    return this.hangTime;
+  }
+
   observe(snap: CartSnapshot, dt: number): void {
     this.maxSpeed = Math.max(this.maxSpeed, Math.abs(snap.v));
     if (snap.airborne) this.hangTime += dt;

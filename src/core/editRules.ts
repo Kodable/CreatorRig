@@ -59,10 +59,11 @@ export function canGrab(points: readonly TrackPoint[], i: number): boolean {
 }
 
 /** Where a drag of point `i` to world point `to` puts it (before the scene's edge clamp): the
- * station keeps its x under `stationVertical`. */
+ * station keeps its x under `stationVertical`, and so does any point flagged `vertical` (the air
+ * time lesson's hump top). */
 export function dragTarget(rules: EditRules, points: readonly TrackPoint[], i: number, to: Vec2): Vec2 {
   const p = points[i];
-  if (rules.stationVertical && i === 0 && p) return { x: p.x, y: to.y };
+  if (p && (p.vertical || (rules.stationVertical && i === 0))) return { x: p.x, y: to.y };
   return { x: to.x, y: to.y };
 }
 
@@ -78,7 +79,7 @@ export function samePoints(a: readonly TrackPoint[], b: readonly TrackPoint[]): 
   for (let i = 0; i < a.length; i++) {
     const p = a[i]!;
     const q = b[i]!;
-    if (p.x !== q.x || p.y !== q.y || p.kind !== q.kind || !!p.locked !== !!q.locked) return false;
+    if (p.x !== q.x || p.y !== q.y || p.kind !== q.kind || !!p.locked !== !!q.locked || !!p.vertical !== !!q.vertical) return false;
   }
   return true;
 }

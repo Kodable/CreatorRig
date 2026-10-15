@@ -3,7 +3,8 @@ import { COLORS, ORIGIN_X, GROUND_Y, PANEL_TOP_Y, PPM, WORLD_W, WORLD_H, STAGE_W
 import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, EditTool } from '../core/types';
 import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
 import { OPEN_RULES, canGrab, clearedPoints, dragTarget, samePoints, type EditRules } from '../core/editRules';
-import { DRAG_RISE_PX, dragHandPose, tapHandFrame } from '../core/coach';
+import { dragHandPose, tapHandFrame } from '../core/coach';
+import { airCounterText, goalWords, longestStretch, type AirPreview, type AirStretch } from '../core/airPreview';
 import { BrunoStage } from '../ui/brunoStage';
 import type { FrameState } from '../kit/camera';
 import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
@@ -68,9 +69,39 @@ const COACH_IN_MS = 300;
  * off the handle's bottom-right and the handle stays visible. */
 const COACH_TIP_OFFSET = { x: 5, y: 5 };
 
-/** What the scene's tutorial hand shows: the drag-up stroke on the station, a tap on a world spot
- * (m), or nothing. */
-export type SceneCoach = { kind: 'drag-station' } | { kind: 'tap'; at: Vec2 } | null;
+/** What the scene's tutorial hand shows: the drag-up stroke on point `index` (the station, or the
+ * air time lesson's hilltop) rising `risePx` stage px, a tap on a world spot (m), or nothing. */
+export type SceneCoach = { kind: 'drag'; index: number; risePx: number } | { kind: 'tap'; at: Vec2 } | null;
+
+/* 2026-10-15 (Gao: level 5 "too hard, kids won't understand hang time"): air time made visible.
+   Edit mode, on levels with an air time goal: the stretches of rail where a dry run of the sim
+   floats the fuzz (src/core/airPreview.ts) glow light blue, with a small "Air time: 0.3 s" pill
+   under the longest one (green once it meets the goal). The ride, every level: while the fuzz is
+   airborne (seat g under 0.3) it eases up off the rail with a soft shadow left on the rail and a
+   trail of sparkles; on levels with an air time goal a counter over it counts the ride's air time
+   up and pops the goal in words ("1 second!") the moment it is met. Cosmetic: the sim and the
+   metrics never see any of it. */
+const AIR_GLOW = 0xffffff;       // the soft halo under the floaty stretch
+const AIR_EDGE = 0x1f6fc2;       // the floaty stretch's rail: a blue edge...
+const AIR_RAIL = 0x7fd8ff;       // ...a light-blue rail...
+const AIR_SHINE = 0xe9fbff;      // ...and a bright shine line
+const AIR_PILL = 0x2b8fd6;       // the preview pill (under the goal)
+const AIR_PILL_MET = 0x3f9e2c;   // the preview pill once the preview meets the goal
+const AIR_TEXT_STROKE = '#1b2a5c';
+const AIR_FONT = '"Nunito", "Arial Rounded MT Bold", ui-rounded, -apple-system, "Segoe UI", Roboto, sans-serif';
+/** The float's ease (ms time constants): up quickly, down a little slower, so it never pops. */
+const FLOAT_IN_MS = 70;
+const FLOAT_OUT_MS = 150;
+/** The lift off the rail while airborne, stage px: LIFT_MIN at the 0.3 g threshold, up to LIFT_MAX
+ * when weightless or pulled up (a fuzz radius or more: readable in the full view and doubled by the
+ * ride camera's zoom). */
+const LIFT_MIN_PX = 12;
+const LIFT_MAX_PX = 24;
+/** The counter waits this long after the float ends, then fades (ms). */
+const COUNTER_HOLD_MS = 700;
+const COUNTER_FADE_MS = 250;
+/** The goal words ("1 second!") stay up this long after the goal is met (ms). */
+const GOAL_POP_HOLD_MS = 1300;
 
 // world panel: a single rounded sky/ground panel, x 32..992, y 78..700 (2026-10-07: was 210..700;
 // the top follows WORLD_H, view.ts)
@@ -197,6 +228,28 @@ export class CoasterScene extends Phaser.Scene {
   private coachHandShadow?: Phaser.GameObjects.Image;
   private coachArrow?: Phaser.GameObjects.Graphics;
 
+  // 2026-10-15: air time made visible (see AIR_GLOW).
+  private airGoal: number | null = null;
+  private airPreview: AirPreview | null = null;
+  private airDirty = false;
+  private airGfx!: Phaser.GameObjects.Graphics;
+  private airCoreGfx!: Phaser.GameObjects.Graphics;
+  private airPill!: Phaser.GameObjects.Container;
+  private airPillBg!: Phaser.GameObjects.Graphics;
+  private airPillText!: Phaser.GameObjects.Text;
+  /** 0 on the rail, 1 fully floating (eased, FLOAT_IN_MS / FLOAT_OUT_MS). */
+  private floatK = 0;
+  private lastCartMs: number | null = null;
+  private rideAir = 0;
+  private prevRideAir = 0;
+  private floatShadow!: Phaser.GameObjects.Image;
+  private sparkles!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private airCounter!: Phaser.GameObjects.Text;
+  /** Scene time the counter was last needed (floating, or the goal pop), for its hold and fade. */
+  private counterSeenAt = -Infinity;
+  /** Scene time the goal words popped (-Infinity: not this ride). */
+  private goalPopAt = -Infinity;
+
   private finish: FinishZone | null = null;
   private finishReached = false;
 
@@ -295,6 +348,21 @@ export class CoasterScene extends Phaser.Scene {
     this.trackGfx = this.onWorld(this.add.graphics());
     this.trackGfx.setDepth(DEPTH_TRACK);
 
+    // The air preview: a glow under the rail and a bright core line over it, then the pill.
+    this.airGfx = this.onWorld(this.add.graphics());
+    this.airGfx.setDepth(DEPTH_TRACK - 0.05);
+    this.airCoreGfx = this.onWorld(this.add.graphics());
+    this.airCoreGfx.setDepth(DEPTH_TRACK + 0.05);
+    this.airPillBg = this.add.graphics();
+    this.airPillText = this.add.text(0, 0, '', {
+      fontFamily: AIR_FONT, fontSize: '14px', fontStyle: 'bold', color: '#ffffff',
+    });
+    this.airPillText.setOrigin(0.5, 0.5);
+    this.airPillText.setResolution(RENDER_SCALE * 2);
+    this.airPill = this.onWorld(this.add.container(0, 0, [this.airPillBg, this.airPillText]));
+    this.airPill.setDepth(DEPTH_POINTS + 0.2);
+    this.airPill.setVisible(false);
+
     this.pointsGfx = this.onWorld(this.add.graphics());
     this.pointsGfx.setDepth(DEPTH_POINTS);
 
@@ -338,6 +406,11 @@ export class CoasterScene extends Phaser.Scene {
       this.redrawFinish();
       this.finishDirty = false;
     }
+    if (this.airDirty) {
+      this.redrawAirPreview();
+      this.airDirty = false;
+    }
+    this.updateAirCounter();
     this.drawCoach();
   }
 
@@ -531,6 +604,70 @@ export class CoasterScene extends Phaser.Scene {
     card.fillRect(0, 0, 6, 10);
     card.generateTexture('confetti', 6, 10);
     card.destroy();
+
+    // The float (2026-10-15): a four-point sparkle for the trail, a soft oval for the shadow the
+    // floating fuzz leaves on the rail.
+    const spark = this.add.graphics();
+    spark.fillStyle(0xffffff, 1);
+    const star: [number, number][] = [[8, 0], [10, 6], [16, 8], [10, 10], [8, 16], [6, 10], [0, 8], [6, 6]];
+    spark.beginPath();
+    spark.moveTo(star[0]![0], star[0]![1]);
+    for (const [x, y] of star.slice(1)) spark.lineTo(x, y);
+    spark.closePath();
+    spark.fillPath();
+    spark.generateTexture('air-sparkle', 16, 16);
+    spark.destroy();
+    const oval = this.add.graphics();
+    for (let i = 0; i < 4; i++) {
+      oval.fillStyle(0x000000, 0.25);
+      oval.fillEllipse(16, 5, 32 - i * 6, 10 - i * 2);
+    }
+    oval.generateTexture('air-shadow', 32, 10);
+    oval.destroy();
+
+    this.floatShadow = this.onWorld(this.add.image(0, 0, 'air-shadow'));
+    this.floatShadow.setDepth(DEPTH_TRACK + 0.1);
+    this.floatShadow.setVisible(false);
+
+    this.sparkles = this.onWorld(
+      this.add.particles(0, 0, 'air-sparkle', {
+        emitting: false,
+        frequency: 40,
+        quantity: 1,
+        lifespan: { min: 450, max: 750 },
+        speed: { min: 8, max: 34 },
+        angle: { min: 0, max: 360 },
+        // Born anywhere on the fuzz (a 10 px disc), not all from its centre.
+        emitZone: {
+          type: 'random',
+          source: {
+            getRandomPoint: (pt: Phaser.Types.Math.Vector2Like): void => {
+              const a = Math.random() * Math.PI * 2;
+              const r = 10 * Math.sqrt(Math.random());
+              pt.x = Math.cos(a) * r;
+              pt.y = Math.sin(a) * r;
+            },
+          },
+        },
+        rotate: { min: 0, max: 360 },
+        scale: { start: 0.85, end: 0.1 },
+        alpha: { start: 0.95, end: 0 },
+        tint: [0xffffff, 0xc9efff, 0xfff1a8],
+      }),
+    );
+    this.sparkles.setDepth(DEPTH_FUZZ - 0.05);
+    // The emitter stays at the origin and fires at the fuzz, so the sparkles stay where they were
+    // born and the moving fuzz leaves them behind as a trail.
+    this.sparkles.startFollow(this.fuzz);
+
+    this.airCounter = this.onWorld(this.add.text(0, 0, '', {
+      fontFamily: AIR_FONT, fontSize: '14px', fontStyle: 'bold', color: '#ffffff',
+      stroke: AIR_TEXT_STROKE, strokeThickness: 4,
+    }));
+    this.airCounter.setOrigin(0.5, 1);
+    this.airCounter.setResolution(RENDER_SCALE * 2);
+    this.airCounter.setDepth(DEPTH_FUZZ + 0.1);
+    this.airCounter.setVisible(false);
   }
 
   private skinKey(excited: boolean): string {
@@ -617,6 +754,7 @@ export class CoasterScene extends Phaser.Scene {
       this.activePointerId = null;
     }
     this.pointsDirty = true;
+    this.airDirty = true;
   }
 
   setTool(tool: EditTool): void {
@@ -664,6 +802,38 @@ export class CoasterScene extends Phaser.Scene {
   setTrack(t: Track | null): void {
     this.track = t;
     this.trackDirty = true;
+    this.airDirty = true;
+  }
+
+  /** The level's air time goal in seconds (the counter's goal pop; the preview shows only when
+   * there is one), or null. */
+  setAirGoal(goal: number | null): void {
+    this.airGoal = goal;
+    this.airDirty = true;
+  }
+
+  /** The latest air time dry run on the edited track (App, src/core/airPreview.ts), or null. Drawn
+   * in edit mode on levels with an air time goal. */
+  setAirPreview(p: AirPreview | null): void {
+    this.airPreview = p;
+    this.airDirty = true;
+  }
+
+  /** The ride's air time so far (seconds), for the float counter; set before drawCart each frame. */
+  setRideAir(seconds: number): void {
+    this.rideAir = seconds;
+  }
+
+  /** The air preview's state (dev checks): the stretches drawn and the pill's text, or null when
+   * nothing is drawn. */
+  airPreviewShown(): { stretches: AirStretch[]; pill: string } | null {
+    if (!this.airGfx?.visible || !this.airPreview) return null;
+    return { stretches: this.airPreview.stretches.map((st) => ({ ...st })), pill: this.airPill.visible ? this.airPillText.text : '' };
+  }
+
+  /** The float's state (dev checks): how far the fuzz floats (0..1) and the counter's text. */
+  floatShown(): { floatK: number; counter: string | null } {
+    return { floatK: this.floatK, counter: this.airCounter.visible && this.airCounter.alpha > 0 ? this.airCounter.text : null };
   }
 
   setFinish(zone: FinishZone | null): void {
@@ -687,6 +857,7 @@ export class CoasterScene extends Phaser.Scene {
       this.resetFuzzFallState();
       this.fuzzVel = { x: 0, y: 0 };
       this.setExcited(false);
+      this.resetFloat();
       return;
     }
     this.fuzz.setVisible(true);
@@ -705,8 +876,15 @@ export class CoasterScene extends Phaser.Scene {
     const sy = clamp(1 / (0.9 + 0.1 * Math.max(snap.gNormal, 0)), 0.85, 1.08);
     const sx = 1 / sy;
 
-    let liftPx = 0;
-    if (snap.airborne) liftPx = clamp(8 * (0.3 - snap.gNormal), 0, 20);
+    // The float: eased up off the rail while airborne, back down after (never a pop).
+    const dtMs = this.lastCartMs === null ? 16 : clamp(this.nowMs - this.lastCartMs, 0, 100);
+    this.lastCartMs = this.nowMs;
+    const floating = snap.airborne && snap.outcome === 'running';
+    const tau = floating ? FLOAT_IN_MS : FLOAT_OUT_MS;
+    this.floatK += ((floating ? 1 : 0) - this.floatK) * (1 - Math.exp(-dtMs / tau));
+    if (this.floatK < 0.01 && !floating) this.floatK = 0;
+    const liftTarget = LIFT_MIN_PX + (LIFT_MAX_PX - LIFT_MIN_PX) * clamp((0.3 - snap.gNormal) / 0.5, 0, 1);
+    const liftPx = this.floatK * liftTarget;
     const stageUpX = snap.up.x;
     const stageUpY = -snap.up.y;
 
@@ -715,6 +893,25 @@ export class CoasterScene extends Phaser.Scene {
       this.fuzz.setRotation(-snap.theta);
       this.fuzz.setScale(sx, sy);
     }
+
+    // The shadow it leaves on the rail, fainter and smaller the higher it floats; the sparkle trail.
+    const railPx = toPx(snap.pos);
+    const showShadow = this.floatK > 0.05 && !this.fuzzFellStarted && snap.outcome === 'running';
+    this.floatShadow.setVisible(showShadow);
+    if (showShadow) {
+      const k = liftPx / LIFT_MAX_PX;
+      this.floatShadow.setPosition(railPx.x, railPx.y);
+      this.floatShadow.setRotation(-snap.theta);
+      this.floatShadow.setScale(1 - 0.3 * k, 1 - 0.3 * k);
+      this.floatShadow.setAlpha(this.floatK * (1 - 0.4 * k));
+    }
+    this.sparkles.emitting = floating && this.floatK > 0.4;
+
+    // The counter's goal pop: the ride's air time just crossed the level's goal.
+    const goal = this.airGoal;
+    if (goal !== null && this.prevRideAir < goal - 1e-9 && this.rideAir >= goal - 1e-9) this.popAirGoal();
+    this.prevRideAir = this.rideAir;
+    if (floating) this.counterSeenAt = this.nowMs;
 
     // Rolling: moving forward along s, a ball on top of the rail turns clockwise on screen
     // (positive rotation in Phaser). When the ride side is the right normal it turns the other way.
@@ -742,6 +939,63 @@ export class CoasterScene extends Phaser.Scene {
     } else {
       this.fuzzBody.clearTint();
     }
+  }
+
+  /** Back on the rail, no trail, no counter (a new ride, Stop, or the next level). */
+  private resetFloat(): void {
+    this.floatK = 0;
+    this.lastCartMs = null;
+    this.rideAir = 0;
+    this.prevRideAir = 0;
+    this.counterSeenAt = -Infinity;
+    this.goalPopAt = -Infinity;
+    this.floatShadow?.setVisible(false);
+    if (this.sparkles) this.sparkles.emitting = false;
+    if (this.airCounter) {
+      this.tweens.killTweensOf(this.airCounter);
+      this.airCounter.setVisible(false);
+      this.airCounter.setScale(1);
+    }
+  }
+
+  /** The goal met mid-ride: the counter says it in words, grows and settles, and a little burst of
+   * sparkles goes off around the fuzz. */
+  private popAirGoal(): void {
+    this.goalPopAt = this.nowMs;
+    this.counterSeenAt = this.nowMs;
+    this.tweens.killTweensOf(this.airCounter);
+    this.airCounter.setScale(0.6);
+    this.tweens.add({ targets: this.airCounter, scaleX: 1.25, scaleY: 1.25, duration: 220, ease: 'Back.easeOut',
+      onComplete: () => this.tweens.add({ targets: this.airCounter, scaleX: 1, scaleY: 1, duration: 260, ease: 'Quad.easeInOut' }) });
+    this.sparkles.explode(18);
+  }
+
+  /**
+   * The float counter over the fuzz (levels with an air time goal): shown while floating and for a
+   * beat after, counting the ride's air time in tenths; the goal words while the pop holds; then it
+   * fades. White on navy while it counts, gold for the goal words, green once the goal is met.
+   */
+  private updateAirCounter(): void {
+    const c = this.airCounter;
+    if (!c) return;
+    if (this.airGoal === null || !this.fuzz.visible || this.fuzzFellStarted) {
+      c.setVisible(false);
+      return;
+    }
+    const popping = this.nowMs - this.goalPopAt < GOAL_POP_HOLD_MS;
+    const since = this.nowMs - this.counterSeenAt;
+    const alpha = popping || since <= COUNTER_HOLD_MS ? 1 : 1 - (since - COUNTER_HOLD_MS) / COUNTER_FADE_MS;
+    if (alpha <= 0) {
+      c.setVisible(false);
+      return;
+    }
+    const text = airCounterText(this.rideAir, this.airGoal, popping);
+    if (c.text !== text) c.setText(text);
+    const met = this.rideAir >= this.airGoal - 1e-9;
+    c.setColor(popping ? '#ffd23d' : met ? '#b8f59a' : '#ffffff');
+    c.setPosition(this.fuzz.x, this.fuzz.y - FUZZ_R_PX - 10);
+    c.setAlpha(alpha);
+    c.setVisible(true);
   }
 
   private setExcited(on: boolean): void {
@@ -948,11 +1202,12 @@ export class CoasterScene extends Phaser.Scene {
     // Dragging a loop point moves the whole loop: the loop shape is expanded from this single
     // point (its bottom) by the app before buildTrack, so moving the point is all that's needed.
     const prevKind = this.points[this.gesture.index]!.kind;
-    // A vertical-only station (level 1) keeps its x (dragTarget).
+    // A vertical-only station (level 1) or hilltop (the air time lesson) keeps its x (dragTarget).
     const w = dragTarget(this.rules, this.points, this.gesture.index, toWorld({ x: sx, y: sy }));
     const wx = clamp(w.x, EDGE, POINT_X_MAX);
     const wy = clamp(w.y, EDGE, prevKind === 'loop' ? LOOP_Y_MAX : POINT_Y_MAX);
-    this.points[this.gesture.index] = { x: wx, y: wy, kind: prevKind };
+    // Keeps the point's flags (a vertical-only hilltop stays vertical-only).
+    this.points[this.gesture.index] = { ...this.points[this.gesture.index]!, x: wx, y: wy, kind: prevKind };
     this.pointsDirty = true;
     this.emitPointsChanged();
   }
@@ -990,14 +1245,15 @@ export class CoasterScene extends Phaser.Scene {
   // ---------------- the tutorial hand ----------------
 
   /**
-   * Draws this frame's tutorial hand (setCoach). 'drag-station': the glove presses on the station
-   * handle, slides straight up DRAG_RISE_PX while pressed, lets go and fades (dragHandPose), with
+   * Draws this frame's tutorial hand (setCoach). 'drag': the glove presses on the point's handle
+   * (the station, or the air time lesson's hilltop), slides straight up `risePx` while pressed, lets go and fades (dragHandPose), with
    * a faint dotted arrow showing the way up. 'tap': the glove taps the spot (tapHandFrame). Hidden
    * in play mode and while a gesture is in progress.
    */
   private drawCoach(): void {
     const c = this.coach;
-    const station = this.points[0];
+    const target = c && c.kind === 'drag' ? this.points[c.index] : undefined;
+    const risePx = c && c.kind === 'drag' ? c.risePx : 0;
     let tip: Vec2 | null = null;
     let frame: 0 | 1 | 2 = 0;
     let alpha = 1;
@@ -1006,10 +1262,10 @@ export class CoasterScene extends Phaser.Scene {
     let ghostRise = -1;
     const t = this.nowMs - this.coachStart;
     const visible = !!c && this.editable && !this.gesture;
-    if (visible && c.kind === 'drag-station' && station) {
-      const p = toPx(station);
+    if (visible && c.kind === 'drag' && target) {
+      const p = toPx(target);
       const pose = dragHandPose(t);
-      tip = { x: p.x + COACH_TIP_OFFSET.x, y: p.y + COACH_TIP_OFFSET.y - pose.rise * DRAG_RISE_PX };
+      tip = { x: p.x + COACH_TIP_OFFSET.x, y: p.y + COACH_TIP_OFFSET.y - pose.rise * risePx };
       frame = pose.frame;
       alpha = pose.alpha;
       arrowFrom = p;
@@ -1049,12 +1305,12 @@ export class CoasterScene extends Phaser.Scene {
     if (arrowFrom) {
       const x = arrowFrom.x;
       const y0 = arrowFrom.y - 20;
-      const y1 = arrowFrom.y - DRAG_RISE_PX;
+      const y1 = arrowFrom.y - risePx;
       arrow.fillStyle(COLORS.white, 0.55);
       for (let y = y0; y > y1 + 10; y -= 10) arrow.fillCircle(x, y, 2.2);
       arrow.fillTriangle(x - 8, y1 + 10, x + 8, y1 + 10, x, y1 - 2);
       if (ghostRise >= 0 && alpha > 0) {
-        const gy = arrowFrom.y - ghostRise * DRAG_RISE_PX;
+        const gy = arrowFrom.y - ghostRise * risePx;
         arrow.fillStyle(COLORS.orange, 0.5 * alpha);
         arrow.fillCircle(x, gy, 13);
         arrow.lineStyle(2, COLORS.white, 0.7 * alpha);
@@ -1104,6 +1360,66 @@ export class CoasterScene extends Phaser.Scene {
       gfx.lineTo(p.x, p.y + offsetY);
     }
     gfx.strokePath();
+  }
+
+  /**
+   * The air preview (edit mode, levels with an air time goal): each floaty stretch of rail turns
+   * light blue (a blue-edged light-blue rail with a shine line over the red one, a soft white halo
+   * under it), and a pill under the longest stretch says how long the fuzz will float ("Air time: 0.3 s"), green once that meets
+   * the goal. The stretches come from the latest dry run, which trails a drag by up to 100 ms.
+   */
+  private redrawAirPreview(): void {
+    const g = this.airGfx;
+    const core = this.airCoreGfx;
+    g.clear();
+    core.clear();
+    const track = this.track;
+    const pv = this.airPreview;
+    const show = this.editable && this.airGoal !== null && !!track && !!pv && pv.stretches.length > 0;
+    g.setVisible(show);
+    core.setVisible(show);
+    this.airPill.setVisible(false);
+    if (!show || !track || !pv) return;
+
+    for (const st of pv.stretches) {
+      const pts: Vec2[] = [];
+      const s1 = Math.min(st.s1, track.length);
+      for (let s = Math.max(0, st.s0); s < s1; s += 0.25) pts.push(toPx(track.lookup(s).pos));
+      pts.push(toPx(track.lookup(s1).pos));
+      if (pts.length < 2) {
+        const p = pts[0]!;
+        pts.push({ x: p.x + 0.5, y: p.y });
+      }
+      // A soft white halo under the rail, then the stretch of rail itself repainted light blue
+      // over the red one (light blue alone vanishes against the sky; the rail turning blue reads).
+      this.strokePolyline(g, pts, 30, AIR_GLOW, 0.18);
+      this.strokePolyline(g, pts, 20, AIR_GLOW, 0.32);
+      this.strokePolyline(core, pts, 10, AIR_EDGE, 1);
+      this.strokePolyline(core, pts, 6, AIR_RAIL, 1);
+      this.strokePolyline(core, pts, 2, AIR_SHINE, 0.9, -1.5);
+    }
+
+    const best = longestStretch(pv.stretches);
+    if (!best) return;
+    const mid = toPx(track.lookup((best.s0 + best.s1) / 2).pos);
+    const met = pv.airTime >= (this.airGoal ?? Infinity) - 1e-9;
+    const text = `Air time: ${(Math.floor(pv.airTime * 10 + 1e-6) / 10).toFixed(1)} s`;
+    if (this.airPillText.text !== text) this.airPillText.setText(text);
+    const w = Math.ceil(this.airPillText.width) + 20;
+    const h = 24;
+    this.airPillBg.clear();
+    this.airPillBg.fillStyle(0x000000, 0.18);
+    this.airPillBg.fillRoundedRect(-w / 2, -h / 2 + 2, w, h, h / 2);
+    this.airPillBg.fillStyle(met ? AIR_PILL_MET : AIR_PILL, 1);
+    this.airPillBg.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+    this.airPillBg.lineStyle(2, COLORS.white, 0.9);
+    this.airPillBg.strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
+    // Under the crest, inside the hill's arch (the hilltop's handle and the hand sit over it),
+    // kept off the grass.
+    const x = clamp(mid.x, PANEL_X0 + w / 2 + 6, PANEL_X1 - w / 2 - 6);
+    const y = Math.min(mid.y + clamp((GROUND_Y - mid.y) * 0.45, 34, 80), GROUND_Y - h / 2 - 6);
+    this.airPill.setPosition(x, y);
+    this.airPill.setVisible(true);
   }
 
   private redrawTrack(): void {
@@ -1219,6 +1535,27 @@ export class CoasterScene extends Phaser.Scene {
     this.stationFuzz.setVisible(true);
   }
 
+  /**
+   * A vertical-only handle (the air time lesson's hilltop): the station's orange handle with its
+   * pulsing halo (it is the one thing to drag), and a small white chevron above and below it that
+   * say "up and down".
+   */
+  private drawVerticalHandle(p: Vec2): void {
+    const g = this.pointsGfx;
+    g.fillStyle(COLORS.orange, 1);
+    g.fillCircle(p.x, p.y, 12);
+    g.lineStyle(2, COLORS.white, 1);
+    g.strokeCircle(p.x, p.y, this.stationRingR - 1);
+    for (const dir of [-1, 1]) {
+      const tipY = p.y + dir * 25;
+      const baseY = p.y + dir * 18;
+      g.fillStyle(LOCKED_COLOR, 0.55);
+      g.fillTriangle(p.x - 7, baseY + dir * 1.5, p.x + 7, baseY + dir * 1.5, p.x, tipY + dir * 1.5);
+      g.fillStyle(COLORS.white, 1);
+      g.fillTriangle(p.x - 6, baseY, p.x + 6, baseY, p.x, tipY);
+    }
+  }
+
   /** A small white padlock mark (body + shackle), centred on `p`. Used on locked control points. */
   private drawPadlockMark(p: Vec2): void {
     const g = this.pointsGfx;
@@ -1257,6 +1594,11 @@ export class CoasterScene extends Phaser.Scene {
         this.pointsGfx.lineStyle(1.5, COLORS.white, 1);
         this.pointsGfx.strokeCircle(p.x, p.y, 13);
         if (locked) this.drawPadlockMark(p);
+        continue;
+      }
+
+      if (pt.vertical && !locked) {
+        this.drawVerticalHandle(p);
         continue;
       }
 

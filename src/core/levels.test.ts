@@ -34,6 +34,7 @@ function ride(level: Level, points: TrackPoint[]): { outcome: Outcome; metrics: 
 const lock = (x: number, y: number): TrackPoint => ({ x, y, kind: 'curve', locked: true });
 const c = (x: number, y: number): TrackPoint => ({ x, y, kind: 'curve' });
 const loop = (x: number, y: number): TrackPoint => ({ x, y, kind: 'loop' });
+const top = (x: number, y: number): TrackPoint => ({ x, y, kind: 'curve', vertical: true });
 
 /** Every level but free: a recorded passing track (found by sim search) and naive tracks that fail. */
 const SOLUTIONS: { id: string; solution: TrackPoint[]; naive: { why: string; points: TrackPoint[] }[] }[] = [
@@ -68,11 +69,13 @@ const SOLUTIONS: { id: string; solution: TrackPoint[]; naive: { why: string; poi
   },
   {
     id: 'hang',
-    // Drop off the gentle start, float over a hump, coast to the flag.
-    solution: [lock(2, 16), lock(10, 12), c(18, 3), c(28, 9), c(36, 3), c(56, 3)],
+    // 2026-10-15: the drag-the-top lesson. The hilltop dragged from 5 m up to 10 m (0.87 s of air,
+    // the middle of the band; the good band is checked below); nothing else moves.
+    solution: [lock(2, 18), lock(18, 4), top(30, 10), lock(42, 4), lock(56, 3)],
     naive: [
-      { why: 'a straight slope to the flag never floats', points: [lock(2, 16), lock(10, 12), c(56, 3)] },
-      { why: 'plunging straight down after the start is not enough', points: [lock(2, 16), lock(10, 12), c(10.5, 0.5), c(56, 3)] },
+      { why: 'the hilltop left where it starts floats for only about 0.3 s', points: [lock(2, 18), lock(18, 4), top(30, 5), lock(42, 4), lock(56, 3)] },
+      { why: 'a hilltop too high strands the fuzz in the valley', points: [lock(2, 18), lock(18, 4), top(30, 20), lock(42, 4), lock(56, 3)] },
+      { why: 'a hilltop dragged down into a dip floats too little', points: [lock(2, 18), lock(18, 4), top(30, 1), lock(42, 4), lock(56, 3)] },
     ],
   },
   {
@@ -188,6 +191,12 @@ describe('levels', () => {
         // Nothing added on a no-add level; a vertical-only station keeps its x.
         if (level.canAdd === false) expect(sol.solution).toHaveLength(level.preset!.length);
         if (level.stationVertical) expect(sol.solution[0]!.x).toBe(level.preset![0]!.x);
+        // A vertical-only point keeps its x and its flag.
+        (level.preset ?? []).forEach((p, i) => {
+          if (!p.vertical) return;
+          expect(sol.solution[i]!.vertical, `point ${i}`).toBe(true);
+          expect(sol.solution[i]!.x, `point ${i}`).toBe(p.x);
+        });
         // Only the level's tools: no loop before the loop lesson.
         const tools = level.tools ?? ['point', 'loop'];
         if (!tools.includes('loop')) expect(sol.solution.some((p) => p.kind === 'loop')).toBe(false);
@@ -212,6 +221,7 @@ describe('levels', () => {
         sol.solution.forEach((p, i) => {
           if (p.locked) return;
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+            if (dx !== 0 && (p.vertical || (i === 0 && level.stationVertical))) continue; // it cannot move sideways
             const moved = sol.solution.map((q, k) => (k === i ? { ...q, x: q.x + dx, y: q.y + dy } : q));
             expect(ride(level, moved).passed, `point ${i} moved by (${dx}, ${dy})`).toBe(true);
           }
@@ -231,7 +241,6 @@ describe('levels', () => {
   // area just after the locked start.
   describe.each([
     { id: 'thrill', end: c(56, 4) },
-    { id: 'hang', end: c(56, 3) },
   ])('$id: a single plunge node after the locked start never passes', ({ id, end }) => {
     it('sweeps the node below the lead-in', () => {
       const level = findLevel(id)!;
@@ -244,6 +253,56 @@ describe('levels', () => {
         }
       }
       expect(passing).toEqual([]);
+    });
+  });
+
+  // 2026-10-15: the air time lesson's good band. The child only drags the hilltop up and down; a
+  // wide band of heights (6 m to 16 m: 10 m of slack) floats the fuzz for the half second, the start
+  // height does not, and too high strands it.
+  describe('hang: the hilltop band', () => {
+    const level = findLevel('hang')!;
+    const withTop = (y: number): TrackPoint[] => level.preset!.map((p) => (p.vertical ? { ...p, y } : { ...p }));
+
+    it('the preset is the drag-the-top shape: locked station, feet and end, one vertical-only top', () => {
+      const preset = level.preset!;
+      expect(preset.map((p) => !!p.locked)).toEqual([true, true, false, true, true]);
+      expect(preset.filter((p) => p.vertical)).toHaveLength(1);
+      expect(preset[2]!.vertical).toBe(true);
+      expect(preset[preset.length - 1]).toMatchObject({ x: level.finish!.x, y: level.finish!.y });
+      expect(level.tools).toEqual([]);
+      expect(level.canAdd).toBe(false);
+      expect(level.goals[0]).toMatchObject({ metric: 'hangTime', op: '>=', value: 0.5 });
+    });
+
+    it('the start height floats a little, short of the goal', () => {
+      const r = ride(level, withTop(level.preset![2]!.y));
+      expect(r.outcome).toBe('reachedEnd');
+      expect(r.metrics.hangTime).toBeGreaterThan(0.1);
+      expect(r.metrics.hangTime).toBeLessThan(0.4);
+      expect(r.passed).toBe(false);
+    });
+
+    it('every height from 6.5 m to 15.5 m passes (9 m of slack), with more air the higher it goes', () => {
+      let last = 0;
+      for (let y = 6.5; y <= 15.5; y += 0.5) {
+        const r = ride(level, withTop(y));
+        expect(r.passed, `top ${y}: ${r.outcome} ${r.metrics.hangTime.toFixed(2)} s`).toBe(true);
+        expect(r.metrics.hangTime, `top ${y}`).toBeGreaterThanOrEqual(last - 0.02);
+        last = r.metrics.hangTime;
+      }
+    });
+
+    it('too high (17 m and up) the fuzz cannot get over the hill', () => {
+      for (let y = 17; y <= 37; y += 2) {
+        const r = ride(level, withTop(y));
+        expect(r.outcome, `top ${y}`).not.toBe('reachedEnd');
+        expect(r.passed, `top ${y}`).toBe(false);
+      }
+    });
+
+    it('the air comes from the crest of the hill, not a plunge', () => {
+      const r = ride(level, withTop(10));
+      expect(r.steepHang).toBeLessThan(0.05);
     });
   });
 

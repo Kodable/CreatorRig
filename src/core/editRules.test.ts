@@ -43,8 +43,40 @@ describe('editor rules (2026-10-15)', () => {
     });
   });
 
+  describe('level 5 (air time): drag the hilltop, nothing else', () => {
+    const hang = findLevel('hang')!;
+    const rules = editRules(hang);
+    const pts = hang.preset!;
+
+    it('shows no tool buttons and cannot add or delete', () => {
+      expect(levelTools(hang)).toEqual([]);
+      expect(rules.canAdd).toBe(false);
+      expect(rules.canDelete).toBe(false);
+    });
+
+    it('only the hilltop can be grabbed, and it only slides up and down', () => {
+      expect(pts.map((_, i) => canGrab(pts, i))).toEqual([false, false, true, false, false]);
+      expect(rules.stationVertical).toBe(false);
+      expect(dragTarget(rules, pts, 2, { x: 40, y: 12 })).toEqual({ x: pts[2]!.x, y: 12 });
+      expect(dragTarget(rules, pts, 2, { x: 3, y: 1 })).toEqual({ x: pts[2]!.x, y: 1 });
+    });
+
+    it('Clear resets to the preset, flags and all', () => {
+      const dragged = pts.map((p) => (p.vertical ? { ...p, y: 12 } : { ...p }));
+      expect(clearedPoints(rules, dragged)).toEqual(pts);
+      expect(samePoints(dragged, pts)).toBe(false);
+    });
+  });
+
+  it('a point flagged vertical keeps its x on any level; the flag survives a copy and counts in samePoints', () => {
+    const v: TrackPoint = { x: 10, y: 5, kind: 'curve', vertical: true };
+    expect(dragTarget(OPEN_RULES, [c(2, 20), v], 1, { x: 30, y: 9 })).toEqual({ x: 10, y: 9 });
+    expect(clearedPoints(editRules(findLevel('hang')!), [v])[2]?.vertical).toBe(true);
+    expect(samePoints([v], [{ ...v, vertical: undefined }])).toBe(false);
+  });
+
   it('Clear keeps every locked point, in order, on a level that can add', () => {
-    const rules = editRules(findLevel('hang')!);
+    const rules = editRules(findLevel('speed')!);
     const pts = [lock(2, 16), lock(10, 12), c(18, 3), c(28, 9), c(56, 3)];
     expect(clearedPoints(rules, pts)).toEqual([lock(2, 16), lock(10, 12)]);
     expect(clearedPoints(OPEN_RULES, [lock(2, 20), c(5, 5), lock(9, 9)])).toEqual([lock(2, 20), lock(9, 9)]);
@@ -53,7 +85,7 @@ describe('editor rules (2026-10-15)', () => {
   it('Clear and Undo snapshots are copies: clearing never mutates the points it was given', () => {
     const pts = [lock(2, 16), c(18, 3)];
     const before = JSON.stringify(pts);
-    const out = clearedPoints(editRules(findLevel('hang')!), pts);
+    const out = clearedPoints(editRules(findLevel('speed')!), pts);
     out[0]!.y = 99;
     expect(JSON.stringify(pts)).toBe(before);
   });
@@ -79,8 +111,9 @@ describe('editor rules (2026-10-15)', () => {
     expect(LEVELS.filter((l) => l.newTool)).toHaveLength(1);
   });
 
-  it('every level from 2 on can add points with the Point tool; untouched levels keep both tools', () => {
+  it('every level from 2 on but the air time lesson can add points with the Point tool; untouched levels keep both tools', () => {
     for (const level of LEVELS.slice(1)) {
+      if (level.id === 'hang') continue; // the drag-the-top lesson (above)
       expect(levelTools(level).includes('point'), level.id).toBe(true);
       expect(editRules(level).canAdd, level.id).toBe(true);
       expect(startTool(level), level.id).toBe('point');

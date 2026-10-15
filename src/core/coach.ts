@@ -5,7 +5,9 @@ import type { CoachStep, Level, TrackPoint } from './types';
  * the height"). Pure: which step shows, and the glove's pose over time. The glove is the builder
  * kit's 3-frame hand (public/ui/hand_01..03.png: the hand holds still and only the index finger
  * bends; frame index 0 = finger out, 2 = pressed). CoasterScene draws the in-scene steps
- * ('drag-station', 'add-point'), the HUD the bar-button steps ('skin', 'play', 'loop-tool').
+ * ('drag-station', 'drag-top', 'add-point'), the HUD the bar-button steps ('skin', 'play',
+ * 'loop-tool'). 'drag-top' is the same drag-up stroke as 'drag-station', on the level's
+ * vertical-only point (the air time lesson's hump top) instead of the station.
  */
 
 /** A level's steps in order (none when the level has no hand). */
@@ -27,6 +29,21 @@ export function stationMoved(preset: readonly TrackPoint[], points: readonly Tra
   const b = points[0];
   if (!a || !b) return false;
   return Math.abs(a.y - b.y) > 1e-6 || Math.abs(a.x - b.x) > 1e-6;
+}
+
+/** The index of the point the 'drag-top' hand drags: the first unlocked point flagged `vertical`
+ * (the air time lesson's hump top), or -1. */
+export function dragTopIndex(points: readonly TrackPoint[]): number {
+  return points.findIndex((p) => p.vertical && !p.locked);
+}
+
+/** The vertical-only point moved off its preset height (the 'drag-top' step is done). */
+export function topMoved(preset: readonly TrackPoint[], points: readonly TrackPoint[]): boolean {
+  const i = dragTopIndex(preset);
+  if (i < 0) return false;
+  const a = preset[i]!;
+  const b = points[i];
+  return !!b && (Math.abs(a.y - b.y) > 1e-6 || Math.abs(a.x - b.x) > 1e-6);
 }
 
 /** The child added a point to the preset (the 'add-point' step is done). */
@@ -52,6 +69,9 @@ export const DRAG_HAND_PERIOD_MS = Object.values(DRAG_HAND).reduce((a, b) => a +
 /** How far up the stroke goes, stage px (16 px = 1 m: 140 px = 8.75 m, the level-1 station from
  * 14 m to 22.75 m, well past the 19 m the 15 m drop needs). */
 export const DRAG_RISE_PX = 140;
+/** The 'drag-top' stroke is shorter (80 px = 5 m): the air time lesson's hump top from 5 m to
+ * 10 m, the middle of the heights that float the fuzz for half a second (levels.test.ts). */
+export const DRAG_TOP_RISE_PX = 80;
 
 export interface DragHandPose {
   /** Index into the 3 glove frames (0 = finger out, 2 = pressed). */

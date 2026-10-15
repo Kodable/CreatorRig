@@ -8,7 +8,11 @@ import { FIXED_DT, FixedStepper } from './core/stepper';
 import { interpolateCart } from './core/interpolateCart';
 import { clonePoints, expandTrackPoints } from './core/trackPoints';
 import { editRules, startTool, toolAllowed } from './core/editRules';
-import { LOOP_HAND_TAPS, TAP_PERIOD_MS, coachSteps, nextCoachStep, pointAdded, stationMoved } from './core/coach';
+import {
+  DRAG_RISE_PX, DRAG_TOP_RISE_PX, LOOP_HAND_TAPS, TAP_PERIOD_MS,
+  coachSteps, dragTopIndex, nextCoachStep, pointAdded, stationMoved, topMoved,
+} from './core/coach';
+import { airGoal, previewAir, type AirPreview } from './core/airPreview';
 import type { Hud } from './ui/hud';
 import type { CoasterScene } from './game/CoasterScene';
 import { isSkinId, loadSkin, saveSkin, type SkinId } from './game/skins';
@@ -20,6 +24,9 @@ import { makeDialogRunner, type BrunoDialogRunner } from './ui/brunoDialog';
  * the physics sim and the HUD together. Deliberately free of Phaser imports
  * (apart from the CoasterScene type) so it stays testable in isolation.
  */
+/** The air preview's wait after a track change (ms), see App.previewDueMs. */
+const PREVIEW_DELAY_MS = 100;
+
 export class App {
   mode: Mode = 'edit';
   levelIndex = 0;
@@ -52,6 +59,14 @@ export class App {
   /** The step on screen and how long it has shown (ms; the Loop hand leaves after its taps). */
   private coachStep: CoachStep | null = null;
   private coachStepMs = 0;
+
+  // ---- the air time preview (2026-10-15, src/core/airPreview.ts) ----
+  /** The latest dry run on the edited track (levels with an air time goal only), else null. */
+  airPreview: AirPreview | null = null;
+  /** ms until the pending dry run, or null when none is pending. A change schedules one
+   * PREVIEW_DELAY_MS later and later changes ride along, so a drag recomputes about ten times a
+   * second (a few ms each) and the glow keeps up with the finger. */
+  private previewDueMs: number | null = null;
 
   private readonly onVisibilityChange = (): void => {
     // A long background pause would otherwise accumulate a burst of steps.
@@ -100,6 +115,10 @@ export class App {
     this.coachStep = null;
     this.coachStepMs = 0;
     this.scene.setCoach(null);
+    this.previewDueMs = null;
+    this.airPreview = null;
+    this.scene.setAirGoal(airGoal(level));
+    this.scene.setAirPreview(null);
 
     this.hud.setLevel(level, LEVELS);
     this.scene.setRideCamera(false);
@@ -110,6 +129,8 @@ export class App {
     this.scene.setFinish(level.finish ?? null);
     // Fires onPointsChanged, which rebuilds the track.
     this.scene.setPoints(clonePoints(level.preset ?? []));
+    // The level's first preview is there from the start (no wait).
+    this.refreshAirPreview();
 
     this.syncUrl(level.id);
 
@@ -150,6 +171,7 @@ export class App {
     if (this.scene.isGestureActive()) return null;
     const preset = level.preset ?? [];
     if (stationMoved(preset, this.points)) this.markCoach('drag-station');
+    if (topMoved(preset, this.points)) this.markCoach('drag-top');
     if (pointAdded(preset, this.points)) this.markCoach('add-point');
     // The drop goal met counts as the station dragged (the drag step's purpose).
     if (this.mode === 'edit' && level.goals.some((g) => g.metric === 'maxDrop')) {
@@ -195,6 +217,15 @@ export class App {
     this.points = pts;
     this.track = buildTrack(expandTrackPoints(pts).pts);
     this.scene.setTrack(this.track);
+    if (airGoal(this.level) !== null && this.previewDueMs === null) this.previewDueMs = PREVIEW_DELAY_MS;
+  }
+
+  /** Runs the air time dry run on the current track now (levels with an air time goal) and hands
+   * the floaty stretches to the scene. */
+  private refreshAirPreview(): void {
+    this.previewDueMs = null;
+    this.airPreview = airGoal(this.level) !== null && this.track ? previewAir(this.track) : null;
+    this.scene.setAirPreview(this.airPreview);
   }
 
   // ---- public commands (wired to the HUD) ------------------------------
@@ -281,6 +312,8 @@ export class App {
         this.meters.observe(this.lastSnap, FIXED_DT);
       });
       this.lastSnap = sim.snapshot();
+      // The float counter over the fuzz counts the ride's air time so far (the hangTime meter).
+      this.scene.setRideAir(this.meters.airTime());
       this.scene.drawCart(interpolateCart(this.prevSnap, this.lastSnap, this.stepper.alpha));
 
       if (sim.outcome !== 'running') {
@@ -301,10 +334,18 @@ export class App {
       }
     }
 
+    if (this.previewDueMs !== null) {
+      this.previewDueMs -= deltaMs;
+      if (this.previewDueMs <= 0) this.refreshAirPreview();
+    }
+
     const step = this.updateCoach(deltaMs);
+    const topIndex = step === 'drag-top' ? dragTopIndex(this.points) : -1;
     this.scene.setCoach(
       step === 'drag-station'
-        ? { kind: 'drag-station' }
+        ? { kind: 'drag', index: 0, risePx: DRAG_RISE_PX }
+        : topIndex >= 0
+          ? { kind: 'drag', index: topIndex, risePx: DRAG_TOP_RISE_PX }
         : step === 'add-point' && this.level.coachSpot
           ? { kind: 'tap', at: this.level.coachSpot }
           : null,

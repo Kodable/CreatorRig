@@ -93,22 +93,35 @@ export const LEVELS: Level[] = [
   },
   {
     id: 'hang',
-    title: 'Hang time',
-    bruno: "Fuzzes love to float! Can we give them one whole second of air over a hump?",
+    title: 'Air time',
+    bruno: "Ever feel your tummy float over a hill? Let's give the fuzz that feeling.",
     goals: [
-      { metric: 'hangTime', op: '>=', value: 1, label: '1 second of hang time' },
+      { metric: 'hangTime', op: '>=', value: 0.5, label: 'Half a second of air time' },
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
       { metric: 'reachedEnd', op: '==', value: 1, label: 'Fuzz reaches the end' }
     ],
-    // A gentle locked start: the track cannot drop straight down off the station, so the floaty
-    // time has to come from going over a hump (a straight plunge after it gives at most 0.9 s).
-    preset: [{ x: 2, y: 16, kind: 'curve', locked: true }, { x: 10, y: 12, kind: 'curve', locked: true }],
+    // 2026-10-15 (Gao: "kids won't understand hang time"): a drag-the-top lesson like level 1. The
+    // whole track is placed: a locked station, the hill's two locked feet, the hilltop (index 2),
+    // which only slides up and down, and a locked end on the flag. Nothing can be added. The top
+    // starts 1 m over its feet (about 0.3 s of air, short of the goal); from about 6 m to 16 m the
+    // fuzz floats for half a second or more over the crest (0.5 s at 6 m, 1.6 s at 16 m); above
+    // about 16.5 m the fuzz cannot get over and rocks back and forth in the valley (stuck). The
+    // light-blue glow on the rail (src/core/airPreview.ts) shows where it will float before Play.
+    preset: [
+      { x: 2, y: 18, kind: 'curve', locked: true },
+      { x: 18, y: 4, kind: 'curve', locked: true },
+      { x: 30, y: 5, kind: 'curve', vertical: true },
+      { x: 42, y: 4, kind: 'curve', locked: true },
+      { x: 56, y: 3, kind: 'curve', locked: true }
+    ],
     finish: { x: 56, y: 3, r: 2.5 },
-    tools: ['point'],
+    tools: [],
+    canAdd: false,
+    coach: ['drag-top'],
     hints: {
-      rolledBack: "The fuzz rolled back. Make the hump lower than the station.",
-      stuck: "Not enough speed for that hump. Make it a little lower.",
-      fell: "The fuzz fell off! Floaty time comes from going over a hump."
+      rolledBack: "The fuzz rolled back. Let's keep the hilltop lower than the station.",
+      stuck: "Too high! The fuzz could not get over. Let's drag the hilltop down a little.",
+      fell: "Off the track! Let's drag the hilltop to a new height and try again."
     }
   },
   {
@@ -174,14 +187,15 @@ export const LEVELS: Level[] = [
   {
     id: 'thrill',
     title: 'Thrill ride',
-    bruno: "Challenge! One second of air, under 4 g, and end at the flag. Let's plan it.",
+    bruno: "Challenge! One second of air time, under 4 g, and end at the flag. Let's plan it.",
     goals: [
-      { metric: 'hangTime', op: '>=', value: 1, label: '1 second of hang time' },
+      { metric: 'hangTime', op: '>=', value: 1, label: '1 second of air time' },
       { metric: 'maxG', op: '<=', value: 4, label: 'Stay under 4 g' },
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' }
     ],
     // A gentle locked start stops the cheap vertical plunge off the station; the flag forces a
-    // real track across the field, so the floaty time has to come from a hump crest.
+    // real track across the field, so the air time has to come from a hump crest. The light-blue
+    // air preview shows on the rail here too (src/core/airPreview.ts).
     preset: [{ x: 2, y: 22, kind: 'curve', locked: true }, { x: 8, y: 20, kind: 'curve', locked: true }],
     finish: { x: 56, y: 4, r: 2.5 },
     hints: {

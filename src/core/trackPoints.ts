@@ -8,11 +8,12 @@ export const LOOP_STEPS = 8;    // control points around the circle (9 points in
 
 const SAMPLES_PER_SEGMENT = 24;
 
-/** Deep copy of a TrackPoint list, preserving kind and locked. */
+/** Deep copy of a TrackPoint list, preserving kind, locked and vertical. */
 export function clonePoints(points: readonly TrackPoint[]): TrackPoint[] {
   return points.map((p) => {
     const copy: TrackPoint = { x: p.x, y: p.y, kind: p.kind };
     if (p.locked) copy.locked = true;
+    if (p.vertical) copy.vertical = true;
     return copy;
   });
 }

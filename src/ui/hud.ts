@@ -318,7 +318,7 @@ export class Hud {
     this.meterSpeed.sub = speedKm;
 
     this.meterLength = makeMeter('meter-length', 'Length');
-    this.meterHang = makeMeter('meter-hang', 'Hang time');
+    this.meterHang = makeMeter('meter-hang', 'Air time');
     this.meterLoops = makeMeter('meter-loops', 'Loops');
 
     this.meterIntense = makeMeter('meter-intense', 'Intense-o-meter');

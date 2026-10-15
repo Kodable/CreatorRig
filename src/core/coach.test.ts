@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LEVELS, findLevel } from './levels';
 import {
   DRAG_HAND, DRAG_HAND_PERIOD_MS, LOOP_HAND_TAPS, TAP_PERIOD_MS,
-  coachSteps, dragHandPose, nextCoachStep, pointAdded, stationMoved, tapHandFrame,
+  DRAG_TOP_RISE_PX, coachSteps, dragHandPose, dragTopIndex, nextCoachStep, pointAdded, stationMoved, tapHandFrame, topMoved,
 } from './coach';
 import { insertionIndex } from './trackPoints';
 import type { CoachStep } from './types';
@@ -39,8 +39,26 @@ describe('coaster tutorial hand (2026-10-15)', () => {
     expect(coachSteps(findLevel('loop')!)).toEqual(['loop-tool']);
   });
 
-  it('only levels 1, 2 and the loop lesson have a hand', () => {
-    expect(LEVELS.filter((l) => coachSteps(l).length > 0).map((l) => l.id)).toEqual(['drop', 'complete', 'loop']);
+  it('only levels 1, 2, the air time lesson and the loop lesson have a hand', () => {
+    expect(LEVELS.filter((l) => coachSteps(l).length > 0).map((l) => l.id)).toEqual(['drop', 'complete', 'hang', 'loop']);
+  });
+
+  it('air time lesson: the hand drags the hilltop up into the floaty band, and stops once it moves', () => {
+    const hang = findLevel('hang')!;
+    expect(coachSteps(hang)).toEqual(['drag-top']);
+    const preset = hang.preset!;
+    const i = dragTopIndex(preset);
+    expect(i).toBe(2);
+    expect(preset[i]!.vertical).toBe(true);
+    expect(topMoved(preset, preset)).toBe(false);
+    expect(topMoved(preset, preset.map((p, k) => (k === i ? { ...p, y: p.y + 0.5 } : p)))).toBe(true);
+    // the stroke ends inside the band that floats the fuzz for half a second (6..16 m, levels.test.ts)
+    const end = preset[i]!.y + DRAG_TOP_RISE_PX / 16;
+    expect(end).toBeGreaterThanOrEqual(7);
+    expect(end).toBeLessThanOrEqual(14);
+    expect(nextCoachStep(coachSteps(hang), new Set<CoachStep>(['drag-top']))).toBeNull();
+    // levels without a vertical point have no top to drag
+    expect(dragTopIndex(LEVELS[0]!.preset!)).toBe(-1);
   });
 
   it('the drag step is done once the station moves; the add step once a point is added', () => {

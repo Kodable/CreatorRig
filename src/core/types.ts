@@ -4,9 +4,10 @@ export const DS = 0.1;                       // resample spacing, meters
 
 /** A control point of the one track object. A 'loop' point is a fixed vertical loop piece
  * (radius LOOP_RADIUS in core/trackPoints.ts) whose bottom sits at the point. A locked point was
- * placed by the level: the child cannot move or delete it. */
+ * placed by the level: the child cannot move or delete it. A vertical point (2026-10-15, the air
+ * time lesson's hump top) only slides up and down: a drag keeps its x (src/core/editRules.ts). */
 export type PointKind = 'curve' | 'loop';
-export interface TrackPoint { x: number; y: number; kind: PointKind; locked?: boolean }
+export interface TrackPoint { x: number; y: number; kind: PointKind; locked?: boolean; vertical?: boolean }
 /** A finish zone in world meters: the track's last point must lie inside the circle. */
 export interface FinishZone { x: number; y: number; r: number }
 
@@ -35,9 +36,10 @@ export interface Metrics {
 export type Metric = keyof Metrics;
 export interface Goal { metric: Metric; op: '>=' | '<=' | '=='; value: number; label: string }
 export interface GoalResult { goal: Goal; current: number; pass: boolean }
-/** A step of a level's tutorial hand (src/core/coach.ts): the glove drags the station up, taps the
- * fuzz skin button, taps Play, taps an empty sky spot to add a point, or taps the Loop tool. */
-export type CoachStep = 'drag-station' | 'skin' | 'play' | 'add-point' | 'loop-tool';
+/** A step of a level's tutorial hand (src/core/coach.ts): the glove drags the station up, drags the
+ * level's vertical-only point (the air time lesson's hump top) up, taps the fuzz skin button, taps
+ * Play, taps an empty sky spot to add a point, or taps the Loop tool. */
+export type CoachStep = 'drag-station' | 'drag-top' | 'skin' | 'play' | 'add-point' | 'loop-tool';
 export interface Level {
   id: string; title: string; bruno: string; goals: Goal[]; preset?: TrackPoint[]; finish?: FinishZone;
   hints: { rolledBack: string; stuck: string; fell: string };

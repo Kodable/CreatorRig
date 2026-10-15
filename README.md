@@ -24,10 +24,11 @@ Tap empty space on the track to insert a point. Tap the sky to append at the end
 
 Two tools in the bottom bar: **Point** and **Loop**. A loop is a fixed piece (a point of kind `loop` expanded into a 4 m radius circle by `expandTrackPoints` before the spline is built). Locked points (placed by a level) show a padlock and cannot move or delete; Clear keeps them.
 
-**Editor rules, locks and tutorial hands (2026-10-15).** A level may restrict the editor (`Level.tools`, `canAdd`, `stationVertical`, `newTool`; the pure helpers in `src/core/editRules.ts`, used by `CoasterScene` and the HUD; a level that sets none of them is the open editor). `tools` picks the tool buttons (default Point and Loop; `[]` hides the group, a lone button gets both pill ends). `canAdd: false` means a tap on the track or the sky adds nothing and a tap on a point deletes nothing, and Clear resets to the preset (elsewhere Clear keeps the locked points; Clear and a tap that changed nothing push no undo step). `stationVertical` lets the station slide only up and down. The Loop button is hidden before the loop lesson; on the loop lesson (`newTool: 'loop'`) it shows with a NEW pill until the child picks it.
+**Editor rules, locks and tutorial hands (2026-10-15).** A level may restrict the editor (`Level.tools`, `canAdd`, `stationVertical`, `newTool`; the pure helpers in `src/core/editRules.ts`, used by `CoasterScene` and the HUD; a level that sets none of them is the open editor). `tools` picks the tool buttons (default Point and Loop; `[]` hides the group, a lone button gets both pill ends). `canAdd: false` means a tap on the track or the sky adds nothing and a tap on a point deletes nothing, and Clear resets to the preset (elsewhere Clear keeps the locked points; Clear and a tap that changed nothing push no undo step). `stationVertical` lets the station slide only up and down; a point flagged `vertical` (`TrackPoint.vertical`, the air time lesson's hilltop) does the same wherever it sits, and keeps the flag through drags, Undo and Clear. The Loop button is hidden before the loop lesson; on the loop lesson (`newTool: 'loop'`) it shows with a NEW pill until the child picks it.
 
 The tutorial hand is the builder kit's 3-frame glove (`public/ui/hand_01..03.png`, fingertip anchor 108/310, 2/360, only the finger bends). A level lists its steps in `Level.coach` (`src/core/coach.ts`: `nextCoachStep` shows the first step not done; a step's action done early skips it). The hand appears only after Bruno's intro and the goals intro, never in play mode, hides while a finger is on the track, and each step is done for good on that level load (a fresh load starts over).
 - Level 1 (`drop`): `drag-station` (in the scene, on the world camera: the glove presses on the station handle, frames 1-2-3 over 0.25 s, slides straight up 140 px over 0.9 s ease in-out carrying a faint ghost handle, holds, releases 3-2-1, fades, pauses 0.6 s, repeats; a faint dotted arrow shows the way up; done once a drag of the station is let go or the drop goal is met), then `skin` (taps the fuzz button until the skin tray opens), then `play` (taps Play until it is pressed).
+- Air time lesson (`hang`): `drag-top` (the same stroke on the vertical-only hilltop, rising 80 px = 5 m, from 5 m into the middle of the floaty band; done once the hilltop has been dragged).
 - Level 2 (`complete`): `add-point` (taps the empty sky at `coachSpot` (40, 5) m, two thirds of the way to the flag, until a point is added).
 - Loop lesson: `loop-tool` (taps the Loop button 3 times, or until the child picks Loop).
 Taps: one per 1.1 s (finger out, bend, pressed, back, rest). The bar-button hands are the glove flipped upside down, pointing down at the button's top-right from above (the bar sits on the stage's bottom edge, where the upright glove was cut off).
@@ -42,17 +43,19 @@ Layout (2026-10-07, the rover's treatment): no dash. The goals float in a transl
 
 ### 12 Levels
 
+**Air time made visible (2026-10-15).** On levels with an air time goal (`hang`, `thrill`; `airGoal` in `src/core/airPreview.ts`), edit mode shows where the fuzz will float before the ride: `previewAir` runs the same deterministic sim on the edited track (fixed steps, capped at 40 s of sim time, usually well under 1 ms to a few ms) and returns the airborne stretches of rail, which the scene paints as a light-blue glow along the rail (the rail itself repainted light blue with a blue edge and a shine line, over a soft white halo) with an "Air time: 0.3 s" pill under the longest stretch (blue, green once it meets the goal). The App reruns it 100 ms after a track change (later changes ride along, so a drag updates about ten times a second); the preview's air time is the ride's (`airPreview.test.ts`). During the ride (every level), when the fuzz is airborne (seat g under 0.3) it eases up off the rail (12 to 24 stage px, eased in over about 70 ms and down over about 150 ms), leaves a soft shadow on the rail, keeps its excited face and trails little sparkles; on levels with an air time goal a counter over it counts the ride's air time in tenths ("0.4 s"), stays 0.7 s after a float and fades, and the moment the goal is met it pops the goal in words ("Half a second!", "1 second!") in gold with a burst of sparkles, then counts on in green. All cosmetic: the sim and the metrics never see it.
+
 Most levels lock the station (and, where the start matters, a second lead-in point) and end at a locked finish flag with a "Track reaches the flag" goal; a level with a flag passes only when the fuzz actually reaches the end (`src/app.ts`). Each level's solution track is proven in `src/core/levels.test.ts` (it still passes when any one point moves 1 m; it keeps the preset's locked points and uses only the level's tools).
 
 - `drop`: Vertical drop — drag the station up: at least 15 m down to the flag. No tool buttons, nothing to add or delete, the end locked on the flag, the station slides only up and down; tutorial hand: drag up, fuzz button, Play.
 - `complete`: Complete the track — pre-placed locked points; bring the rail to the finish flag. Point only; tutorial hand taps a sky spot.
 - `speed`: Speed — reach 18 m/s and the high flag (a straight slope is too slow). Point only.
 - `length`: Length — 80 m of track to the flag. Point only; station at 26 m (20 m before 2026-10-15: from 26 m one tall up-and-down hill already reaches 80 m, from 20 m it took three hills squeezed under the station).
-- `hang`: Hang time — a locked gentle lead-in; a hump gives 1 s of airtime. Point only.
+- `hang`: Air time (2026-10-15, was "Hang time": Gao, "kids won't understand hang time") — a drag-the-top lesson like level 1: a locked station (2, 18), the hill's locked feet (18, 4) and (42, 4), the hilltop (30, y) that only slides up and down, and a locked end on the flag (56, 3); no tool buttons, nothing to add. Goal: half a second of air time (0.5 s). The hilltop starts at 5 m (about 0.3 s of air); from about 6 m to 16 m the fuzz floats 0.5 s to 1.6 s over the crest (the tests check 6.5 to 15.5 m); from about 17 m it cannot get over and rocks in the valley (stuck). Tutorial hand: drag the hilltop up.
 - `loop`: Loops — ride through a loop to the flag (a loop left high falls off). The Loop button first shows here (NEW pill, tutorial hand).
 - `intense`: Intense-o-meter — 15 m/s under 4 g to a high flag (one round dip).
 - `double`: Double loop — two loops, reach the flag (challenge).
-- `thrill`: Thrill ride — locked lead-in, 1 s of hang time from a hump, under 4 g, reach the flag (challenge).
+- `thrill`: Thrill ride — locked lead-in, 1 s of air time from a hump, under 4 g, reach the flag (challenge). Shows the air preview too.
 - `express`: Fuzz express — 20 m/s on 100 m of track, reach the end (challenge).
 - `grand`: Grand finale — a loop under 7 g from a locked 28 m station (challenge).
 - `free`: Free play — all meters on.
@@ -62,7 +65,7 @@ Most levels lock the station (and, where the start matters, a second lead-in poi
 **Drop**: max fall from station to track low point.  
 **Speed**: current speed (play mode) or max speed (edit mode); also shown in km/h.  
 **Length**: total track length.  
-**Hang time**: seconds with seat g under 0.3 (weightless).  
+**Air time** (the `hangTime` metric; kids see "air time" everywhere since 2026-10-15): seconds with seat g under 0.3 (weightless).  
 **Loops**: number built (edit) or completed/total during ride (play).  
 **Bruno** (Spine) slides in to give each level's lesson intro (see Bruno's dialog above); his run lines show in the quick box with his face. The rider is the blue fuzz image in `public/blueFuzz_idle.png`.  
 **Intense-o-meter**: current g in play mode or max g overall; green < 2g, orange 2–4g, pink > 4g.
