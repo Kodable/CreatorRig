@@ -434,7 +434,7 @@ export class Hud {
 
     // ---- the tutorial hand over the bar buttons (under Bruno's dialog) ----
     const hand = document.createElement('div');
-    hand.className = 'coach-hand down';
+    hand.className = 'coach-hand side';
     hand.hidden = true;
     const handImg = document.createElement('img');
     handImg.src = COACH_HAND_SRC[0];
@@ -460,11 +460,12 @@ export class Hud {
   }
 
   /**
-   * The tutorial hand on its bar button (2026-10-15): the kit's glove flipped upside down (finger
-   * pointing down, `.coach-hand.down`), because the bar sits on the stage's bottom edge and the
-   * upright glove, which hangs below its fingertip, was cut off there. The fingertip sits near the
-   * button's top-right (82%/30%; the wide Play button 92%/35%, the rover DRIVE hand's right-end
-   * spot), so the glove hangs above the button's right end and the label stays visible; one tap
+   * The tutorial hand on its bar button (2026-10-15): the kit's glove turned a quarter turn (finger
+   * pointing left, `.coach-hand.side`, turned about the fingertip), because the bar sits on the
+   * stage's bottom edge and the upright glove, which hangs below its fingertip, was cut off there
+   * (a first try flipped it upside down; Gao asked for 90 degrees instead). The fingertip sits on
+   * the button's right part at mid-height (82%/55%; the wide Play button 92%/55%), so the glove lies
+   * in the bar to the button's right and the label stays visible; one tap
    * per TAP_PERIOD_MS (tapHandFrame), a pop-in when the step changes. Hidden while the skin tray is
    * open. Never interactive (pointer-events: none).
    */
@@ -489,10 +490,10 @@ export class Hud {
     if (this.coachHandImg.getAttribute('src') !== src) this.coachHandImg.src = src;
     const wide = step === 'play';
     const fx = rect.x + rect.w * (wide ? 0.92 : 0.82);
-    const fy = rect.y + rect.h * (wide ? 0.35 : 0.3);
-    // Flipped vertically: the fingertip is (FX, 1 - FY) of the glove box.
+    const fy = rect.y + rect.h * 0.55;
+    // The picture turns about its fingertip (style.css), so the fingertip is (FX, FY) of the box.
     this.coachHandEl.style.left = `${(fx - COACH_HAND_FX * COACH_HAND_W).toFixed(1)}px`;
-    this.coachHandEl.style.top = `${(fy - (1 - COACH_HAND_FY) * COACH_HAND_H).toFixed(1)}px`;
+    this.coachHandEl.style.top = `${(fy - COACH_HAND_FY * COACH_HAND_H).toFixed(1)}px`;
     this.setHidden(this.coachHandEl, false);
   }
 
