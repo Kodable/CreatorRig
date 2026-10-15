@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { lookImageUrls } from '../../kit/looks';
 import { PARALLAX } from '../../kit/parallax';
+import { estimateBigTextWidth, layoutWidgets, MIN_TOUCH_PX } from '../../kit/widgetLayout';
 import { catapultSpec } from './spec';
 import { CATALOG, FUZZ, FUZZ_NAMES } from './core/catalog';
 import {
@@ -139,7 +140,29 @@ describe('catapultSpec.widgets', () => {
     expect(angle.track).toBe('none');
     expect(angle.readout).toBe('knob');
     expect(angle.live).toBe(true);
-    expect(angle.size).toBe(72);
+  });
+
+  it('angle (2026-10-15, Gao: "remove the indicator dots, and make the drag handle smaller"): no notch ' +
+    'dots, a 56 px knob (was 72) whose grab circle still clears the 64 px touch rule and whose "60°" ' +
+    'readout fits at 16 px', () => {
+    const part = catapultPart(15, 0);
+    const angle = catapultSpec.widgets!(part, [], {} as never).find((w) => w.id === 'angle')!;
+    if (angle.kind !== 'dial') throw new Error('expected a dial widget');
+    expect(angle.notches).toBe(false);
+    expect(angle.size).toBe(56);
+    // Laid out at the build view's zoom (pxScale = 1 / zoom): drawn 56 px across on screen, the
+    // grab circle >= 64 px, and no invisible tick hit spots where the dots were.
+    const zoom = catapultSpec.focusFrame!(part, {} as never)!.zoom;
+    const toPx = (v: { x: number; y: number }) => ({ x: v.x * 32, y: -v.y * 32 });
+    const [geom] = layoutWidgets([angle], toPx, 1 / zoom);
+    if (geom?.kind !== 'dial') throw new Error('expected a dial geom');
+    expect(geom.notches).toBe(false);
+    expect(geom.handleR * 2 * zoom).toBeCloseTo(56, 9);
+    expect(geom.hits).toHaveLength(1);
+    const grab = geom.hits[0]!.shape;
+    expect(grab.kind === 'circle' && grab.r * 2 * zoom).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
+    // "75°" in 16 px bold is ~30 px wide: inside the knob's 56 px minus its 4 px ring.
+    expect(estimateBigTextWidth('75°') * (16 / 20)).toBeLessThan(56 - 8);
   });
 
   it('angle: option i sits exactly on the lever end for that angle (radiusM at armAngleFor(deg))', () => {
@@ -303,23 +326,25 @@ describe('catapultSpec.focusFrame: the machine framed left of the drawer', () =>
     expect(catapultSpec.focusFrame!(shelf, {} as never)).toBeNull();
   });
 
-  it('zoom 3.6, centred at (x + 0.7, y + 2.073): y + 1.5 plus half the 132 px the viewport grew ' +
-    '(2026-10-07)', () => {
+  it('zoom 2.8 (2026-10-15, Gao: "dont zoom into the catapult as much"; was 3.6), centred at ' +
+    '(x + 1.75, y + 2.665): the old 1.5 m rescaled to the new zoom plus half the 132 px the viewport ' +
+    'grew (2026-10-07)', () => {
     const part = catapultPart(15, 0);
     const frame = catapultSpec.focusFrame!(part, {} as never)!;
-    expect(frame.zoom).toBe(3.6);
-    expect(frame.cx).toBeCloseTo(part.x + 0.7, 9);
-    expect(frame.cy).toBeCloseTo(part.y + 1.5 + 66 / (32 * 3.6), 9);
+    expect(frame.zoom).toBe(2.8);
+    expect(frame.cx).toBeCloseTo(part.x + 1.75, 9);
+    expect(frame.cy).toBeCloseTo(part.y + (1.5 * 3.6) / 2.8 + 66 / (32 * 2.8), 9);
+    expect(frame.cy - part.y).toBeCloseTo(2.665, 3);
   });
 
-  it('the machine stays where it sat on screen before the world grew (2026-10-07): the anchor lands ' +
-    'on the same stage y in the 622 px viewport (top 78) as in the 490 px one (top 210)', () => {
+  it('the ground line stays where it sat on screen: the anchor lands on the same stage y (627.8) at ' +
+    'zoom 2.8 in the 622 px viewport (top 78) as at 3.6 in the 490 px one (top 210)', () => {
     const part = catapultPart(15, 0);
     const frame = catapultSpec.focusFrame!(part, {} as never)!;
     // The world camera centres the frame in its viewport (BuilderScene: panel top .. 690 + 10).
-    const stageY = (viewTop: number, cy: number) => (viewTop + 700) / 2 + (cy - part.y) * 32 * frame.zoom;
-    expect(stageY(78, frame.cy)).toBeCloseTo(stageY(210, part.y + 1.5), 6);
-    expect(stageY(78, frame.cy)).toBeCloseTo(627.8, 6);
+    const stageY = (viewTop: number, cy: number, zoom: number) => (viewTop + 700) / 2 + (cy - part.y) * 32 * zoom;
+    expect(stageY(78, frame.cy, frame.zoom)).toBeCloseTo(stageY(210, part.y + 1.5, 3.6), 6);
+    expect(stageY(78, frame.cy, frame.zoom)).toBeCloseTo(627.8, 6);
     // Inside the kit's clamp (clampFrame: cy >= -groundDepth + worldH / zoom / 2), so it holds.
     expect(frame.cy).toBeGreaterThan(-1.5 + WORLD_H / frame.zoom / 2);
   });
@@ -328,7 +353,7 @@ describe('catapultSpec.focusFrame: the machine framed left of the drawer', () =>
     'right) holds the whole machine - the arm, cup and base pictures with >= 0.1 m to spare (whole ' +
     'boxes, transparent corners included) - and the loaded Metal fuzz\'s body, the lever knob at ' +
     'every angle and the snip spot (where FIRE was) with >= 0.3 m, the lever\'s pad with >= 0.1 m, for both arms', () => {
-      const zoom = 3.6;
+      const zoom = 2.8;
       const viewW = 960 / 32 / zoom;
       // The 612 px panel (WORLD_H * 32) plus the kit's 10 px earth margin (490 before 2026-10-07).
       const viewH = (WORLD_H * 32 + 10) / 32 / zoom;
@@ -371,15 +396,24 @@ describe('catapultSpec.focusFrame: the machine framed left of the drawer', () =>
         // the old caption line, about y - 0.34, still over 0.25 m above the view's bottom edge.
         inside(fireSpot(part), 'snip', 0.3);
         expect(part.y - 0.34).toBeGreaterThan(frame.cy - viewH / 2 + 0.25);
+
+        // The room 2.8 frees goes to the shot preview: >= 1.5 m of open view right of the base
+        // picture before the drawer (none at 3.6), >= 2.5 m over the lever's pad.
+        expect(frame.cx - viewW / 2 + uncoveredW - (part.x + BASE_ART.cx + BASE_ART.w / 2)).toBeGreaterThan(1.5);
+        expect(frame.cy + viewH / 2 - (part.y + 3.38)).toBeGreaterThan(2.5);
       }
   });
 
-  it('at the leftmost catapult position in levels.ts (x = 3.5, the "move" level\'s start), cx stays ' +
-    'just clear of the kit\'s left clamp (worldW / zoom / 2)', () => {
+  it('at the leftmost catapult position in levels.ts (x = 3.5, the "move" level\'s start), cx asks ' +
+    'for the kit\'s left clamp itself (worldW / zoom / 2 = 5.357), and the Short arm\'s cup is in view', () => {
     const part = catapultPart(3.5, 0);
     const frame = catapultSpec.focusFrame!(part, {} as never)!;
-    expect(frame.cx).toBeCloseTo(4.2, 9);
+    expect(frame.cx).toBeCloseTo(30 / 2.8 / 2, 9);
     expect(frame.cx).toBeGreaterThanOrEqual(30 / frame.zoom / 2);
+    const pivot = { x: part.x + PIVOT_DX, y: part.y + PIVOT_DY };
+    for (const p of boxCorners(pivot, REST_ANGLE, cupCoverBox(2))) expect(p.x).toBeGreaterThan(frame.cx - 15 / frame.zoom + 0.5);
+    // Dragged right on that level, the frame follows the catapult's x.
+    expect(catapultSpec.focusFrame!(catapultPart(6, 0), {} as never)!.cx).toBeCloseTo(7.75, 9);
   });
 });
 

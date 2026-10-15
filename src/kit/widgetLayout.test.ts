@@ -5,6 +5,7 @@ import {
   BIG_MIN_W,
   BIG_PAD_X,
   BIG_PILL_H,
+  DIAL_MIN_KNOB_PX,
   MIN_TOUCH_PX,
   estimateBigTextWidth,
   widgetAnchor,
@@ -198,6 +199,33 @@ describe('dial layout: radiusM, track, readout, live', () => {
     expect(g.track).toBe('arc');
     expect(g.readout).toBe('value');
     expect(g.live).toBe(false);
+  });
+
+  it('notches: default true (an option tick hit each); false (2026-10-15) drops the dots and their ' +
+    'hit spots, leaving only the handle grab', () => {
+    const [on] = layoutWidgets([baseDial], toPx, 1) as [DialGeom];
+    expect(on.notches).toBe(true);
+    expect(on.hits).toHaveLength(1 + baseDial.options.length);
+    const [off] = layoutWidgets([{ ...baseDial, notches: false }], toPx, 1) as [DialGeom];
+    expect(off.notches).toBe(false);
+    expect(off.hits).toHaveLength(1);
+    expect(off.hits[0]!.index).toBe(1); // 'mid'
+  });
+
+  it('size: the drawn handle may go under the 64 px control floor down to DIAL_MIN_KNOB_PX, the ' +
+    'grab circle never under MIN_TOUCH_PX across', () => {
+    const r = (size: number | undefined, pxScale = 1) => {
+      const [g] = layoutWidgets([{ ...baseDial, size }], toPx, pxScale) as [DialGeom];
+      const grab = g.hits[0]!.shape;
+      return { drawn: g.handleR * 2, grab: grab.kind === 'circle' ? grab.r * 2 : 0 };
+    };
+    expect(r(undefined).drawn).toBe(72);
+    expect(r(56).drawn).toBe(56);
+    expect(r(30).drawn).toBe(DIAL_MIN_KNOB_PX);
+    for (const size of [30, 44, 56, 72]) expect(r(size).grab).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
+    // Screen-constant: at zoom 2.8 (pxScale 1 / 2.8) both shrink in stage px by the same factor.
+    expect(r(56, 1 / 2.8).drawn).toBeCloseTo(20, 9);
+    expect(r(56, 1 / 2.8).grab * 2.8).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
   });
 
   it('carries track, readout and live through from the widget spec', () => {

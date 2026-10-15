@@ -65,7 +65,7 @@ class FakeScene {
   /** The widget list last sent (`setWidgets`), the selection, and the coach hand's target. */
   widgetsNow: Widget[] = [];
   selected: number | null = null;
-  coach: { target: unknown; stepId: string } | null = null;
+  coach: { target: unknown; stepId: string; gesture?: unknown } | null = null;
   onUpdate?: (dt: number) => void;
   onPartTapped?: (id: number) => void;
   onEmptyTapped?: (at: Vec2) => void;
@@ -98,8 +98,8 @@ class FakeScene {
   setSelected(id: number | null): void {
     this.selected = id;
   }
-  setCoachTarget(target: unknown, stepId: string): void {
-    this.coach = target ? { target, stepId } : null;
+  setCoachTarget(target: unknown, stepId: string, gesture?: unknown): void {
+    this.coach = target ? (gesture ? { target, stepId, gesture } : { target, stepId }) : null;
   }
   celebrate(): void {}
   trackPoint(p: unknown): void {
@@ -588,6 +588,18 @@ describe('BuilderApp: the coach', () => {
     await tap();
     expect(frame(scene, hud).coach?.id).toBe('tap');
     expect(scene.coach).toEqual({ target: { type: 'part', partId: 1 }, stepId: 'tap' });
+  });
+});
+
+describe('BuilderApp: the coach gesture', () => {
+  it("passes a step's drag gesture (CoachStep.gesture) on to the scene with its widget target", async () => {
+    const spec = makeSpec(SINGLE, {
+      coach: () => ({ id: 'angle', text: 'Drag it', target: { type: 'widget', id: 'angle' }, gesture: { kind: 'drag', toValue: '60' } }),
+    });
+    const { scene, hud } = boot(spec);
+    await flush();
+    expect(frame(scene, hud).coach?.gesture).toEqual({ kind: 'drag', toValue: '60' });
+    expect(scene.coach).toEqual({ target: { type: 'widget', id: 'angle' }, stepId: 'angle', gesture: { kind: 'drag', toValue: '60' } });
   });
 });
 

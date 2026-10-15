@@ -122,7 +122,8 @@ interface WidgetBase {
   code?: string;
   action?: WidgetAction;
   /** Control size in stage px, screen-constant (the scene divides by the camera zoom). The
-   * scene never draws or hit-tests a control smaller than 64 px (children's fingers). Default 76. */
+   * scene never draws or hit-tests a control smaller than 64 px (children's fingers; a dial's
+   * drawn handle may be smaller, its grab circle never is, see `DialWidget`). Default 76. */
   size?: number;
   color?: number;
   /** Stamped by the controller from `part.lockedProps`; courses leave it undefined. */
@@ -151,9 +152,11 @@ export interface TapWidget extends WidgetBase {
 
 /** A handle dragged along an arc around `pivot`, snapping to `options` on release. Option i sits
  * at `arcFrom + (arcTo - arcFrom) * i / (options.length - 1)` (radians, CCW, 0 = +x, world axes).
- * `radiusPx` in stage px, screen-constant. `size` is the handle diameter (default 72). The
- * traversed arc fills with the accent colour; `readout` 'value' (default) draws the current
- * option's label big (24 px bold) inside the arc. Pass `options` in visual order. */
+ * `radiusPx` in stage px, screen-constant. `size` is the DRAWN handle diameter (default 72; a dial
+ * may draw it down to DIAL_MIN_KNOB_PX = 44 px, smaller than other widgets' 64 px floor, because
+ * its grab circle never shrinks below the 64 px touch rule, see widgetLayout.ts). The traversed
+ * arc fills with the accent colour; `readout` 'value' (default) draws the current option's label
+ * big (24 px bold) inside the arc. Pass `options` in visual order. */
 export interface DialWidget extends WidgetBase {
   kind: 'dial';
   pivot: Vec2;
@@ -164,6 +167,10 @@ export interface DialWidget extends WidgetBase {
   /** 'arc' (default) draws the track band and its accent fill. 'none' draws only the notch ticks:
    * the machine part under the handle is the track (a lever stick). */
   track?: 'arc' | 'none';
+  /** false: no notch dots along the arc (2026-10-15, Gao on the catapult's angle lever: "remove
+   * the indicator dots"); the handle still snaps to the options, and only the handle is grabbed
+   * (no invisible grab spots where the dots were). Default true. */
+  notches?: boolean;
   arcFrom: number;
   arcTo: number;
   options: PropertyOption[];
@@ -437,11 +444,23 @@ export type CoachTarget<K extends string = string> =
   | { type: 'bar'; button: 'play' | 'next' | 'undo' | 'clear' }
   | { type: 'none' };
 
+/** A demonstration the in-scene coach hand performs instead of its tap (2026-10-15, Gao: "add a
+ * drag tutorial" on the catapult's angle level). 'drag' on a 'widget' target that is a DIAL: the
+ * glove presses on the handle (finger frames 1 -> 2 -> 3), slides along the dial's arc to the
+ * option `toValue` while pressed, carrying a faint ghost of the handle, lets go (3 -> 2 -> 1),
+ * fades, pauses and repeats: the coaster's drag-hand timing (src/core/coach.ts `DRAG_HAND`,
+ * 2.65 s a stroke). Pure pose maths in src/kit/coachGesture.ts. Ignored (the plain tap) on any
+ * other target, when the dial has no such option, or when it already shows `toValue`. The hand
+ * hides while the child holds that widget. */
+export type CoachGesture = { kind: 'drag'; toValue: string };
+
 export interface CoachStep<K extends string = string> {
   /** Stable id: the HUD animates the hand in again only when it changes. */
   id: string;
   text: string;
   target: CoachTarget<K>;
+  /** Optional: drag instead of tap (see `CoachGesture`). Default: the tap. */
+  gesture?: CoachGesture;
 }
 
 export interface CoachContext<K extends string, L> {

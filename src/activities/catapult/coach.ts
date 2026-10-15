@@ -12,7 +12,7 @@
 // child is on their own for the rest of that level load. A fresh load starts over. Level 1 also
 // points at Next level after the pass, as the rover's level 1 does. Nothing on the Donut level
 // (its new thing, the split, is locked in and needs no tap) or on the challenges.
-import type { CoachContext, CoachStep, CoachTarget } from '../../kit/types';
+import type { CoachContext, CoachGesture, CoachStep, CoachTarget } from '../../kit/types';
 import { gatedOptions, isOptionKnown, knownConcepts } from '../../kit/concepts';
 import { CATALOG } from './core/catalog';
 import { LEVELS } from './core/levels';
@@ -29,7 +29,7 @@ export const ANGLE_WIDGET = 'angle';
 export const BUILD_WIDGET = 'build';
 
 /** What each intro level teaches: a drawer row (the hand on one of its options), the angle lever
- * (the hand on its knob), or dragging the catapult. */
+ * (the hand drags its knob up the arc, 2026-10-15), or dragging the catapult. */
 type Lesson =
   | { kind: 'drawer'; code: 'power' | 'fuzz' | 'arm'; tap: string; pick: string }
   | { kind: 'lever'; tap: string; drag: string }
@@ -65,8 +65,23 @@ export const NEXT_TEXT = 'You did it! Tap Next level.';
 
 const GATED = gatedOptions(LEVELS);
 
-function step(id: string, text: string, target: CoachTarget<PartKind>): CatapultCoachStep {
-  return { id, text, target };
+function step(id: string, text: string, target: CoachTarget<PartKind>, gesture?: CoachGesture): CatapultCoachStep {
+  return gesture ? { id, text, target, gesture } : { id, text, target };
+}
+
+/** How many notches up the angle step's drag demonstration goes: two (30 degrees, 30 -> 60 on the
+ * angle level). */
+export const ANGLE_DRAG_NOTCHES = 2;
+
+/** Where the angle step's glove drags the lever knob to (2026-10-15, Gao: "add a drag tutorial on
+ * level 2"): ANGLE_DRAG_NOTCHES options up from the current angle (aim higher), stopping at the
+ * top; from the top itself, that many down so the glove still shows a drag. */
+export function suggestedAngle(part: PlacedPart): string | null {
+  const options = (CATALOG.catapult.descriptors.find((d) => d.code === 'angle')?.options ?? []).map((o) => o.value);
+  const i = options.indexOf(part.props.angle ?? '');
+  if (i === -1 || options.length < 2) return null;
+  const up = Math.min(options.length - 1, i + ANGLE_DRAG_NOTCHES);
+  return options[up !== i ? up : Math.max(0, i - ANGLE_DRAG_NOTCHES)] ?? null;
 }
 
 function catapultOf(ctx: CatapultCoachContext): PlacedPart | undefined {
@@ -102,7 +117,11 @@ export function catapultCoach(ctx: CatapultCoachContext): CatapultCoachStep | nu
     // 2026-10-15: the glove taps the BUILD pill over the catapult (spec.ts idleWidgets), as on the
     // rover; a tap on the machine itself still opens the drawer and moves the coach on.
     if (ctx.selectedId !== catapult.id) return step('tap', lesson.tap, { type: 'widget', id: BUILD_WIDGET });
-    if (lesson.kind === 'lever') return step('angle', lesson.drag, { type: 'widget', id: ANGLE_WIDGET });
+    if (lesson.kind === 'lever') {
+      // The glove drags the knob along the lever's arc (kit `CoachGesture`), not a tap.
+      const to = suggestedAngle(catapult);
+      return step('angle', lesson.drag, { type: 'widget', id: ANGLE_WIDGET }, to ? { kind: 'drag', toValue: to } : undefined);
+    }
     const value = suggestedOption(ctx.level, catapult, lesson.code);
     return step(lesson.code, lesson.pick, value ? { type: 'drawer', code: lesson.code, value } : { type: 'drawer', code: lesson.code });
   }

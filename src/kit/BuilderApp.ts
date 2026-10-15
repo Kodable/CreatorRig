@@ -1127,7 +1127,7 @@ export class BuilderApp<
         }) ?? null
       : null;
     const t = this.coach?.target;
-    this.scene.setCoachTarget(t && (t.type === 'widget' || t.type === 'part') ? t : null, this.coach?.id ?? '');
+    this.scene.setCoachTarget(t && (t.type === 'widget' || t.type === 'part') ? t : null, this.coach?.id ?? '', this.coach?.gesture);
   }
 
   private hudState(): HudState<K, M, O, L> {

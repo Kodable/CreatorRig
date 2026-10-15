@@ -5,6 +5,10 @@ import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, TapW
 
 /** The scene never draws or hit-tests a control smaller than this (on-screen px). */
 export const MIN_TOUCH_PX = 64;
+/** A dial's handle may be DRAWN down to this diameter (on-screen px; 2026-10-15, Gao: "make the
+ * drag handle smaller" on the catapult's angle lever); its grab circle stays at least
+ * MIN_TOUCH_PX * 1.2 across (see `layoutDial`), so the touch target never shrinks. */
+export const DIAL_MIN_KNOB_PX = 44;
 
 /** A hit-test shape in stage px (the same coordinate space `toPx` produces, i.e. before
  * RENDER_SCALE and before the camera's zoom — the space the pointer handlers already compute via
@@ -101,6 +105,8 @@ export interface DialGeom extends WidgetGeomBase {
   /** 'arc' (default) draws the track band and its accent fill; 'none' draws only the notch ticks
    * (the machine part under the handle is the track). */
   track: 'arc' | 'none';
+  /** Draw the notch dots along the arc (`DialWidget.notches`, default true). */
+  notches: boolean;
   /** Commit every new notch while dragging (one undo entry per drag). Default false. */
   live: boolean;
 }
@@ -298,7 +304,9 @@ function layoutDial(w: DialWidget, toPx: (v: Vec2) => Vec2, pxScale: number): Di
           return Math.hypot(edge.x - pivot.x, edge.y - pivot.y);
         })()
       : w.radiusPx * pxScale;
-  const handleR = sizeOf(w.size, 72, pxScale) / 2;
+  // The drawn handle: `size` down to DIAL_MIN_KNOB_PX (not the 64 px floor of other controls);
+  // the grab circle below stays >= MIN_TOUCH_PX * 0.6 in radius whatever the drawn size.
+  const handleR = (Math.max(DIAL_MIN_KNOB_PX, w.size ?? 72) * pxScale) / 2;
   const idx = optionIndex(w, w.value);
   const handleAngle = angleForIndex(w, idx);
   const handlePt = dialPoint(pivot, radiusPx, handleAngle);
@@ -315,14 +323,16 @@ function layoutDial(w: DialWidget, toPx: (v: Vec2) => Vec2, pxScale: number): Di
     handleR,
     readout: w.readout ?? 'value',
     track: w.track ?? 'arc',
+    notches: w.notches ?? true,
     live: w.live ?? false,
     label: w.label,
     locked: w.locked ?? false,
     // Grab the handle (with a generous radius) or any option tick on the arc. Never the whole
     // disc around the pivot: neighbouring widgets (a pump next to the angle dial) sit inside it.
+    // Without notch dots (`notches: false`) only the handle: no invisible grab spots in the sky.
     hits: [
       { shape: { kind: 'circle', x: handlePt.x, y: handlePt.y, r: Math.max(handleR * 1.4, MIN_TOUCH_PX * 0.6 * pxScale) }, index: idx },
-      ...w.options.map((opt, i) => {
+      ...(w.notches === false ? [] : w.options).map((opt, i) => {
         const p = dialPoint(pivot, radiusPx, angleForIndex(w, i));
         return { shape: { kind: 'circle' as const, x: p.x, y: p.y, r: handleR * 0.9 }, value: opt.value, index: i };
       }),

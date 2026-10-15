@@ -48,10 +48,20 @@ const OLD_VIEWPORT_H_PX = 490;
 function riseFor(zoom: number): number {
   return (VIEWPORT_H_PX - OLD_VIEWPORT_H_PX) / 2 / (PPM * zoom);
 }
-/** Building: the machine's zoom, and the frame centre's height over the catapult's anchor: 1.5 m in
- * the 490 px viewport, + riseFor(3.6) = 0.573 m since 2026-10-07 (2.073 m; see `focusFrame`). */
-const FOCUS_ZOOM = 3.6;
-const FOCUS_CY_ABOVE = 1.5 + riseFor(FOCUS_ZOOM);
+/** Building: the machine's zoom, and the frame centre's height over the catapult's anchor. Until
+ * 2026-10-15 zoom 3.6 and 1.5 m in the 490 px viewport + riseFor(3.6) = 2.073 m. 2026-10-15 (Gao:
+ * "dont zoom into the catapult as much, maybe just a little less so we can see the dotted line
+ * more"): zoom 2.8, and the same rule with the anchor kept on its stage y (627.8, the ground line
+ * where it was): 1.5 m at 3.6 is 172.8 stage px between the anchor and the 490 px viewport's
+ * centre, i.e. 172.8 / (32 * 2.8) = 1.929 m at 2.8, + riseFor(2.8) = 0.737 m: 2.665 m (see
+ * `focusFrame`). */
+const FOCUS_ZOOM = 2.8;
+const OLD_FOCUS_ZOOM = 3.6;
+const FOCUS_CY_ABOVE = (1.5 * OLD_FOCUS_ZOOM) / FOCUS_ZOOM + riseFor(FOCUS_ZOOM);
+/** The frame centre's x over the catapult's anchor (m): the machine near the view's left edge (the
+ * Long arm's cup 0.3 m in), so the open drawer leaves the most room on the right for the shot
+ * preview's arc (see `focusFrame`). */
+const FOCUS_DX = 1.75;
 /** The run: the follow camera's zoom, and how far over the followed point it centres: 0.5 m in the
  * 490 px viewport, + riseFor(1.6) = 1.289 m since 2026-10-07 (1.789 m; see `follow`). */
 const FOLLOW_ZOOM = 1.6;
@@ -84,7 +94,9 @@ const WHEEL_HUB = { x: 10, y: M(104) };
 const WHEEL_SPIN = 0.12;
 /** The wheel moves nearly with the world here (the coaster's wheel depth is { x: 0.55, y: 1 }):
  * the catapult's 3.6x build view sits near x 6 m, and at the coaster's depth the wheel slid ~4 m
- * left and filled the space behind the machine (2026-10-15). At 0.9 it shifts ~0.6 m. */
+ * left and filled the space behind the machine (2026-10-15). At 0.9 it shifts ~0.6 m. Since the
+ * build view went to 2.8x later that day (centred near x 7 m) the wheel stands behind the shot
+ * preview's arc, right of the machine; the arc's dark-rimmed dots read on it. */
 const CATAPULT_WHEEL_PARALLAX = { x: 0.9, y: 1 };
 
 const COASTER_BACKDROP: NonNullable<WorldSpec['backgrounds']> = [
@@ -301,7 +313,11 @@ function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
       track: 'none', // the lever stick itself is the track; no separate arc band drawn
       readout: 'knob',
       live: true, // the lever (and the crossbar it drives) moves with the finger, not just on release
-      size: 72,
+      // 2026-10-15 (Gao: "for the angle adjustment, remove the indicator dots, and make the drag
+      // handle smaller"): no notch dots along the arc, and a 56 px knob (was 72; its "60°" stays
+      // 16 px bold, its grab circle 78 px across, widgetLayout's DIAL_MIN_KNOB_PX).
+      notches: false,
+      size: 56,
     },
   ];
 }
@@ -375,43 +391,37 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
   },
 
   // Stakeholder feedback 2026-09-22: "make the ground thicker so we can zoom in better to the
-  // catapult (it's really low on the screen)." zoom 3.6. The world camera's viewport is the 960 x
-  // 622 px panel (VIEWPORT_H_PX: 490 until 2026-10-07, when the world grew to 19.125 m), so at zoom
-  // z the view is 960 / (32 z) x 622 / (32 z) m: 8.333 x 5.399 m at 3.6. The open drawer
-  // (src/kit/builder.css: 340 px wide, from x 652 of the panel's 32..992) covers the right 340 of
-  // the 960 px, leaving 620 / 960 of the width, 5.382 m: x in [cx - 4.167, cx + 1.215], y in
-  // [cy - 2.700, cy + 2.700]. (The old note here said 300 px; the drawer has been 340 px wide since
-  // the kit's drawer pass.)
+  // catapult (it's really low on the screen)": zoom 3.6, cx = x + 0.7, the machine filling the
+  // view left of the drawer. 2026-10-15 (Gao: "dont zoom into the catapult as much, maybe just a
+  // little less so we can see the dotted line more"): zoom 2.8, the machine moved to the view's
+  // left so the room it frees goes to the shot preview's arc (up and to the right of the cup).
   //
-  // Re-fit for the real art (2026-10-01), measured on the prepared pictures' opaque pixels
-  // (relative to the part's anchor):
-  //  - leftmost: the Long arm's cup at rest, x - 3.31 (its Metal fuzz reaches x - 3.14)
-  //  - rightmost: the base picture's plank, x + 1.74 (BASE_ART in build.ts)
-  //  - top: the lever's pad at 15 degrees, y + 3.38 (the knob itself, LEVER_LENGTH out, tops out at
-  //    y + 3.05; its 72 px handle reaches about y + 3.36)
-  //  - bottom: the FIRE button's caption (~16 px under the button, in the ground band), about
-  //    y - 0.34 (an estimate: the caption's own text height). 2026-10-15: FIRE moved to the bottom
-  //    bar; the frame stays as fitted (the snip burst still plays at that spot).
-  // Horizontal span 5.05 m of the 5.382 m, so the old 0.3 m margin all round no longer fits at 3.6
-  // (that would take zoom 3.4); the picture edges get about 0.16 m instead, the parts the child
-  // touches far more: cx = x + 0.7 leaves (x - 3.31) - (x + 0.7 - 4.167) = 0.16 m left of the Long
-  // cup's rim and (x + 0.7 + 1.215) - (x + 1.74) = 0.18 m right of the plank, and >= 0.36 m round
-  // the loaded fuzz's body, the knob and FIRE.
+  // The world camera's viewport is the 960 x 622 px panel (VIEWPORT_H_PX), so at zoom 2.8 the view
+  // is 960 / 89.6 x 622 / 89.6 = 10.714 x 6.942 m. The open drawer (src/kit/builder.css: 340 px
+  // wide, from x 652 of the panel's 32..992) covers the right 340 px, leaving 620 / 960 of the
+  // width, 6.920 m: x in [cx - 5.357, cx + 1.563].
   //
-  // Vertical (2026-10-07, the 622 px viewport): the view's bottom edge stays 0.627 m under the
-  // anchor, where cy = y + 1.5 put it in the 490 px one (1.5 - 490 / (2 * 32 * 3.6)), so cy =
-  // y + FOCUS_CY_ABOVE = y + 2.073 and the view runs y - 0.627 .. y + 4.773. The machine, its
-  // lever and FIRE sit exactly where they did on screen (the anchor at stage y 627.8 either way)
-  // and the taller panel only adds 1.146 m of sky over the lever, where the goals overlay sits.
-  // Vertical span 3.72 m of the 5.399 m: 1.39 m over the pad (1.72 m over the knob) and
-  // (y - 0.34) - (y - 0.627) = 0.29 m under the caption. The kit clamps cy >= -1.5 + 19.125 /
-  // 3.6 / 2 = 1.156, well under every level's y + 2.073 (every catapult stands on y = 0).
+  // The machine, measured on the prepared pictures' opaque pixels (relative to the part's anchor,
+  // 2026-10-01): leftmost the Long arm's cup at rest, x - 3.31; rightmost the base picture's plank,
+  // x + 1.74; top the lever's pad at 15 degrees, y + 3.38 (the knob, LEVER_LENGTH out, tops out at
+  // y + 3.05). cx = x + FOCUS_DX = x + 1.75 puts the view's left edge at x - 3.607, 0.30 m left of
+  // the Long cup, and the drawer's edge at x + 3.313: 1.57 m of open sky right of the plank (none
+  // at 3.6) for the arc, which also has 2.76 m over the lever's pad.
   //
-  // Left clamp: the kit clamps cx to >= 15/zoom = 4.167 (`clampFrame`, src/kit/camera.ts). The
-  // 'move' level starts its catapult at x = 3.5, the lowest x any level ever places one at: cx =
-  // 4.2, just clear of the clamp.
+  // Vertical: the anchor keeps its stage y (627.8, as since 2026-10-07), so the ground line does
+  // not move when the camera zooms in: cy = y + FOCUS_CY_ABOVE = y + 2.665 and the view runs
+  // y - 0.806 .. y + 6.136 (72 px of the ground band under the anchor, as before). The kit clamps
+  // cy >= -1.5 + 19.125 / 2.8 / 2 = 1.915, under every level's y + 2.665 (every catapult stands on
+  // y = 0).
+  //
+  // Left clamp: the kit clamps cx to >= 15 / zoom = 5.357 (`clampFrame`, src/kit/camera.ts); the
+  // frame asks for that itself (the 'move' level starts its catapult at x = 3.5, the lowest x any
+  // level places one at: cx 5.357 instead of 5.25, the Short arm's cup still 1.2 m in). On the move
+  // level the frame follows the dragged catapult's x.
   focusFrame: (part) =>
-    part.kind === 'catapult' ? { cx: part.x + 0.7, cy: part.y + FOCUS_CY_ABOVE, zoom: FOCUS_ZOOM } : null,
+    part.kind === 'catapult'
+      ? { cx: Math.max(15 / FOCUS_ZOOM, part.x + FOCUS_DX), cy: part.y + FOCUS_CY_ABOVE, zoom: FOCUS_ZOOM }
+      : null,
 
   // 'impact' first: from the fuzz's first hit on a target the sim adds an invisible item on that
   // target, so the camera swings to the collapse and stays there (huddle 2026-09-22: "lean into

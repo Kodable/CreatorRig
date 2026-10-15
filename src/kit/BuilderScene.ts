@@ -34,11 +34,13 @@ import {
   type TapGeom,
   type WidgetGeom,
 } from './widgetLayout';
+import { dialDragPose } from './coachGesture';
 import type {
   BackgroundLayer,
   Bounds,
   BodyId,
   CameraFrame,
+  CoachGesture,
   LinkEnd,
   OverlayItem,
   RenderItem,
@@ -494,7 +496,11 @@ export class BuilderScene extends Phaser.Scene {
 
   // ---- the coach's pointer hand (see `setCoachTarget`) ----
   private coachTarget: CoachSceneTarget | null = null;
-  /** Step id + target: the hand pops in again whenever it changes. */
+  /** The step's demonstration (`CoachStep.gesture`): a drag along a dial instead of the tap. */
+  private coachGesture: CoachGesture | null = null;
+  /** The faint ghost handle the drag demonstration carries along the dial (drawn under the glove). */
+  private coachGhost?: Phaser.GameObjects.Graphics;
+  /** Step id + target (+ gesture): the hand pops in again whenever it changes. */
   private coachKey = '';
   private coachStart = 0;
   private coachHand?: Phaser.GameObjects.Image;
@@ -1341,10 +1347,20 @@ export class BuilderScene extends Phaser.Scene {
   private drawCoachHand(): void {
     const target = this.coachTarget;
     let p: Vec2 | null = null;
+    /** The drag demonstration's pose this frame (a 'drag' gesture on a dial), else the tap. */
+    let drag: ReturnType<typeof dialDragPose> = null;
+    let ghostR = 0;
     if (target && this.editable) {
       if (target.type === 'widget') {
         const geom = this.widgetGeoms.find((gm) => gm.id === target.id);
-        if (geom) p = widgetAnchor(geom);
+        // A drag demonstration steps aside while the child has that knob in hand.
+        const held = this.coachGesture !== null && geom !== undefined && this.widgetDrag?.id === geom.id;
+        if (geom?.kind === 'dial' && this.coachGesture?.kind === 'drag' && !held) {
+          drag = dialDragPose(geom, this.coachGesture.toValue, this.nowMs - this.coachStart);
+          ghostR = geom.handleR;
+        }
+        if (drag) p = drag.tip;
+        else if (geom && !held) p = widgetAnchor(geom);
       } else {
         const b = this.boundsByPart.get(target.partId);
         if (b) {
@@ -1355,6 +1371,9 @@ export class BuilderScene extends Phaser.Scene {
     }
     // Off camera (a focus zoom elsewhere, a scrolled wide world): no hand.
     if (p && !this.worldCam.worldView.contains(p.x, p.y)) p = null;
+    // The pause between drag strokes: no hand at all.
+    if (p && drag && drag.alpha <= 0) p = null;
+    this.drawCoachGhost(p && drag ? drag.ghost : null, ghostR, drag?.alpha ?? 0);
     if (!p) {
       this.coachHand?.setVisible(false);
       this.coachHandShadow?.setVisible(false);
@@ -1375,11 +1394,14 @@ export class BuilderScene extends Phaser.Scene {
     }
     const s = this.pxScale;
     const tIn = Math.min(1, Math.max(0, (this.nowMs - this.coachStart) / COACH_IN_MS));
-    const grow = tIn >= 1 ? 1 : 0.3 + 0.7 * easeOutBack(tIn);
-    const alpha = Math.min(1, tIn * 1.5);
-    // The 1 -> 2 -> 3 -> 2 loop, driven by the scene clock (not `coachStart`) so every coach hand
-    // on screen stays in lockstep.
-    const frame = COACH_HAND_FRAMES[COACH_FRAME_SEQUENCE[Math.floor(this.nowMs / COACH_FRAME_MS) % COACH_FRAME_SEQUENCE.length]!]!;
+    // A drag stroke fades itself in (dialDragPose's alpha); the tap pops in.
+    const grow = drag || tIn >= 1 ? 1 : 0.3 + 0.7 * easeOutBack(tIn);
+    const alpha = drag ? drag.alpha : Math.min(1, tIn * 1.5);
+    // The tap: the 1 -> 2 -> 3 -> 2 loop, driven by the scene clock (not `coachStart`) so every
+    // coach hand on screen stays in lockstep. The drag: the stroke's own press/hold/release frame.
+    const frame = drag
+      ? COACH_HAND_FRAMES[drag.frame]!
+      : COACH_HAND_FRAMES[COACH_FRAME_SEQUENCE[Math.floor(this.nowMs / COACH_FRAME_MS) % COACH_FRAME_SEQUENCE.length]!]!;
     const h = COACH_HAND_H_PX * s * grow;
     const w = h * COACH_HAND_ASPECT;
     for (const img of [shadow, hand]) {
@@ -1394,6 +1416,28 @@ export class BuilderScene extends Phaser.Scene {
     hand.setPosition(p.x, p.y);
     hand.setAlpha(alpha);
     hand.setVisible(true);
+  }
+
+  /** The drag demonstration's ghost handle: a faint copy of the dial's knob (same radius) under
+   * the pressed glove, so the stroke reads as "the knob goes with your finger". */
+  private drawCoachGhost(at: Vec2 | null, r: number, alpha: number): void {
+    if (!at || alpha <= 0) {
+      this.coachGhost?.setVisible(false);
+      return;
+    }
+    let g = this.coachGhost;
+    if (!g) {
+      g = this.onWorld(this.add.graphics());
+      g.setDepth(DEPTH_COACH - 0.02);
+      this.coachGhost = g;
+    }
+    const s = this.pxScale;
+    g.clear();
+    g.fillStyle(KNOB_COLOR, 0.35 * alpha);
+    g.fillCircle(at.x, at.y, r);
+    g.lineStyle(3 * s, ACTIVE, 0.6 * alpha);
+    g.strokeCircle(at.x, at.y, r);
+    g.setVisible(true);
   }
 
   setSelected(partId: number | null): void {
@@ -1458,16 +1502,23 @@ export class BuilderScene extends Phaser.Scene {
    * 👆 drawn in world-camera space (counter-scaled, so ~40 px on screen at any zoom) with its
    * fingertip on the widget's anchor (see `widgetAnchor`: a tap's centre, a dial's handle, ...) or
    * the part's bounds centre. `stepId` is the coach step's id: the hand pops in again when it (or
-   * the target) changes. null hides the hand. Nothing is drawn while the target is not found (no
+   * the target) changes. null hides the hand. `gesture` 'drag' on a dial widget (`CoachStep.gesture`,
+   * 2026-10-15) makes the glove drag the handle along the arc to that option instead of tapping
+   * it (src/kit/coachGesture.ts), with a ghost handle under the pressed finger; it hides while the
+   * child holds the dial. Nothing is drawn while the target is not found (no
    * widget with that id on screen, no such part) or sits outside the camera view, or while the
    * scene is not editable (play mode). Cheap to call every frame. */
-  setCoachTarget(target: CoachSceneTarget | null, stepId = ''): void {
-    const key = target ? `${stepId}|${target.type === 'widget' ? `w:${target.id}` : `p:${target.partId}`}` : '';
+  setCoachTarget(target: CoachSceneTarget | null, stepId = '', gesture?: CoachGesture): void {
+    const drag = target?.type === 'widget' && gesture?.kind === 'drag' ? gesture : null;
+    const key = target
+      ? `${stepId}|${target.type === 'widget' ? `w:${target.id}` : `p:${target.partId}`}${drag ? `|drag:${drag.toValue}` : ''}`
+      : '';
     if (key !== this.coachKey) {
       this.coachKey = key;
       this.coachStart = this.nowMs;
     }
     this.coachTarget = target;
+    this.coachGesture = drag;
   }
 
   // ---------------- drawing ----------------
@@ -2122,7 +2173,8 @@ export class BuilderScene extends Phaser.Scene {
       arcPath(geom.arcFrom, handleAngle);
     }
 
-    const n = geom.options.length;
+    // `notches: false` (the catapult's lever, 2026-10-15): no dots; the handle still snaps.
+    const n = geom.notches ? geom.options.length : 0;
     for (let i = 0; i < n; i++) {
       const a = n > 1 ? geom.arcFrom + ((geom.arcTo - geom.arcFrom) * i) / (n - 1) : geom.arcFrom;
       const p = at(a, geom.radiusPx);
@@ -2147,10 +2199,13 @@ export class BuilderScene extends Phaser.Scene {
     const pivotDx = geom.pivot.x - handlePos.x;
     const pivotDy = geom.pivot.y - handlePos.y;
     const pivotLen = Math.hypot(pivotDx, pivotDy) || 1;
+    // The needle toward the pivot; with the label inside the knob ('knob' readout) it starts past
+    // the label (2026-10-15: the catapult's knob shrank to 56 px and the needle crossed its "0").
+    const needleFrom = geom.readout === 'knob' ? 0.55 : 0;
     g.lineStyle(3 * s, accent, alpha);
     g.beginPath();
-    g.moveTo(handlePos.x, handlePos.y);
-    g.lineTo(handlePos.x + (pivotDx / pivotLen) * handleR * 0.8, handlePos.y + (pivotDy / pivotLen) * handleR * 0.8);
+    g.moveTo(handlePos.x + (pivotDx / pivotLen) * handleR * needleFrom, handlePos.y + (pivotDy / pivotLen) * handleR * needleFrom);
+    g.lineTo(handlePos.x + (pivotDx / pivotLen) * handleR * 0.85, handlePos.y + (pivotDy / pivotLen) * handleR * 0.85);
     g.strokePath();
 
     const opt = geom.options.find((o) => o.value === value);

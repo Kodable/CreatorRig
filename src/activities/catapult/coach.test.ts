@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { brunoVoiceProblems } from '../../core/brunoVoice';
 import { gatedOptions, isKnown, isOptionKnown, knownConcepts } from '../../kit/concepts';
 import type { Mode } from '../../kit/types';
-import { ANGLE_WIDGET, catapultCoach, FIRE_TARGET, NEXT_TEXT, suggestedOption } from './coach';
+import { ANGLE_DRAG_NOTCHES, ANGLE_WIDGET, catapultCoach, FIRE_TARGET, NEXT_TEXT, suggestedAngle, suggestedOption } from './coach';
 import type { CatapultCoachContext, CatapultCoachStep } from './coach';
 import { catapultSpec } from './spec';
 import { LEVELS, findLevel } from './core/levels';
@@ -52,6 +52,15 @@ function expectTargetOnScreen(c: CatapultCoachContext, s: CatapultCoachStep): vo
     expect(sel?.kind, s.id).toBe('catapult');
     const widgets = catapultSpec.widgets!(sel!, c.parts, c.level).filter((w) => !w.code || isKnown(known, w.code));
     expect(widgets.map((w) => w.id), s.id).toContain(t.id);
+    if (s.gesture) {
+      // A drag demonstration: the widget is a dial that has the target option, not already there.
+      const w = widgets.find((ww) => ww.id === t.id)!;
+      expect(w.kind, s.id).toBe('dial');
+      if (w.kind === 'dial') {
+        expect(w.options.map((o) => o.value), s.id).toContain(s.gesture.toValue);
+        expect(s.gesture.toValue, s.id).not.toBe(w.value);
+      }
+    }
   } else if (t.type === 'drawer') {
     expect(sel?.kind, s.id).toBe('catapult');
     expect(isKnown(known, t.code), s.id).toBe(true);
@@ -105,7 +114,13 @@ describe('catapultCoach: level 1 (power) walks every tap', () => {
 describe('catapultCoach: levels 2-5, one new thing each, then FIRE', () => {
   it('angle: tap the catapult -> drag the lever knob (the angle widget) -> FIRE', () => {
     expect(coach('angle')).toEqual({ id: 'tap', text: 'Tap BUILD. The catapult has a new lever.', target: { type: 'widget', id: 'build' } });
-    expect(coach('angle', { selected: true })).toEqual({ id: 'angle', text: 'Drag the lever knob to aim higher.', target: { type: 'widget', id: ANGLE_WIDGET } });
+    // 2026-10-15 (Gao: "add a drag tutorial on level 2"): the glove DRAGS the knob from 30 to 60.
+    expect(coach('angle', { selected: true })).toEqual({
+      id: 'angle',
+      text: 'Drag the lever knob to aim higher.',
+      target: { type: 'widget', id: ANGLE_WIDGET },
+      gesture: { kind: 'drag', toValue: '60' },
+    });
     expect(coach('angle', { selected: true, changed: ['angle'] })).toEqual({ id: 'fire', text: 'Now tap FIRE.', target: FIRE_TARGET });
     expect(coach('angle', { changed: ['angle'], runs: 1 })).toBeNull();
     // Another prop does not count as the lesson.
@@ -152,6 +167,37 @@ describe('catapultCoach: levels 2-5, one new thing each, then FIRE', () => {
     const wp = weight.parts[0]!;
     expect(suggestedOption(weight, { ...wp, props: { ...wp.props, fuzz: 'Metal' } }, 'fuzz')).toBe('Helmet');
     expect(suggestedOption(weight, { ...wp, props: { ...wp.props, fuzz: 'Fur' } }, 'fuzz')).toBe('Helmet');
+  });
+});
+
+describe('catapultCoach: the angle step drags, every other step taps', () => {
+  it('suggestedAngle: two notches (30 degrees) up, capped at 75; from 75 two down', () => {
+    expect(ANGLE_DRAG_NOTCHES).toBe(2);
+    const part = findLevel('angle')!.parts.find((p) => p.kind === 'catapult')!;
+    const at = (angle: string) => suggestedAngle({ ...part, props: { ...part.props, angle } });
+    expect(at('15')).toBe('45');
+    expect(at('30')).toBe('60');
+    expect(at('45')).toBe('75');
+    expect(at('60')).toBe('75');
+    expect(at('75')).toBe('45');
+    expect(at('nope')).toBeNull();
+  });
+
+  it('the angle step follows the knob: a drag to two notches over the current angle', () => {
+    const c = ctxFor('angle', { selected: true });
+    c.parts = c.parts.map((p) => (p.kind === 'catapult' ? { ...p, props: { ...p.props, angle: '45' } } : p));
+    expect(catapultCoach(c)?.gesture).toEqual({ kind: 'drag', toValue: '75' });
+  });
+
+  it('no other step on any intro level carries a gesture (the plain tap)', () => {
+    for (const id of INTRO) {
+      for (const changed of [[], ['power'], ['fuzz'], ['arm'], ['move'], ['angle']]) {
+        for (const selected of [false, true]) {
+          const s = coach(id, { selected, changed });
+          if (s && s.id !== 'angle') expect(s.gesture, `${id} ${s.id}`).toBeUndefined();
+        }
+      }
+    }
   });
 });
 
