@@ -28,6 +28,9 @@
 import { defaultProps } from './catalog';
 import type { CatapultLevel, PlacedPart } from './types';
 
+/** The 🎯 marker over a target block. 2026-10-15 (Gao: "remove the target icon on the beans, its
+ * unnecessary"): the cans (the rover's can of beans) carry no marker any more; only the weight
+ * level's block keeps one. */
 const TARGET_ICON = '🎯';
 
 /** A locked, position-locked block (the stack levels 12-15 are built from these). */
@@ -138,7 +141,6 @@ export const LEVELS: CatapultLevel[] = [
       "Try Medium power, then tap FIRE.",
     ],
     failHints: { outOfShots: 'Out of fuzzes! The can is still standing up there. Try turning up the power.' },
-    markers: [{ kind: 'icon', p: { x: 14.5, y: 2.5 }, text: TARGET_ICON }],
     solution: [
       {
         id: 1,
@@ -228,7 +230,6 @@ export const LEVELS: CatapultLevel[] = [
       'Set the angle to 60. That loops the fuzz well over the wall and back down onto the can.',
     ],
     failHints: { outOfShots: "Out of fuzzes. Good tests! Let's try a steeper angle." },
-    markers: [{ kind: 'icon', p: { x: 17.5, y: 1 }, text: TARGET_ICON }],
     solution: [
       {
         id: 1,
@@ -454,7 +455,6 @@ export const LEVELS: CatapultLevel[] = [
       'Roll it up near the wall and try a steep angle, like 75. It loops over onto the can.',
     ],
     failHints: { outOfShots: 'Out of fuzzes! Try rolling the catapult closer to the wall first.' },
-    markers: [{ kind: 'icon', p: { x: 16.5, y: 1 }, text: TARGET_ICON }],
     solution: [
       {
         id: 1,
@@ -540,11 +540,6 @@ export const LEVELS: CatapultLevel[] = [
       'Try High power at 30 degrees. The three little donuts spread out right across the shelves.',
     ],
     failHints: { outOfShots: 'Not enough cans down! Change the power and angle so the Donut splits right before the shelves.' },
-    markers: [
-      { kind: 'icon', p: { x: 17.8, y: 1 }, text: TARGET_ICON },
-      { kind: 'icon', p: { x: 19.4, y: 1.8 }, text: TARGET_ICON },
-      { kind: 'icon', p: { x: 21.2, y: 2.6 }, text: TARGET_ICON },
-    ],
     solution: [
       {
         id: 1,
@@ -656,7 +651,6 @@ export const LEVELS: CatapultLevel[] = [
       'Try High power, angle 45 and the Metal fuzz. That sends the whole tower tumbling.',
     ],
     failHints: { outOfShots: "Out of fuzzes. Let's hit the tower harder this time." },
-    markers: [{ kind: 'icon', p: { x: 19.5, y: 4.4 }, text: TARGET_ICON }],
     solution: [
       {
         id: 1,
