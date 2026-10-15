@@ -33,12 +33,12 @@ async function fireAllShots(parts: CatapultLevel['parts'], level: CatapultLevel,
 }
 
 describe('catapult levels: structure', () => {
-  it('has 16 entries with unique ids, free play last', () => {
-    expect(LEVELS).toHaveLength(15);
+  it('has 14 entries with unique ids, free play last (no move level since 2026-10-15)', () => {
+    expect(LEVELS).toHaveLength(14);
     // Stakeholder direction 2026-09-22: intro levels (one new mechanic each) up front, then a run
     // of challenge levels that mix everything.
     expect(LEVELS.map((level) => level.id)).toEqual([
-      'power', 'angle', 'weight', 'arm', 'move', 'donut', 'both', 'tower', 'line', 'chain',
+      'power', 'angle', 'weight', 'arm', 'donut', 'both', 'tower', 'line', 'chain',
       // Stakeholder request 2026-09-22: stack levels with a lenient line, before free play.
       'pyramid', 'towers', 'wall', 'dominoes',
       'free',
@@ -46,11 +46,11 @@ describe('catapult levels: structure', () => {
     expect(new Set(LEVELS.map((level) => level.id)).size).toBe(LEVELS.length);
   });
 
-  it('the first six levels each introduce at most one code, and together introduce exactly ' +
+  it('the first five levels each introduce at most one code, and together introduce exactly ' +
     'power, angle, fuzz (the weight level), arm and the Donut option (fuzz:Donut, its own level); ' +
     'the challenge levels introduce nothing', () => {
-    const introLevels = LEVELS.slice(0, 6);
-    const challengeLevels = LEVELS.slice(6);
+    const introLevels = LEVELS.slice(0, 5);
+    const challengeLevels = LEVELS.slice(5);
 
     for (const level of introLevels) {
       expect(level.introduces?.length ?? 0).toBeLessThanOrEqual(1);
@@ -59,7 +59,7 @@ describe('catapult levels: structure', () => {
     expect(new Set(introducedTogether)).toEqual(new Set(['power', 'angle', 'fuzz', 'arm', 'fuzz:Donut']));
     expect(findLevel('weight')!.introduces).toEqual(['fuzz']);
     expect(findLevel('donut')!.introduces).toEqual(['fuzz:Donut']);
-    expect(introducedTogether).toHaveLength(5); // no duplicates, no empties beyond 'move'
+    expect(introducedTogether).toHaveLength(5); // one per intro level, no duplicates
 
     for (const level of challengeLevels) {
       expect(level.introduces ?? []).toEqual([]);
@@ -250,4 +250,14 @@ describe('catapult levels: lenient stack levels', () => {
       }
     });
   }
+});
+
+describe('catapult levels: the catapult never moves (2026-10-15)', () => {
+  it('every level bolts the catapult in place (no drag region)', () => {
+    for (const level of LEVELS) {
+      const cp = level.parts.find((p) => p.kind === 'catapult')!;
+      expect(cp.lockPosition, level.id).toBe(true);
+      expect(cp.region, level.id).toBeUndefined();
+    }
+  });
 });

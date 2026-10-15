@@ -7,7 +7,7 @@ import type { CatapultCoachContext, CatapultCoachStep } from './coach';
 import { catapultSpec } from './spec';
 import { LEVELS, findLevel } from './core/levels';
 
-const INTRO = ['power', 'angle', 'weight', 'arm', 'move'];
+const INTRO = ['power', 'angle', 'weight', 'arm'];
 
 interface Opts {
   selected?: boolean;
@@ -146,14 +146,6 @@ describe('catapultCoach: levels 2-5, one new thing each, then FIRE', () => {
     expect(coach('arm', { changed: ['arm'] })?.id).toBe('fire');
   });
 
-  it('move: drag the catapult (the hand on it, selected or not) -> FIRE', () => {
-    const drag = { id: 'move', text: "Let's roll closer. Drag the catapult toward the wall.", target: { type: 'part', partId: 1 } };
-    expect(coach('move')).toEqual(drag);
-    expect(coach('move', { selected: true })).toEqual(drag);
-    expect(coach('move', { selected: true, changed: ['angle'] })).toEqual(drag);
-    expect(coach('move', { changed: ['move'] })).toEqual({ id: 'fire', text: 'Now tap FIRE.', target: FIRE_TARGET });
-    expect(coach('move', { changed: ['move', 'angle'], runs: 1 })).toBeNull();
-  });
 
   it('the suggested option is the next one up, or the one below at the top', () => {
     const level = findLevel('power')!;
@@ -217,8 +209,8 @@ describe('catapultCoach: scope', () => {
   }
 
   it('no step on the Donut level or any challenge level', () => {
-    expect(LEVELS.slice(0, 5).map((l) => l.id)).toEqual(INTRO);
-    for (const level of LEVELS.slice(5)) {
+    expect(LEVELS.slice(0, 4).map((l) => l.id)).toEqual(INTRO);
+    for (const level of LEVELS.slice(4)) {
       for (const c of situations(level.id)) expect(catapultCoach(c), level.id).toBeNull();
     }
   });
@@ -235,7 +227,7 @@ describe('catapultCoach: scope', () => {
         expect(s.text.length, s.text).toBeLessThanOrEqual(100);
       }
     }
-    expect([...ids].sort()).toEqual(['angle', 'arm', 'fire', 'fuzz', 'move', 'next', 'power', 'tap'].sort());
+    expect([...ids].sort()).toEqual(['angle', 'arm', 'fire', 'fuzz', 'next', 'power', 'tap'].sort());
   });
 
   it('a step sequence per level, driven by the child doing each step', () => {
@@ -260,6 +252,5 @@ describe('catapultCoach: scope', () => {
     expect(walk('angle')).toEqual(['tap', 'angle', 'fire']);
     expect(walk('weight')).toEqual(['tap', 'fuzz', 'fire']);
     expect(walk('arm')).toEqual(['tap', 'arm', 'fire']);
-    expect(walk('move')).toEqual(['move', 'fire']);
   });
 });

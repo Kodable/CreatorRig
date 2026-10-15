@@ -405,15 +405,15 @@ describe('catapultSpec.focusFrame: the machine framed left of the drawer', () =>
       }
   });
 
-  it('at the leftmost catapult position in levels.ts (x = 3.5, the "move" level\'s start), cx asks ' +
-    'for the kit\'s left clamp itself (worldW / zoom / 2 = 5.357), and the Short arm\'s cup is in view', () => {
+  it('at a catapult as far left as x = 3.5, cx asks for the kit\'s left clamp itself ' +
+    '(worldW / zoom / 2 = 5.357), and the Short arm\'s cup is in view', () => {
     const part = catapultPart(3.5, 0);
     const frame = catapultSpec.focusFrame!(part, {} as never)!;
     expect(frame.cx).toBeCloseTo(30 / 2.8 / 2, 9);
     expect(frame.cx).toBeGreaterThanOrEqual(30 / frame.zoom / 2);
     const pivot = { x: part.x + PIVOT_DX, y: part.y + PIVOT_DY };
     for (const p of boxCorners(pivot, REST_ANGLE, cupCoverBox(2))) expect(p.x).toBeGreaterThan(frame.cx - 15 / frame.zoom + 0.5);
-    // Dragged right on that level, the frame follows the catapult's x.
+    // A catapult further right gets a frame that follows its x.
     expect(catapultSpec.focusFrame!(catapultPart(6, 0), {} as never)!.cx).toBeCloseTo(7.75, 9);
   });
 });
@@ -490,7 +490,6 @@ describe('catapultSpec: the fuzzes, the real art, the collapse payoff and the li
     expect(cardFor('angle').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle']);
     expect(cardFor('weight').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz']);
     expect(cardFor('arm').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
-    expect(cardFor('move').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
     expect(cardFor('donut').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
     // Every challenge level comes after all four mechanics are known, so all four rows show.
     for (const id of ['both', 'tower', 'line', 'chain', 'free']) {

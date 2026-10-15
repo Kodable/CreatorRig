@@ -16,7 +16,8 @@
 // challenge levels that mix everything. `introduces` (see kit/types.ts's Level doc comment) names
 // the property codes each intro level unlocks; the kit hides any drawer row / widget whose code
 // isn't known yet (the union of every earlier level's `introduces`) and keeps that prop at its
-// default. Order: power, angle, weight (unlocks the fuzz row: Flower, Fur, Helmet, Metal), arm, move
+// default. Order: power, angle, weight (unlocks the fuzz row: Flower, Fur, Helmet, Metal), arm (the 'move'
+// level, dragging the catapult, was removed 2026-10-15: no more catapult moving)
 // (no new code - the mechanic is dragging the catapult itself), donut (unlocks the Donut option,
 // `fuzz:Donut`) - then the challenge run: both, tower, line, chain, pyramid, towers, wall,
 // dominoes, free, none of which introduce anything new.
@@ -392,106 +393,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 5. move ------------------------------------------------------------------------------------
-  // Power locked High. From the preset spot the wall blocks any 45-degree shot; rolled up to
-  // x ~10.4 (inside the widened region, x 3.5..10.5) a steep 75-degree arc clears the 6 m wall and
-  // drops onto the can. No new property code here - the mechanic is dragging the catapult itself
-  // along the ground, so `introduces` is empty (everything up to `arm` is already unlocked).
-  {
-    id: 'move',
-    introduces: [],
-    title: 'Roll closer',
-    bruno: 'The wall is tall and the can is far. Where should my catapult stand?',
-    goals: [{ metric: 'knockedDown', op: '>=', value: 1, label: 'Can knocked down' }],
-    palette: [],
-    shots: 3,
-    parts: [
-      {
-        id: 1,
-        kind: 'catapult',
-        x: 3.5,
-        y: 0,
-        props: { ...defaultProps('catapult'), power: 'High', angle: '45' },
-        locked: true,
-        lockedProps: ['power'],
-        region: { x: 7, y: 0, w: 7, h: 1 },
-      },
-      {
-        id: 2,
-        kind: 'wall',
-        x: 13.5,
-        y: 3,
-        props: { ...defaultProps('wall'), height: '6' },
-        locked: true,
-        lockPosition: true,
-      },
-      {
-        id: 3,
-        kind: 'shelf',
-        x: 16.5,
-        y: 0.5,
-        props: { ...defaultProps('shelf'), length: '2' },
-        locked: true,
-        lockPosition: true,
-      },
-      {
-        id: 4,
-        kind: 'can',
-        x: 16.5,
-        y: 1,
-        props: { ...defaultProps('can') },
-        locked: true,
-        lockPosition: true,
-      },
-    ],
-    hints: [
-      'From way back here, that six-meter wall blocks the shot no matter the angle.',
-      'Drag the catapult closer. It rolls along the ground between the gold guides.',
-      'Roll it up near the wall and try a steep angle, like 75. It loops over onto the can.',
-    ],
-    failHints: { outOfShots: 'Out of fuzzes! Try rolling the catapult closer to the wall first.' },
-    solution: [
-      {
-        id: 1,
-        kind: 'catapult',
-        x: 10.4,
-        y: 0,
-        props: { ...defaultProps('catapult'), power: 'High', angle: '75' },
-        locked: true,
-        lockedProps: ['power'],
-        region: { x: 7, y: 0, w: 7, h: 1 },
-      },
-      {
-        id: 2,
-        kind: 'wall',
-        x: 13.5,
-        y: 3,
-        props: { ...defaultProps('wall'), height: '6' },
-        locked: true,
-        lockPosition: true,
-      },
-      {
-        id: 3,
-        kind: 'shelf',
-        x: 16.5,
-        y: 0.5,
-        props: { ...defaultProps('shelf'), length: '2' },
-        locked: true,
-        lockPosition: true,
-      },
-      {
-        id: 4,
-        kind: 'can',
-        x: 16.5,
-        y: 1,
-        props: { ...defaultProps('can') },
-        locked: true,
-        lockPosition: true,
-      },
-    ],
-  },
-
-  // 6. donut ----------------------------------------------------------------------------------
+  // 5. donut ----------------------------------------------------------------------------------
   // The Donut is locked in; it splits into three at the top of its arc (sim.ts). The cans climb as
   // they get farther (shelf tops 0.6, 1.4, 2.2 m at x 17.8, 19.4, 21.2), each sitting on one of the
   // three paths of a split, so no single fuzz can take two: across every power, angle, fuzz and
@@ -555,7 +457,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 7. both ------------------------------------------------------------------------------------
+  // 6. both ------------------------------------------------------------------------------------
   // First challenge level: everything is unlocked by now, so nothing is hidden here.
   {
     id: 'both',
@@ -613,7 +515,7 @@ export const LEVELS: CatapultLevel[] = [
   },
 
 
-  // 9. tower -----------------------------------------------------------------------------------
+  // 7. tower -----------------------------------------------------------------------------------
   // Blocks are not glued, so a solid hit drops the whole column. High power at 45 degrees (robust
   // from about catX 4.0-5.5 and angle 40-50) knocks down all four blocks; the can rides the
   // collapse down but is not reliably latched as "knocked", so the goal is set to 4.
@@ -664,7 +566,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 10. line -----------------------------------------------------------------------------------
+  // 8. line -----------------------------------------------------------------------------------
   // Huddle 2026-09-22: once there are real structures, the goal can be broader than a target -
   // nothing may stay above the line, knock it down any way you like. Deviation from the brief's
   // 2-wide x 3-high tower: in the live sim a 2-wide wood tower is too stable for a fuzz (the Metal
@@ -720,7 +622,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 11. chain ----------------------------------------------------------------------------------
+  // 9. chain ----------------------------------------------------------------------------------
   // The over-the-top moment: one fuzz tips the first domino and the row goes down in sequence
   // (CRASH! fires on the third). Deviation from the brief's 1x2 blocks: a 1 m-wide block is too
   // squat to knock its neighbour over (at 1.4 m apart a hit one just leans on the next and no
@@ -790,7 +692,7 @@ export const LEVELS: CatapultLevel[] = [
   // fuzz passed a few more in each level (42, 33, 39, 58 of 120) without trivialising any. `altSolutions` records
   // other passing tunings, each proven on its own by levels.test.ts.
 
-  // 12. pyramid --------------------------------------------------------------------------------
+  // 10. pyramid --------------------------------------------------------------------------------
   // A 3-2-1 wood pyramid at x = 13 with two blocks balanced on its peak, each half hanging off.
   // Line 3.5 (peak 3, hat blocks' tops 4): knock both hat blocks down. 29 of those 120 tunings pass
   // in one shot (Low 4, Medium 16, High 4, Max 5).
@@ -820,7 +722,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 13. towers ---------------------------------------------------------------------------------
+  // 11. towers ---------------------------------------------------------------------------------
   // Two wood towers (a 1x2 post and a 1x1 each) at x = 15 with a 2x1 plank across them and a block
   // balanced on each end of the plank. Line 4.5 (plank top 4, end blocks' tops 5). 30 of those 120
   // tunings pass in one shot (Low 1, Medium 12, High 11, Max 6).
@@ -850,7 +752,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 14. wall -----------------------------------------------------------------------------------
+  // 12. wall -----------------------------------------------------------------------------------
   // A 2x1 plank wall at x = 13, bricks on the bottom row for a heavier feel: two brick planks, one
   // wood plank centered on them, then two wood planks balanced half off its ends. Line 2.5 (middle
   // row top 2, top row 3). 26 of those 120 tunings pass in one shot (Low 1, Medium 16, High 5,
@@ -881,7 +783,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 15. dominoes -------------------------------------------------------------------------------
+  // 13. dominoes -------------------------------------------------------------------------------
   // Three wood dominoes lead into a small tower at x = 14 (a 1x2 post, a 2x1 plank, a block
   // balanced on each plank end). Hit the dominoes or the tower: either knocks the end blocks off.
   // Line 3.5 (plank top 3, end blocks' tops 4). 41 of those 120 tunings pass in one shot (Low 11,
@@ -912,7 +814,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 16. free play ----------------------------------------------------------------------------
+  // 14. free play ----------------------------------------------------------------------------
   {
     id: 'free',
     title: 'Free play',
@@ -928,7 +830,8 @@ export const LEVELS: CatapultLevel[] = [
         y: 0,
         props: { ...defaultProps('catapult') },
         locked: true,
-        region: { x: 7, y: 0, w: 9, h: 1 },
+        // 2026-10-15 (Gao: "no more catapult moving"): the catapult stays where it is.
+        lockPosition: true,
       },
       { id: 2, kind: 'shelf', x: 16.5, y: 2, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
       { id: 3, kind: 'can', x: 16.5, y: 2.5, props: { ...defaultProps('can') }, locked: true, lockPosition: true },
