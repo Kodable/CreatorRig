@@ -125,12 +125,12 @@ describe('catapultCoach: levels 2-5, one new thing each, then FIRE', () => {
     expect(coach('angle', { changed: ['angle'], runs: 1, mode: 'done', passed: true })).toBeNull();
   });
 
-  it('weight: tap -> a heavier fuzz (Fur after Flower: the Donut is still locked) -> FIRE', () => {
+  it('weight: tap -> the light Flower (the energy rule: a light fuzz flies farther, to the far can) -> FIRE', () => {
     expect(coach('weight')?.text).toBe('Tap the catapult to pick a fuzz.');
     expect(coach('weight', { selected: true })).toEqual({
       id: 'fuzz',
-      text: "Let's try a heavier fuzz. Tap this one.",
-      target: { type: 'drawer', code: 'fuzz', value: 'Fur' },
+      text: 'A light fuzz flies farther. Tap this one.',
+      target: { type: 'drawer', code: 'fuzz', value: 'Flower' },
     });
     expect(coach('weight', { selected: true, changed: ['fuzz'] })?.id).toBe('fire');
     expect(coach('weight', { changed: ['fuzz'], runs: 1 })).toBeNull();

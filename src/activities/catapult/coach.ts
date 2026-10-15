@@ -27,10 +27,11 @@ export const FIRE_TARGET: CoachTarget<PartKind> = { type: 'bar', button: 'play' 
 /** The angle lever's drag handle (spec.ts `catapultWidgets`). */
 export const ANGLE_WIDGET = 'angle';
 
-/** What each intro level teaches: a drawer row (the hand on one of its options), the angle lever
- * (the hand drags its knob up the arc, 2026-10-15). */
+/** What each intro level teaches: a drawer row (the hand on one of its options: `option` when the
+ * lesson names one, else `suggestedOption`'s next one up), the angle lever (the hand drags its knob
+ * up the arc, 2026-10-15). */
 type Lesson =
-  | { kind: 'drawer'; code: 'power' | 'fuzz' | 'arm'; tap: string; pick: string }
+  | { kind: 'drawer'; code: 'power' | 'fuzz' | 'arm'; tap: string; pick: string; option?: string }
   | { kind: 'lever'; tap: string; drag: string };
 
 const LESSONS: Record<string, Lesson> = {
@@ -41,11 +42,15 @@ const LESSONS: Record<string, Lesson> = {
     pick: 'More rubber bands means more power. Tap this one.',
   },
   angle: { kind: 'lever', tap: 'Tap the catapult. It has a new lever.', drag: 'Drag the lever knob to aim higher.' },
+  // The energy rule (2026-10-15): the weight level is two targets, a near block for the heavy Metal
+  // and a far can only the light Flower reaches. The glove points at the Flower, the new idea (a
+  // light fuzz flies farther); the hints and Smash it carry the heavy half.
   weight: {
     kind: 'drawer',
     code: 'fuzz',
     tap: 'Tap the catapult to pick a fuzz.',
-    pick: "Let's try a heavier fuzz. Tap this one.",
+    pick: 'A light fuzz flies farther. Tap this one.',
+    option: 'Flower',
   },
   arm: {
     kind: 'drawer',
@@ -117,7 +122,10 @@ export function catapultCoach(ctx: CatapultCoachContext): CatapultCoachStep | nu
       const to = suggestedAngle(catapult);
       return step('angle', lesson.drag, { type: 'widget', id: ANGLE_WIDGET }, to ? { kind: 'drag', toValue: to } : undefined);
     }
-    const value = suggestedOption(ctx.level, catapult, lesson.code);
+    const value =
+      lesson.option !== undefined && lesson.option !== catapult.props[lesson.code]
+        ? lesson.option
+        : suggestedOption(ctx.level, catapult, lesson.code);
     return step(lesson.code, lesson.pick, value ? { type: 'drawer', code: lesson.code, value } : { type: 'drawer', code: lesson.code });
   }
   // The new control is used: FIRE, unless a shot already went (then the child knows FIRE).

@@ -9,21 +9,23 @@
 //   that formula gives ~9.0 m, but solving with the actual ~3.19 m release height gives ~11.5 m -
 //   very close to the ~11.3 m measured here. The "same range band as before" check below compares
 //   against this height-corrected prediction, not the flat-ground ~9 m figure.
-// - Measured ranges @45deg with the Short arm (within ~10%): Low ~6.4 m, Medium ~11.3 m,
-//   High ~16.6 m, Max ~22.8 m. Tests below assert these measured baselines.
-// - Weight-vs-block sweep (Max power, 45deg, 1x2 brick block on the ground): a wide, reliable
-//   window (~22.0-22.75 m out) where the Metal fuzz (old Heavy) topples it and Flower/Fur (old
-//   Light/Medium) do not (they never topple it at any of the offsets swept). offset 22.4 sits
-//   mid-window.
+// - Measured ranges @45deg with the Short arm and the Fur (within ~10%): Low ~6.4 m, Medium
+//   ~11.3 m, High ~16.6 m, Max ~22.8 m. Tests below assert these measured baselines. Since the
+//   energy rule (2026-10-15, catalog.ts launchSpeed) the other fuzzes fly their own speeds: the
+//   Fur is the reference and keeps these numbers.
+// - Weight-vs-block (the weight level's geometry since the energy rule: High power, 45deg, a wood
+//   1x2 block on the ground at x 14.5, catapult at x 5): only the Metal topples it, anywhere from
+//   x 13.75 to 15.25; the Flower, Fur and Helmet fly over it or bounce off. (Until the energy rule
+//   every fuzz flew the same arc, and the scene was a brick block 22.4 m out at Max.)
 // - Collapse payoff + the split (huddle 2026-09-22; the Donut splits since 2026-10-01): the topple
 //   scenes below reuse the `line` level's geometry (a 1-wide stack of three 1x1 wood blocks + a
-//   2x1 plank, 12 m out from a catapult at x 5; Metal/High/30/Short brings it all down in one
-//   shot). Split velocities are read through
+//   2x1 plank, 12 m out from a catapult at x 5; Metal/Max/30/Short brings it all down in one
+//   shot - Metal/High/30 until the energy rule). Split velocities are read through
 //   `sim['world']` (TypeScript allows bracket access to a private member): the public snapshot
 //   carries positions only, and the split rule is about velocities.
 import { describe, expect, it } from 'vitest';
 import { armAngleFor, bandSegments, catapultRelease, crossbarPoseFor, fireSpot, stringAnchor, FUZZ_PART_ID, REST_ANGLE, STRING_HOOK_H } from './build';
-import { FUZZ, FUZZ_NAMES, SPLIT_ANGLE_DEG, SPLIT_OFFSET } from './catalog';
+import { FUZZ, FUZZ_NAMES, SPLIT_ANGLE_DEG, SPLIT_OFFSET, fuzzMass, launchSpeed } from './catalog';
 import { createCatapultSim, CRASH_SIZE, DUST_SIZE, IMPACT_PART_ID } from './sim';
 import type { CatapultLevel, OverlayItem, PlacedPart, RenderItem } from './types';
 
@@ -145,15 +147,11 @@ describe('CatapultSim: a can on a shelf', () => {
   });
 });
 
-describe('CatapultSim: a heavier fuzz vs a standing brick block', () => {
-  it('at Max power/45deg, ~22.4 m out, the Flower and Fur fuzzes do not knock a brick 1x2 block; Metal does', async () => {
+describe('CatapultSim: a heavier fuzz vs a standing block (the energy rule)', () => {
+  it('at High power/45deg, a wood 1x2 block at x 14.5: the Metal lands on it and topples it; the Flower, Fur and Helmet do not', async () => {
     async function tryFuzz(fuzz: string): Promise<boolean> {
-      const cp = catapult({ fuzz, power: 'Max' });
-      const { tip } = catapultRelease(cp);
-      // Empirically-found offset (see the deviation note): Max power gives a wide, reliable
-      // topple window for brick + Metal here.
-      const x = tip.x + 22.4;
-      const block: PlacedPart = { id: id(), kind: 'block', x, y: 1, props: { size: '1x2', material: 'brick' } };
+      const cp = catapult({ fuzz, power: 'High' });
+      const block: PlacedPart = { id: id(), kind: 'block', x: 14.5, y: 1, props: { size: '1x2', material: 'wood' } };
       const level = makeLevel([cp, block], 1);
       const sim = await createCatapultSim([cp, block], level);
       sim.play();
@@ -165,7 +163,51 @@ describe('CatapultSim: a heavier fuzz vs a standing brick block', () => {
 
     expect(await tryFuzz('Flower')).toBe(false);
     expect(await tryFuzz('Fur')).toBe(false);
+    expect(await tryFuzz('Helmet')).toBe(false);
     expect(await tryFuzz('Metal')).toBe(true);
+  });
+});
+
+// Gao, 2026-10-15: "theres no gameplay reason to use a lighter fuzz right now". The bands store a
+// fixed energy per power (catalog.ts launchSpeed): a heavier fuzz leaves slower and flies shorter.
+describe('CatapultSim: the energy rule', () => {
+  it('each fuzz body has the mass fuzzMass gives it and leaves at launchSpeed (the flying fuzz\'s own velocity)', async () => {
+    type World = { getLinearVelocity(b: number): { x: number; y: number }; getMass(b: number): number };
+    for (const fuzz of FUZZ_NAMES) {
+      const cp = catapult({ fuzz, power: 'High' });
+      const sim = await createCatapultSim([cp], makeLevel([cp], 1));
+      sim.play();
+      let body: number | undefined;
+      for (let i = 0; i < 120 && body === undefined; i++) {
+        sim.step();
+        body = sim.renderItems().find((it) => it.role === 'fuzz' && it.partId === FUZZ_PART_ID)?.body;
+      }
+      expect(body, fuzz).toBeDefined();
+      const world = sim['world'] as unknown as World;
+      expect(world.getMass(body!), fuzz).toBeCloseTo(fuzzMass(FUZZ[fuzz]!), 5);
+      // Gravity has had at most a step at it: the horizontal part is the release speed's exactly.
+      const v = world.getLinearVelocity(body!);
+      expect(v.x, fuzz).toBeCloseTo(launchSpeed(cp.props as Record<string, string>) * Math.cos(Math.PI / 4), 3);
+      sim.destroy();
+    }
+  });
+
+  it('at 45 degrees a lighter fuzz flies farther at every power (the real flight, to its first landing)', async () => {
+    for (const power of ['Low', 'Medium', 'High', 'Max']) {
+      const ranges: number[] = [];
+      for (const fuzz of FUZZ_NAMES) ranges.push(await measureRange({ power, fuzz }));
+      // Light to heavy. At Max the Flower and the Donut both reach the right wall (x 30), so only
+      // "not shorter" holds between those two there.
+      for (let i = 1; i < ranges.length; i++) {
+        if (power === 'Max' && i === 1) expect(ranges[1]!, `${power}`).toBeLessThanOrEqual(ranges[0]! + 1e-9);
+        else expect(ranges[i]!, `${power} ${FUZZ_NAMES[i]}`).toBeLessThan(ranges[i - 1]!);
+      }
+      // Fur keeps its pre-rule range; the Metal reaches a little under 60% as far, the Flower over
+      // 1.4x (where the wall does not stop it).
+      expect(ranges[4]! / ranges[2]!).toBeGreaterThan(0.5);
+      expect(ranges[4]! / ranges[2]!).toBeLessThan(0.7);
+      if (power !== 'Max') expect(ranges[0]! / ranges[2]!).toBeGreaterThan(1.4);
+    }
   });
 });
 
@@ -510,6 +552,23 @@ describe('CatapultSim: overlay', () => {
     expect(end.y).toBeLessThan(0.6);
     sim.destroy();
 
+    // The energy rule (2026-10-15): the preview flies each fuzz at its own speed, so it still ends
+    // where the real shot lands for a light and a heavy fuzz - and the two arcs differ.
+    const ends: Record<string, number> = {};
+    for (const fuzz of ['Flower', 'Metal']) {
+      const c = catapult({ power: 'Medium', fuzz });
+      const s = await createCatapultSim([c], makeLevel([c], 3), () => 0);
+      s.showPreview();
+      const dots = (s.snapshot().overlay ?? []).filter((o): o is Extract<OverlayItem, { kind: 'dot' }> => o.kind === 'dot' && o.color === 0xffffff);
+      const e = dots.at(-1)!.p;
+      const r = await measureRange({ power: 'Medium', fuzz });
+      expect(Math.abs(e.x - (catapultRelease(c).tip.x + r)), fuzz).toBeLessThan(0.6);
+      expect(e.y, fuzz).toBeLessThan(0.6);
+      ends[fuzz] = e.x;
+      s.destroy();
+    }
+    expect(ends.Flower! - ends.Metal!).toBeGreaterThan(6);
+
     // A 6 m wall in front: a Medium shot's arc stops at its face, high off the ground.
     const cp2 = catapult({ power: 'Medium' });
     const wall: PlacedPart = { id: id(), kind: 'wall', x: 10, y: 3, props: { height: '6' } };
@@ -826,7 +885,7 @@ function stack(): PlacedPart[] {
     { id: id(), kind: 'block', x: 17, y: 3.5, props: { size: '2x1', material: 'wood' } },
   ];
 }
-const TOPPLE = { power: 'High', angle: '30', fuzz: 'Metal', arm: 'Short' };
+const TOPPLE = { power: 'Max', angle: '30', fuzz: 'Metal', arm: 'Short' };
 
 /** Every sprite overlay id seen per textureKey across the rest of the running shot. */
 async function spritesDuringShot(sim: Awaited<ReturnType<typeof createCatapultSim>>) {
@@ -1062,12 +1121,13 @@ describe('CatapultSim: the Donut, the split shot', () => {
   it('a split fuzz counts for knockedDown: a can only the low little donut reaches goes down for ' +
     'the Donut, stays up for every other fuzz', async () => {
     async function tryFuzz(fuzz: string): Promise<number> {
-      const cp = catapult({ fuzz, power: 'High', angle: '30' });
-      // The `donut` level's near can: on the lower child's path, under the original's.
+      const cp = catapult({ fuzz, power: 'High', angle: '45' });
+      // The `donut` level's near can (since the energy rule): on the lower child's path, under the
+      // original's.
       const parts: PlacedPart[] = [
         cp,
-        { id: id(), kind: 'shelf', x: 17.8, y: 0.5, props: { length: '2' } },
-        { id: id(), kind: 'can', x: 17.8, y: 1, props: { color: 'Red' } },
+        { id: id(), kind: 'shelf', x: 21.2, y: 0.625, props: { length: '2' } },
+        { id: id(), kind: 'can', x: 21.2, y: 1.125, props: { color: 'Red' } },
       ];
       const sim = await createCatapultSim(parts, makeLevel(parts, 1));
       sim.play();
@@ -1084,14 +1144,15 @@ describe('CatapultSim: the Donut, the split shot', () => {
 // Gao, 2026-10-15: "breakable boxes, if hit with enough force, they just get destroyed". A crate is
 // a block with `material: 'crate'`; the rule is catalog.ts CRATE_BREAK (an impulse over 1.8 N s in
 // one step from a body closing on it at 4 m/s or more). The scenes use the Smash it level's
-// geometry: a 1x1 crate on the ground 10 m out, where a Medium / 45 degree shot comes down.
+// geometry (since the energy rule): a tall 1x2 crate on the ground at x 22.5, in the path of a fast,
+// flat Max / 15 degree shot that every fuzz reaches.
 describe('CatapultSim: breakable crates', () => {
   function crate(x = 15, y = 0.5, size = '1x1'): PlacedPart {
     return { id: id(), kind: 'block', x, y, props: { size, material: 'crate' } };
   }
 
   async function shoot(fuzz: string, extra: PlacedPart[] = [], line?: number) {
-    const parts = [catapult({ fuzz }), crate(), ...extra];
+    const parts = [catapult({ fuzz, power: 'Max', angle: '15' }), crate(22.5, 1, '1x2'), ...extra];
     const level = { ...makeLevel(parts, 2), ...(line !== undefined ? { line } : {}) };
     const sim = await createCatapultSim(parts, level);
     const crateBody = sim.handles().find((h) => h.partId === parts[1]!.id)!.bodies[0]!.id;
@@ -1107,7 +1168,7 @@ describe('CatapultSim: breakable crates', () => {
     return { sim, parts, crateBody, before, seen, brokeAt };
   }
 
-  it('a crate hit hard (the Fur fuzz, Medium power) breaks: SMASH!, tumbling planks, its body and picture gone, counted as knocked down', async () => {
+  it('a crate hit hard (the Fur fuzz, Max / 15) breaks: SMASH!, tumbling planks, its body and picture gone, counted as knocked down', async () => {
     const { sim, parts, crateBody, seen, brokeAt } = await shoot('Fur');
     expect(brokeAt).toBeGreaterThan(0);
     const m = sim.metrics();
@@ -1160,12 +1221,13 @@ describe('CatapultSim: breakable crates', () => {
   });
 
   it('a hard hit on the block on top of a crate stack does not break the crates under it (they were resting)', async () => {
-    // High / 30 / Metal strikes the top of a 4-high stack 12 m out; the push runs down through
+    // Max / 30 / Metal / Long strikes the top of a 4-high stack 12 m out (High / 30 / Short until
+    // the energy rule; the Short arm now clips the top crate too); the push runs down through
     // every crate under it into the ground in that same step, far over 1.8 N s - but nothing under
     // the top was moving, so the speed gate keeps them whole.
     const top: PlacedPart = { id: id(), kind: 'block', x: 17, y: 3.5, props: { size: '1x1', material: 'wood' } };
     const stack = [crate(17, 0.5), crate(17, 1.5), crate(17, 2.5), top];
-    const parts = [catapult({ power: 'High', angle: '30', fuzz: 'Metal' }), ...stack];
+    const parts = [catapult({ power: 'Max', angle: '30', fuzz: 'Metal', arm: 'Long' }), ...stack];
     const sim = await createCatapultSim(parts, makeLevel(parts, 1));
     sim.play();
     let hitTick = -1;

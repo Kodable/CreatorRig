@@ -1,5 +1,5 @@
 // Turns a PlacedPart into Rapier bodies/shapes plus the RenderItems the scene draws.
-import { ARM, BAND_COLOR, BAND_COUNT, CAN_COLORS, CRATE_BREAK, FUZZ_TINT, LAUNCH_SPEED, MATERIALS, blockSize, fuzzName, fuzzSpec } from './catalog';
+import { ARM, BAND_COLOR, BAND_COUNT, CAN_COLORS, CRATE_BREAK, FUZZ_TINT, MATERIALS, blockSize, fuzzName, fuzzSpec, launchSpeed } from './catalog';
 import type { BodyId, Bounds, Material, OverlayItem, PartHandle, PlacedPart, RenderItem, Shape, Vec2 } from './types';
 import type { PhysicsWorld } from '../../../physics/types';
 
@@ -709,12 +709,11 @@ export function isTarget(part: PlacedPart): boolean {
  * degrees (the tangent direction for a clockwise sweep) lands exactly on `angleDeg` - one
  * consistent model, not two independent numbers that happen to agree. */
 export function catapultRelease(part: PlacedPart): { tip: Vec2; v: Vec2; releaseAngle: number } {
-  const armSpec = ARM[part.props.arm ?? 'Short'] ?? ARM.Short!;
   const angleDeg = Number(part.props.angle ?? '45') || 45;
   const releaseAngle = (angleDeg * Math.PI) / 180;
   const tip = armTipPoint(part, armAngleFor(angleDeg));
-  const speedBase = LAUNCH_SPEED[part.props.power ?? 'Medium'] ?? LAUNCH_SPEED.Medium!;
-  const speed = speedBase * armSpec.factor;
+  // Power, arm and the fuzz's own mass (catalog.ts: the bands store a fixed energy per power).
+  const speed = launchSpeed(part.props);
   const v: Vec2 = { x: speed * Math.cos(releaseAngle), y: speed * Math.sin(releaseAngle) };
   return { tip, v, releaseAngle };
 }

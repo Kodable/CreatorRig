@@ -21,7 +21,7 @@ import {
   stringAnchor,
   FUZZ_PART_ID,
 } from './build';
-import { ARM, CRATE_BREAK, FUZZ, FUZZ_TINT, LAUNCH_SPEED, SPLIT_ANGLE_DEG, SPLIT_OFFSET, fuzzName, fuzzSpec } from './catalog';
+import { ARM, CRATE_BREAK, FUZZ, FUZZ_TINT, SPLIT_ANGLE_DEG, SPLIT_OFFSET, fuzzName, fuzzSpec, launchSpeed } from './catalog';
 import type {
   BodyId,
   BodyRole,
@@ -392,8 +392,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     const armSpec = ARM[this.catapultPart.props.arm ?? 'Short'] ?? ARM.Short!;
     const angleDeg = Number(this.catapultPart.props.angle ?? '45') || 45;
     const releaseArmAngle = armAngleFor(angleDeg);
-    const speedBase = LAUNCH_SPEED[this.catapultPart.props.power ?? 'Medium'] ?? LAUNCH_SPEED.Medium!;
-    const speed = speedBase * armSpec.factor;
+    const speed = launchSpeed(this.catapultPart.props); // the same speed catapultRelease fires at
 
     // The arm sweeps clockwise (ω < 0) from REST_ANGLE down to the release angle, where it
     // releases the fuzz and halts (variant A: the crossbar sits at that same angle). |ω| = speed

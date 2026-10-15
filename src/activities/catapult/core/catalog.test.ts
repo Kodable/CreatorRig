@@ -12,7 +12,12 @@ import {
   SPLIT_ANGLE_DEG,
   SPLIT_OFFSET,
   LAUNCH_SPEED,
+  FUZZ_REF,
+  FUZZ_SPEED_EXPONENT,
   MATERIALS,
+  MAX_LAUNCH_SPEED,
+  fuzzMass,
+  launchSpeed,
   PART_LIMIT,
   blockSize,
   defaultProps,
@@ -147,5 +152,91 @@ describe('catapult catalog', () => {
     expect(blockSize('2x1')).toEqual({ w: 2, h: 1 });
     expect(blockSize('1x2')).toEqual({ w: 1, h: 2 });
     expect(blockSize('domino')).toEqual({ w: 0.4, h: 2 });
+  });
+});
+
+// Gao, 2026-10-15: "theres no gameplay reason to use a lighter fuzz right now". The bands store a
+// fixed energy per power setting: a heavier fuzz leaves slower, a lighter one faster.
+describe('catapult catalog: the energy rule (launchSpeed)', () => {
+  const POWERS = ['Low', 'Medium', 'High', 'Max'];
+  const ARMS = ['Short', 'Long'];
+
+  it('fuzzMass is the disc mass Rapier gives the body (pi r^2 density), light to heavy', () => {
+    expect(fuzzMass({ r: 0.3, density: 1 })).toBeCloseTo(Math.PI * 0.09, 12);
+    const masses = FUZZ_NAMES.map((name) => fuzzMass(FUZZ[name]!));
+    for (let i = 1; i < masses.length; i++) expect(masses[i]!).toBeGreaterThan(masses[i - 1]!);
+  });
+
+  it('the Fur (the reference) keeps exactly the speeds every fuzz had before: power x arm factor', () => {
+    expect(FUZZ_REF).toBe('Fur');
+    for (const power of POWERS) {
+      for (const arm of ARMS) {
+        expect(launchSpeed({ power, arm, fuzz: 'Fur' })).toBeCloseTo(LAUNCH_SPEED[power]! * ARM[arm]!.factor, 12);
+      }
+    }
+    // Defaults: Medium, Short arm, the Fur.
+    expect(launchSpeed({})).toBeCloseTo(10 * 0.95, 12);
+  });
+
+  it('a lighter fuzz leaves faster at every power and arm (equal only where two hit the cap)', () => {
+    for (const power of POWERS) {
+      for (const arm of ARMS) {
+        const speeds = FUZZ_NAMES.map((fuzz) => launchSpeed({ power, arm, fuzz })); // light to heavy
+        for (let i = 1; i < speeds.length; i++) {
+          if (speeds[i - 1]! < MAX_LAUNCH_SPEED) expect(speeds[i]!, `${power}/${arm}`).toBeLessThan(speeds[i - 1]!);
+          else expect(speeds[i]!, `${power}/${arm}`).toBeLessThanOrEqual(speeds[i - 1]!);
+        }
+        // The Fur and everything heavier never hit the cap; the Metal is always slowest.
+        expect(speeds[2]!).toBeLessThanOrEqual(MAX_LAUNCH_SPEED);
+        expect(speeds[4]!).toBeLessThan(speeds[2]!);
+      }
+    }
+  });
+
+  it('below the cap, speed goes as mass^-FUZZ_SPEED_EXPONENT (0.25): m v^4 is the same for every fuzz at a power', () => {
+    expect(FUZZ_SPEED_EXPONENT).toBe(0.25);
+    const mRef = fuzzMass(FUZZ.Fur!);
+    for (const power of POWERS) {
+      for (const arm of ARMS) {
+        const vRef = launchSpeed({ power, arm, fuzz: 'Fur' });
+        for (const fuzz of FUZZ_NAMES) {
+          const v = launchSpeed({ power, arm, fuzz });
+          if (v >= MAX_LAUNCH_SPEED) continue;
+          const m = fuzzMass(FUZZ[fuzz]!);
+          expect(v / vRef, `${power}/${arm}/${fuzz}`).toBeCloseTo(Math.pow(mRef / m, 0.25), 12);
+          expect(m * v ** 4).toBeCloseTo(mRef * vRef ** 4, 6);
+        }
+      }
+    }
+    // The pure energy rule (1/2 m v^2 fixed) would be the exponent 0.5; softened so the Metal still
+    // reaches mid-range targets and the Flower does not fly 2.4x as far. The heavier fuzz still
+    // carries more momentum (m v ~ m^0.75): it hits harder.
+    const p = (fuzz: string) => fuzzMass(FUZZ[fuzz]!) * launchSpeed({ power: 'High', fuzz });
+    expect(p('Metal')).toBeGreaterThan(p('Helmet'));
+    expect(p('Helmet')).toBeGreaterThan(p('Fur'));
+    expect(p('Fur')).toBeGreaterThan(p('Flower'));
+  });
+
+  it('nothing ever leaves faster than the fastest shot before the rule (Max power, Long arm, 15.75 m/s)', () => {
+    expect(MAX_LAUNCH_SPEED).toBeCloseTo(LAUNCH_SPEED.Max! * ARM.Long!.factor, 12);
+    for (const power of POWERS) for (const arm of ARMS) for (const fuzz of FUZZ_NAMES) {
+      expect(launchSpeed({ power, arm, fuzz })).toBeLessThanOrEqual(MAX_LAUNCH_SPEED);
+    }
+    // Only the light ones near the top are capped: the Flower at High / Long and at Max, the Donut at Max / Long.
+    expect(launchSpeed({ power: 'Max', arm: 'Short', fuzz: 'Flower' })).toBe(MAX_LAUNCH_SPEED);
+    expect(launchSpeed({ power: 'High', arm: 'Short', fuzz: 'Flower' })).toBeLessThan(MAX_LAUNCH_SPEED);
+  });
+
+  it('the speed table (m/s, Short arm) the levels are tuned against', () => {
+    const table = Object.fromEntries(
+      FUZZ_NAMES.map((fuzz) => [fuzz, POWERS.map((power) => Math.round(launchSpeed({ power, fuzz, arm: 'Short' }) * 100) / 100)]),
+    );
+    expect(table).toEqual({
+      Flower: [8.28, 11.82, 14.78, 15.75],
+      Donut: [7.28, 10.4, 13, 15.6],
+      Fur: [6.65, 9.5, 11.88, 14.25],
+      Helmet: [5.77, 8.24, 10.3, 12.36],
+      Metal: [5.12, 7.32, 9.14, 10.97],
+    });
   });
 });

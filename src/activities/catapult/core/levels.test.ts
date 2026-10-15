@@ -33,13 +33,14 @@ async function fireAllShots(parts: CatapultLevel['parts'], level: CatapultLevel,
 }
 
 describe('catapult levels: structure', () => {
-  it('has 14 entries with unique ids, free play last (no move or Bullseye level since 2026-10-15)', () => {
-    expect(LEVELS).toHaveLength(14);
+  it('has 15 entries with unique ids, free play last (no move or Bullseye level, Long shot added, 2026-10-15)', () => {
+    expect(LEVELS).toHaveLength(15);
     // Stakeholder direction 2026-09-22: intro levels (one new mechanic each) up front, then a run
     // of challenge levels that mix everything. 2026-10-15: the Bullseye level ('both') is gone and
     // Smash it introduces the breakable crates right before the challenge run.
     expect(LEVELS.map((level) => level.id)).toEqual([
-      'power', 'angle', 'weight', 'arm', 'donut', 'smash', 'tower', 'line', 'chain',
+      // 2026-10-15 (the energy rule): Long shot, where a light fuzz is the answer, follows Smash it.
+      'power', 'angle', 'weight', 'arm', 'donut', 'smash', 'longshot', 'tower', 'line', 'chain',
       // Stakeholder request 2026-09-22: stack levels with a lenient line, before free play.
       'pyramid', 'towers', 'wall', 'dominoes',
       'free',
@@ -195,19 +196,19 @@ describe('catapult levels: line, chain, donut', () => {
   it('solutions have neighbours that also pass (not a knife edge)', async () => {
     const neighbours: Record<string, Record<string, string>[]> = {
       line: [
-        { power: 'High', angle: '15', fuzz: 'Metal', arm: 'Short' },
-        { power: 'Max', angle: '15', fuzz: 'Metal', arm: 'Short' },
-        { power: 'High', angle: '15', fuzz: 'Metal', arm: 'Long' },
+        { power: 'Max', angle: '45', fuzz: 'Metal', arm: 'Short' },
+        { power: 'Max', angle: '15', fuzz: 'Helmet', arm: 'Short' },
+        { power: 'Max', angle: '15', fuzz: 'Metal', arm: 'Long' },
       ],
       chain: [
         { power: 'Medium', angle: '15' },
         { power: 'Medium', angle: '45' },
-        { power: 'Medium', angle: '30', fuzz: 'Flower' },
+        { power: 'Medium', angle: '30', fuzz: 'Helmet' },
       ],
       donut: [
-        { power: 'High', angle: '45' },
-        { power: 'Max', angle: '60' },
-        { power: 'High', angle: '45', arm: 'Long' },
+        { power: 'High', angle: '30' },
+        { power: 'Max', angle: '30' },
+        { power: 'High', angle: '15', arm: 'Long' },
       ],
     };
     for (const [id, tunings] of Object.entries(neighbours)) {
@@ -294,12 +295,12 @@ describe('catapult levels: crates', () => {
     }
   });
 
-  it('smash: power and angle are locked, and the goal is a smashed crate (shoving it over is not enough)', () => {
+  it('smash: power and angle are locked (fast and flat, so every fuzz reaches the crate), and the goal is a smashed crate (shoving it over is not enough)', () => {
     const level = findLevel('smash')!;
     for (const parts of [level.parts, level.solution!]) {
       const cp = parts.find((p) => p.kind === 'catapult')!;
       expect(cp.lockedProps).toEqual(['power', 'angle']);
-      expect(cp.props).toMatchObject({ power: 'Medium', angle: '45' });
+      expect(cp.props).toMatchObject({ power: 'Max', angle: '15' });
     }
     expect(level.goals).toEqual([expect.objectContaining({ metric: 'smashed', op: '>=', value: 1 })]);
   });
@@ -328,5 +329,97 @@ describe('catapult levels: crates', () => {
     for (const fuzz of ['Fur', 'Helmet', 'Metal']) {
       expect(await run(fuzz), fuzz).toEqual({ touched: true, smashed: 1, alive: false });
     }
+  });
+});
+
+/** One shot of `level`'s solution world with the catapult's props overridden; knockedDown and pass. */
+async function oneShot(level: CatapultLevel, props: Record<string, string>) {
+  const parts = level.solution!.map((p) => (p.kind === 'catapult' ? { ...p, props: { ...p.props, ...props } } : p));
+  const { sim, passed } = await fireAllShots(parts, { ...level, shots: 1 });
+  const knocked = sim.metrics().knockedDown;
+  sim.destroy();
+  return { passed, knocked };
+}
+
+// Gao, 2026-10-15: "theres no gameplay reason to use a lighter fuzz right now". With the energy rule
+// (catalog.ts launchSpeed) a heavier fuzz lands shorter and a lighter one hits softer; these levels
+// teach it.
+describe('catapult levels: the energy rule (heavy hits harder, light flies farther)', () => {
+  const FUZZES = ['Flower', 'Fur', 'Helmet', 'Metal']; // the weight level's drawer (no Donut yet)
+
+  it('weight: power and angle are locked, two targets, the preset Fur (in the gap) and every single fuzz fail', async () => {
+    const level = findLevel('weight')!;
+    for (const parts of [level.parts, level.solution!]) {
+      const cp = parts.find((p) => p.kind === 'catapult')!;
+      expect(cp.lockedProps).toEqual(['power', 'angle']);
+    }
+    expect(level.parts.find((p) => p.kind === 'catapult')!.props.fuzz).toBe('Fur');
+    expect(level.goals).toEqual([expect.objectContaining({ metric: 'knockedDown', op: '>=', value: 2 })]);
+    // No one fuzz takes both targets, even with every shot.
+    for (const fuzz of FUZZES) {
+      const parts = level.parts.map((p) => (p.kind === 'catapult' ? { ...p, props: { ...p.props, fuzz } } : p));
+      const { sim, passed } = await fireAllShots(parts, level);
+      expect(passed, fuzz).toBe(false);
+      sim.destroy();
+    }
+  });
+
+  it('weight: the lesson - only the heavy Metal topples the near block, only the light Flower reaches the far can', async () => {
+    const level = findLevel('weight')!;
+    const only = (keep: 'block' | 'can'): CatapultLevel => {
+      const parts = level.solution!.filter((p) => p.kind === 'catapult' || (keep === 'block' ? p.kind === 'block' : p.kind !== 'block'));
+      return { ...level, parts, solution: parts, goals: [{ metric: 'knockedDown', op: '>=', value: 1, label: '' }] };
+    };
+    const block = only('block');
+    const can = only('can');
+    for (const fuzz of FUZZES) {
+      expect((await oneShot(block, { fuzz })).passed, `block ${fuzz}`).toBe(fuzz === 'Metal');
+      expect((await oneShot(can, { fuzz })).passed, `can ${fuzz}`).toBe(fuzz === 'Flower');
+    }
+  });
+
+  it('longshot: power is locked at Medium; the Fur, Helmet and Metal never reach at any angle or arm, the light fuzzes do', async () => {
+    const level = findLevel('longshot')!;
+    for (const parts of [level.parts, level.solution!]) {
+      const cp = parts.find((p) => p.kind === 'catapult')!;
+      expect(cp.lockedProps).toEqual(['power']);
+      expect(cp.props.power).toBe('Medium');
+    }
+    expect(level.parts.find((p) => p.kind === 'catapult')!.props.fuzz).toBe('Metal');
+    const passing: string[] = [];
+    for (const angle of ['15', '30', '45', '60', '75']) {
+      for (const fuzz of ['Flower', 'Donut', 'Fur', 'Helmet', 'Metal']) {
+        for (const arm of ['Short', 'Long']) {
+          const { passed, knocked } = await oneShot(level, { angle, fuzz, arm });
+          if (fuzz === 'Fur' || fuzz === 'Helmet' || fuzz === 'Metal') {
+            expect(knocked, `${angle}/${fuzz}/${arm}`).toBe(0);
+          } else if (passed) {
+            passing.push(`${angle}/${fuzz}/${arm}`);
+          }
+        }
+      }
+    }
+    // A handful of light tunings, both fuzzes, both arms.
+    expect(passing.length).toBeGreaterThanOrEqual(6);
+    expect(passing.some((t) => t.includes('Flower'))).toBe(true);
+    expect(passing.some((t) => t.includes('Donut'))).toBe(true);
+  });
+
+  it('arm: the fuzz is locked (the Fur), so the Long arm is the answer: the light Flower on the Short arm would reach the bullseye', async () => {
+    const level = findLevel('arm')!;
+    for (const parts of [level.parts, level.solution!]) {
+      const cp = parts.find((p) => p.kind === 'catapult')!;
+      expect(cp.lockedProps).toEqual(['power', 'angle', 'fuzz']);
+      expect(cp.props.fuzz).toBe('Fur');
+    }
+    expect((await oneShot(level, { arm: 'Short' })).passed).toBe(false);
+    expect((await oneShot(level, { arm: 'Long' })).passed).toBe(true);
+    expect((await oneShot(level, { arm: 'Short', fuzz: 'Flower' })).passed).toBe(true); // why it is locked
+  });
+
+  it('longshot: the solution and every altSolutions tuning pass on their own, in one shot', async () => {
+    const level = findLevel('longshot')!;
+    expect((await oneShot(level, {})).passed).toBe(true);
+    for (const alt of level.altSolutions ?? []) expect((await oneShot(level, alt)).passed, JSON.stringify(alt)).toBe(true);
   });
 });

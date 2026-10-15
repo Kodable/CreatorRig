@@ -503,9 +503,13 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
     } else {
       // A bullseye-only level has nothing to knock down, so "0 down, 0 to go" would be noise.
       const hasTargets = m.knockedDown + m.targetsLeft > 0;
-      outcomeText = hasTargets
-        ? `Landed at ${m.maxRange.toFixed(1)} m. ${Math.round(m.knockedDown)} down, ${Math.round(m.targetsLeft)} to go.`
-        : `Landed at ${m.maxRange.toFixed(1)} m.`;
+      // A passed level with a target left over (Long shot's crate pedestal) says so plainly instead
+      // of "1 to go" (2026-10-15).
+      outcomeText = passed
+        ? `Landed at ${m.maxRange.toFixed(1)} m. Goal done!`
+        : hasTargets
+          ? `Landed at ${m.maxRange.toFixed(1)} m. ${Math.round(m.knockedDown)} down, ${Math.round(m.targetsLeft)} to go.`
+          : `Landed at ${m.maxRange.toFixed(1)} m.`;
     }
 
     const tone: ResultCard['tone'] = passed ? 'pass' : outcome === 'outOfShots' ? 'fail' : 'neutral';

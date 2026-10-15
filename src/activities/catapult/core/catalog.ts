@@ -28,7 +28,8 @@ export interface FuzzSpec {
 }
 
 /** The five fuzzes, in drawer (weight) order. Flower, Fur and Metal carry exactly the old Light,
- * Medium and Heavy weights' numbers, so every level tuned before the merge flies the same. */
+ * Medium and Heavy weights' numbers. Since the energy rule (2026-10-15, `launchSpeed`) each one's
+ * mass also sets its launch speed: lighter leaves faster. */
 export const FUZZ_NAMES = ['Flower', 'Donut', 'Fur', 'Helmet', 'Metal'] as const;
 export type FuzzName = (typeof FUZZ_NAMES)[number];
 
@@ -200,8 +201,42 @@ export function defaultProps(kind: PartKind): Record<string, string> {
 
 // ---- physical numbers -----------------------------------------------------------------------
 
-/** Launch speed (m/s) by `power`. */
+/** Launch speed (m/s) by `power` for the reference fuzz (the Fur, `FUZZ_REF`) on a 1.0 arm; the
+ * arm's `factor` scales it and `launchSpeed` adjusts it for the fuzz's own mass. */
 export const LAUNCH_SPEED: Record<string, number> = { Low: 7, Medium: 10, High: 12.5, Max: 15 };
+
+/** The fuzz whose launch speeds are exactly `LAUNCH_SPEED` x arm factor (every Fur-based tuning from
+ * before the energy rule flies the same). */
+export const FUZZ_REF = 'Fur';
+
+/** Gao, 2026-10-15: "theres no gameplay reason to use a lighter fuzz right now" - every fuzz left at
+ * the same speed, so with no air drag they all flew the same distance. Now the bands store a fixed
+ * energy per power setting: a heavier fuzz leaves slower and lands shorter, a lighter one flies
+ * farther but hits softer. The pure energy rule (1/2 m v^2 fixed, v ~ m^-0.5) made the Metal useless
+ * past 9 m and sent the Flower 2.4x as far, so the speed goes as m^-FUZZ_SPEED_EXPONENT instead,
+ * relative to the Fur: speed x1.25 Flower, x1.09 Donut, x1 Fur, x0.87 Helmet, x0.77 Metal (ranges
+ * x1.55, x1.20, x1, x0.75, x0.59). */
+export const FUZZ_SPEED_EXPONENT = 0.25;
+
+/** No fuzz ever leaves faster than this (m/s): the fastest shot before the energy rule (Max power,
+ * Long arm), so the Flower at High/Long and Max reaches no farther than the Fur at Max/Long and never
+ * hits harder than it ever did (it still never breaks a crate, CRATE_BREAK). */
+export const MAX_LAUNCH_SPEED = 15.75;
+
+/** A fuzz's mass as Rapier gives its body: a disc of radius r at its density (2D, per metre). */
+export function fuzzMass(spec: Pick<FuzzSpec, 'r' | 'density'>): number {
+  return Math.PI * spec.r * spec.r * spec.density;
+}
+
+/** The release speed (m/s) for a catapult's props: `LAUNCH_SPEED[power]` x the arm's factor x
+ * (m_ref / m)^FUZZ_SPEED_EXPONENT, capped at MAX_LAUNCH_SPEED. The one formula the shot, the swing
+ * and the dotted preview all use (build.ts `catapultRelease`). */
+export function launchSpeed(props: Record<string, string>): number {
+  const base = LAUNCH_SPEED[props.power ?? 'Medium'] ?? LAUNCH_SPEED.Medium!;
+  const arm = ARM[props.arm ?? 'Short'] ?? ARM.Short!;
+  const massRatio = fuzzMass(FUZZ[FUZZ_REF]!) / fuzzMass(fuzzSpec(props));
+  return Math.min(MAX_LAUNCH_SPEED, base * arm.factor * Math.pow(massRatio, FUZZ_SPEED_EXPONENT));
+}
 
 /** How many rubber bands `power` shows stretched between the arm and the angle lever (product
  * direction 2026-09-22: power is visible as bands, not a power-pack picture). */
@@ -244,8 +279,10 @@ export const MATERIALS: Record<Material, MaterialSpec> = {
  * within one fixed step, from a body that was closing on it at `speed` m/s or more just before the
  * step (sim.ts). The speed gate is what keeps a stack whole: a hit on its top crate pushes hard
  * through every crate under it, but those were resting on each other, so only the hit one breaks.
- * Measured (one 1 x 1 crate on the ground, every power/fuzz/angle): the Flower never passes 1.6
- * (a gentle bump), the Fur hits 1.7-3, the Helmet 2.4-6.7, the Metal 4.5-11; a crate falling
+ * Measured (one 1 x 1 crate on the ground, every power/fuzz/angle, before the energy rule): the
+ * Flower never passes 1.6 (a gentle bump), the Fur hits 1.7-3, the Helmet 2.4-6.7, the Metal 4.5-11
+ * (since the rule the Helmet and Metal hit up to ~25% softer; the Flower's speed is capped at its
+ * old maximum, MAX_LAUNCH_SPEED, so it still never breaks one); a crate falling
  * about a metre or more onto the ground breaks too. `force` (N) is the per-sub-step floor below
  * which a contact is not even reported: a crate resting under a whole tower pushes far less. */
 export const CRATE_BREAK = { impulse: 1.8, speed: 4, force: 60 };
