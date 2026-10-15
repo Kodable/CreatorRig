@@ -143,7 +143,8 @@ const DESCRIPTORS: Record<PartKind, PropertyDescriptor[]> = {
     {
       code: 'material',
       label: 'Material',
-      options: [opt('wood', 'Wood'), opt('brick', 'Brick'), opt('steel', 'Steel')],
+      // 'crate' (2026-10-15): a wooden crate that breaks when it is hit hard enough (CRATE_BREAK).
+      options: [opt('wood', 'Wood'), opt('brick', 'Brick'), opt('steel', 'Steel'), opt('crate', 'Crate')],
       default: DEFAULTS.block.material,
     },
   ],
@@ -232,7 +233,22 @@ export const MATERIALS: Record<Material, MaterialSpec> = {
   wood: { density: 0.6, friction: 0.6, color: 0xc98a4b },
   brick: { density: 1.8, friction: 0.7, color: 0xb0413e },
   steel: { density: 4, friction: 0.5, color: 0x9aa1c0 },
+  // The breakable crate: wood's numbers, so a crate stacks and topples like a wood block until it
+  // takes a hit hard enough to break (CRATE_BREAK).
+  crate: { density: 0.6, friction: 0.6, color: 0xd29a55 },
 };
+
+/** Gao, 2026-10-15: "breakable boxes, if hit with enough force, they just get destroyed". A crate
+ * (a block with `material: 'crate'`) breaks at the end of the step in which one other body (the
+ * fuzz, another block, the ground, a shelf) hits it hard: a contact impulse over `impulse` N s
+ * within one fixed step, from a body that was closing on it at `speed` m/s or more just before the
+ * step (sim.ts). The speed gate is what keeps a stack whole: a hit on its top crate pushes hard
+ * through every crate under it, but those were resting on each other, so only the hit one breaks.
+ * Measured (one 1 x 1 crate on the ground, every power/fuzz/angle): the Flower never passes 1.6
+ * (a gentle bump), the Fur hits 1.7-3, the Helmet 2.4-6.7, the Metal 4.5-11; a crate falling
+ * about a metre or more onto the ground breaks too. `force` (N) is the per-sub-step floor below
+ * which a contact is not even reported: a crate resting under a whole tower pushes far less. */
+export const CRATE_BREAK = { impulse: 1.8, speed: 4, force: 60 };
 
 /** Can colour by `color` prop. */
 export const CAN_COLORS: Record<string, number> = { Red: 0xe0392f, Blue: 0x05aeed, Green: 0x61bb46 };

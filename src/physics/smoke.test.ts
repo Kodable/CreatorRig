@@ -108,3 +108,36 @@ describe('physics: setFriction (2026-10-09)', () => {
     expect(icy).toBeGreaterThan(3.8);
   });
 });
+
+describe('physics: impact reports (ShapeOptions.impactForce, 2026-10-15)', () => {
+  async function drop(impactForce?: number) {
+    const world = await createWorld({ gravity: { x: 0, y: -10 } });
+    const g = world.createBody({ type: 'static', position: { x: 0, y: -0.5 } });
+    world.addShape(g, { kind: 'box', halfWidth: 20, halfHeight: 0.5 });
+    // A 1 kg box dropped from 1.25 m lands at 5 m/s: about 5 N s to stop it (no bounce).
+    const box = world.createBody({ position: { x: 0, y: 1.25 + 0.5 } });
+    world.addShape(box, { kind: 'box', halfWidth: 0.5, halfHeight: 0.5 }, { density: 1, ...(impactForce !== undefined ? { impactForce } : {}) });
+    const impacts: { impulse: number; pair: number[] }[] = [];
+    for (let i = 0; i < 120; i++) {
+      for (const e of world.step(FIXED_DT, FIXED_SUBSTEPS).impacts) impacts.push({ impulse: e.impulse, pair: [e.bodyA, e.bodyB].sort() });
+    }
+    world.destroy();
+    return { impacts, g, box };
+  }
+
+  it('reports the landing as one pair with about m * v of impulse, and the resting weight not at all', async () => {
+    const { impacts, g, box } = await drop(30);
+    expect(impacts.length).toBeGreaterThan(0);
+    for (const e of impacts) expect(e.pair).toEqual([g, box].sort());
+    const peak = Math.max(...impacts.map((e) => e.impulse));
+    expect(peak).toBeGreaterThan(3.5);
+    expect(peak).toBeLessThan(7);
+    // Resting, the box pushes 10 N on the ground, under the 30 N floor: the reports stop.
+    expect(impacts.length).toBeLessThan(10);
+  });
+
+  it('reports nothing for a shape that did not ask, and the same numbers on every run', async () => {
+    expect((await drop()).impacts).toEqual([]);
+    expect((await drop(30)).impacts).toEqual((await drop(30)).impacts);
+  });
+});

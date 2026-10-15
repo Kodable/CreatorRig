@@ -2,7 +2,7 @@
 // least one on-screen target per property value, and that target has to sit inside the play
 // field, not off in the weeds somewhere. Also covers the one in-scene widget left (the angle
 // lever/dial; FIRE moved to the bottom bar on 2026-10-15).
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { lookImageUrls } from '../../kit/looks';
@@ -448,6 +448,28 @@ describe('catapultSpec: the fuzzes, the real art, the collapse payoff and the li
     for (const n of BAND_ASPECTS) expect(tex[`real-band-${n}`]).toEqual({ url: `parts/catapult/real-band-${n}.png` });
   });
 
+  it('textures (2026-10-15): a crate picture per block size at that size\'s aspect, the debris planks and SMASH!, every file present', () => {
+    // A PNG's IHDR: width and height, big-endian, at bytes 16 and 20.
+    const PNG_SIZE = (file: string) => {
+      const buf = readFileSync(file);
+      return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    };
+    const tex = catapultSpec.textures!;
+    const sizes: Record<string, [number, number]> = { '1x1': [1, 1], '2x1': [2, 1], '1x2': [1, 2], domino: [0.4, 2] };
+    for (const [size, [w, h]] of Object.entries(sizes)) {
+      const t = tex[`crate-${size}`]!;
+      expect(t).toEqual({ url: `parts/catapult/crate-${size}.png` });
+      const file = resolve('public', t.url);
+      expect(existsSync(file), file).toBe(true);
+      const px = PNG_SIZE(file);
+      expect(px.w / px.h).toBeCloseTo(w / h, 1);
+    }
+    for (const key of ['crate-debris-1', 'crate-debris-2', 'crate-debris-3', 'fx-smash']) {
+      expect(tex[key], key).toBeDefined();
+      expect(existsSync(resolve('public', tex[key]!.url)), key).toBe(true);
+    }
+  });
+
   it('follow: while running, the camera prefers the impact target, then the fuzz; none otherwise', () => {
     const f = catapultSpec.follow!({} as never, 'running', 0)!;
     expect(f.roles).toEqual(['impact', 'fuzz']);
@@ -492,7 +514,7 @@ describe('catapultSpec: the fuzzes, the real art, the collapse payoff and the li
     expect(cardFor('arm').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
     expect(cardFor('donut').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
     // Every challenge level comes after all four mechanics are known, so all four rows show.
-    for (const id of ['both', 'tower', 'line', 'chain', 'free']) {
+    for (const id of ['smash', 'tower', 'line', 'chain', 'free']) {
       expect(cardFor(id).rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
     }
   });

@@ -17,10 +17,18 @@
 // the property codes each intro level unlocks; the kit hides any drawer row / widget whose code
 // isn't known yet (the union of every earlier level's `introduces`) and keeps that prop at its
 // default. Order: power, angle, weight (unlocks the fuzz row: Flower, Fur, Helmet, Metal), arm (the 'move'
-// level, dragging the catapult, was removed 2026-10-15: no more catapult moving)
-// (no new code - the mechanic is dragging the catapult itself), donut (unlocks the Donut option,
-// `fuzz:Donut`) - then the challenge run: both, tower, line, chain, pyramid, towers, wall,
-// dominoes, free, none of which introduce anything new.
+// level, dragging the catapult, was removed 2026-10-15: no more catapult moving), donut (unlocks
+// the Donut option, `fuzz:Donut`), smash (the breakable crates' first level; a target, so nothing
+// to unlock) - then the challenge run: tower, line, chain, pyramid, towers, wall, dominoes, free,
+// none of which introduce anything new. The Bullseye level (both) was removed 2026-10-15 (Gao: "get
+// rid of level 6 as well"); the bullseye stays a free-play part and the arm level's target.
+//
+// Crates (2026-10-15, Gao: "from level 7 and on, we want to introduce breakable boxes, if hit with
+// enough force, they just get destroyed"): a block with `material: 'crate'` breaks when it takes a
+// hard hit (catalog.ts CRATE_BREAK) and then counts as knocked down. Smash it introduces them, and
+// every challenge level from Timber! on mixes some in (each level's comment says where). The
+// challenge sweeps below count one-shot passes over all 200 tunings (4 power x 5 angle x 5 fuzz x
+// 2 arm) and, in brackets, over the old 120 (Flower, Fur and Metal only) the earlier counts used.
 //
 // Stakeholder direction 2026-10-01: the old weight row (Light/Medium/Heavy) and fuzz row (Blue/
 // Prism) merged into one Fuzz row. Every level's props moved over with identical physics: Light ->
@@ -35,6 +43,14 @@ function stackBlock(id: number, x: number, y: number, size = '1x1', material = '
   return { id, kind: 'block', x, y, props: { ...defaultProps('block'), size, material }, locked: true, lockPosition: true };
 }
 
+/** A locked, position-locked breakable crate (a block with `material: 'crate'`, 2026-10-15). */
+function crateBlock(id: number, x: number, y: number, size = '1x1'): PlacedPart {
+  return stackBlock(id, x, y, size, 'crate');
+}
+
+/** Where the Smash it level's crate stands: right where the locked Medium / 45 shot comes down. */
+const SMASH_CRATE_X = 15;
+
 /** The stack levels' catapult: x = 5, everything free, with the given props over the defaults. */
 function stackCatapult(props: Record<string, string>): PlacedPart {
   return { id: 1, kind: 'catapult', x: 5, y: 0, props: { ...defaultProps('catapult'), ...props }, locked: true, lockPosition: true };
@@ -45,45 +61,45 @@ const STACK_PRESET = { power: 'Low', angle: '45', fuzz: 'Flower' };
 
 const LINE_COLOR = 0xffc629;
 
-/** 12. A 3-2-1 wood pyramid centered at x = 13, two blocks balanced half-off its peak. */
+/** A 3-2-1 wood pyramid centered at x = 13, two crates balanced half-off its peak (the hat). */
 function pyramidStack(): PlacedPart[] {
   const x = 13;
   return [
     stackBlock(2, x - 1, 0.5), stackBlock(3, x, 0.5), stackBlock(4, x + 1, 0.5),
     stackBlock(5, x - 0.5, 1.5), stackBlock(6, x + 0.5, 1.5),
     stackBlock(7, x, 2.5),
-    stackBlock(8, x - 0.5, 3.5), stackBlock(9, x + 0.5, 3.5),
+    crateBlock(8, x - 0.5, 3.5), crateBlock(9, x + 0.5, 3.5),
   ];
 }
 
-/** 13. Two wood towers (1x2 post + 1x1) at x = 15, a 2x1 plank across, a block on each plank end. */
+/** Two towers (a wood 1x2 post + a crate) at x = 15, a 2x1 plank across, a block on each plank end. */
 function towersStack(): PlacedPart[] {
   const x = 15;
   return [
     stackBlock(2, x - 0.75, 1, '1x2'), stackBlock(3, x + 0.75, 1, '1x2'),
-    stackBlock(4, x - 0.75, 2.5), stackBlock(5, x + 0.75, 2.5),
+    crateBlock(4, x - 0.75, 2.5), crateBlock(5, x + 0.75, 2.5),
     stackBlock(6, x, 3.5, '2x1'),
     stackBlock(7, x - 1, 4.5), stackBlock(8, x + 1, 4.5),
   ];
 }
 
-/** 14. A plank wall at x = 13: two brick 2x1s, one wood 2x1 on them, two wood 2x1s half off its ends. */
+/** A plank wall at x = 13: two brick 2x1s, one wood 2x1 on them, two 2x1 crates half off its ends. */
 function wallStack(): PlacedPart[] {
   const x = 13;
   return [
     stackBlock(2, x - 1, 0.5, '2x1', 'brick'), stackBlock(3, x + 1, 0.5, '2x1', 'brick'),
     stackBlock(4, x, 1.5, '2x1'),
-    stackBlock(5, x - 1, 2.5, '2x1'), stackBlock(6, x + 1, 2.5, '2x1'),
+    crateBlock(5, x - 1, 2.5, '2x1'), crateBlock(6, x + 1, 2.5, '2x1'),
   ];
 }
 
-/** 15. Three wood dominoes leading into a tower at x = 14: 1x2 post, 2x1 plank, a block on each end. */
+/** Three wood dominoes leading into a tower at x = 14: 1x2 post, a 2x1 crate plank, a block on each end. */
 function dominoesStack(): PlacedPart[] {
   const x = 14;
   return [
     stackBlock(2, x - 4.2, 1, 'domino'), stackBlock(3, x - 2.8, 1, 'domino'), stackBlock(4, x - 1.4, 1, 'domino'),
     stackBlock(5, x, 1, '1x2'),
-    stackBlock(6, x, 2.5, '2x1'),
+    crateBlock(6, x, 2.5, '2x1'),
     stackBlock(7, x - 1, 3.5), stackBlock(8, x + 1, 3.5),
   ];
 }
@@ -457,72 +473,66 @@ export const LEVELS: CatapultLevel[] = [
     ],
   },
 
-  // 6. both ------------------------------------------------------------------------------------
-  // First challenge level: everything is unlocked by now, so nothing is hidden here.
+  // 6. smash ----------------------------------------------------------------------------------
+  // Gao, 2026-10-15: "from level 7 and on, we want to introduce breakable boxes, if hit with enough
+  // force, they just get destroyed" (level 7 was Timber!, the level after the removed Bullseye).
+  // The crates' own first level, gentle (course rule: one new thing at a time): one wooden crate on
+  // the ground, power and angle locked at Medium / 45 so the shot lands right on it. The preset's
+  // Flower hits it and bounces off (a light fuzz never passes the crate's break impulse, catalog.ts
+  // CRATE_BREAK); any heavier fuzz on the same arc smashes it. The goal counts smashed crates, so
+  // shoving the crate over does not count. No `introduces`: crates are a target, not a drawer row.
   {
-    id: 'both',
-    title: 'Bullseye',
-    bruno: "See that target way out there? Let's land my fuzz dead center.",
-    goals: [{ metric: 'hits', op: '>=', value: 1, label: 'Bullseye hit' }],
+    id: 'smash',
+    title: 'Smash it',
+    bruno: 'Crates break if you hit them hard enough. Can we smash that one?',
+    goals: [{ metric: 'smashed', op: '>=', value: 1, label: 'Crate smashed' }],
     palette: [],
     shots: 3,
     parts: [
       {
         id: 1,
         kind: 'catapult',
-        x: 6,
+        x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Low', angle: '45' },
+        props: { ...defaultProps('catapult'), power: 'Medium', angle: '45', fuzz: 'Flower' },
         locked: true,
         lockPosition: true,
+        lockedProps: ['power', 'angle'],
       },
-      {
-        id: 2,
-        kind: 'bullseye',
-        x: 23.5,
-        y: 5,
-        props: { ...defaultProps('bullseye') },
-        locked: true,
-        lockPosition: true,
-      },
+      crateBlock(2, SMASH_CRATE_X, 0.5),
     ],
     hints: [
-      "Low power barely leaves the stall. That target is way out there.",
-      'Nothing is locked this time. Power and angle are yours to tune.',
-      'Try Max power at 45 degrees. That sends the fuzz all the way out to the bullseye.',
+      'A good hit, but the little Flower just bounced off the crate.',
+      'Power and angle are locked. Tap the catapult. Which fuzz hits harder?',
+      'Pick a heavier fuzz, like Fur or Metal. Same arc, much harder hit.',
     ],
-    failHints: { outOfShots: "Out of fuzzes. That target is farther than it looks. Let's add power." },
+    failHints: { outOfShots: "Out of fuzzes. That crate needs a harder hit. Let's try a heavier fuzz." },
     solution: [
       {
         id: 1,
         kind: 'catapult',
-        x: 6,
+        x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Max', angle: '45' },
+        props: { ...defaultProps('catapult'), power: 'Medium', angle: '45', fuzz: 'Fur' },
         locked: true,
         lockPosition: true,
+        lockedProps: ['power', 'angle'],
       },
-      {
-        id: 2,
-        kind: 'bullseye',
-        x: 23.5,
-        y: 5,
-        props: { ...defaultProps('bullseye') },
-        locked: true,
-        lockPosition: true,
-      },
+      crateBlock(2, SMASH_CRATE_X, 0.5),
     ],
   },
-
 
   // 7. tower -----------------------------------------------------------------------------------
   // Blocks are not glued, so a solid hit drops the whole column. High power at 45 degrees (robust
   // from about catX 4.0-5.5 and angle 40-50) knocks down all four blocks; the can rides the
-  // collapse down but is not reliably latched as "knocked", so the goal is set to 4.
+  // collapse down but is not reliably latched as "knocked", so the goal is set to 4. Since
+  // 2026-10-15 the bottom block is a crate: smash it and the whole column drops a metre, which
+  // knocks everything down (the solution smashes it and downs all five). 36 of 200 tunings pass in
+  // one shot (18 of the old 120; it was 17 of 200 with the wood block), now from Medium power up.
   {
     id: 'tower',
     title: 'Timber!',
-    bruno: 'A tower of blocks with a can on top! Where should we hit it?',
+    bruno: 'A tower of blocks with a crate at the bottom! Where should we hit it?',
     goals: [{ metric: 'knockedDown', op: '>=', value: 4, label: 'Targets knocked down' }],
     palette: [],
     shots: 2,
@@ -536,7 +546,7 @@ export const LEVELS: CatapultLevel[] = [
         locked: true,
         lockPosition: true,
       },
-      { id: 2, kind: 'block', x: 19.5, y: 0.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
+      crateBlock(2, 19.5, 0.5),
       { id: 3, kind: 'block', x: 19.5, y: 1.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
       { id: 4, kind: 'block', x: 19.5, y: 2.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
       { id: 5, kind: 'block', x: 19.5, y: 3.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
@@ -544,7 +554,7 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       "That soft, low toss does not even reach the tower.",
-      'Aim for the middle of the stack and hit it hard. Knock it loose and the rest comes down with it.',
+      'Smash the crate at the bottom and the whole tower drops. A heavy fuzz hits hardest.',
       'Try High power, angle 45 and the Metal fuzz. That sends the whole tower tumbling.',
     ],
     failHints: { outOfShots: "Out of fuzzes. Let's hit the tower harder this time." },
@@ -558,7 +568,7 @@ export const LEVELS: CatapultLevel[] = [
         locked: true,
         lockPosition: true,
       },
-      { id: 2, kind: 'block', x: 19.5, y: 0.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
+      crateBlock(2, 19.5, 0.5),
       { id: 3, kind: 'block', x: 19.5, y: 1.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
       { id: 4, kind: 'block', x: 19.5, y: 2.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
       { id: 5, kind: 'block', x: 19.5, y: 3.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
@@ -567,6 +577,8 @@ export const LEVELS: CatapultLevel[] = [
   },
 
   // 8. line -----------------------------------------------------------------------------------
+  // 2026-10-15: the bottom block is a crate (15 of 200 tunings pass in one shot, 9 of the old 120;
+  // 12 of 200 with wood); the solution smashes it and the tower above drops onto the wreck.
   // Huddle 2026-09-22: once there are real structures, the goal can be broader than a target -
   // nothing may stay above the line, knock it down any way you like. Deviation from the brief's
   // 2-wide x 3-high tower: in the live sim a 2-wide wood tower is too stable for a fuzz (the Metal
@@ -593,14 +605,14 @@ export const LEVELS: CatapultLevel[] = [
         locked: true,
         lockPosition: true,
       },
-      { id: 2, kind: 'block', x: 17, y: 0.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
+      crateBlock(2, 17, 0.5),
       { id: 3, kind: 'block', x: 17, y: 1.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
       { id: 4, kind: 'block', x: 17, y: 2.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
       { id: 5, kind: 'block', x: 17, y: 3.5, props: { ...defaultProps('block'), size: '2x1', material: 'wood' }, locked: true, lockPosition: true },
     ],
     hints: [
       'A soft toss with a light fuzz does not even reach the tower.',
-      'Pick a heavy fuzz so it hits hard, then aim a fast, flat shot right at the tower.',
+      'Pick a heavy fuzz, then aim a fast, flat shot low at the tower. That crate can break.',
       'Try High power, 30 degrees and the Metal fuzz. The whole stack comes crashing down.',
     ],
     failHints: { outOfShots: "Out of fuzzes! Some of the tower is still above the line. Let's hit it harder." },
@@ -615,7 +627,7 @@ export const LEVELS: CatapultLevel[] = [
         locked: true,
         lockPosition: true,
       },
-      { id: 2, kind: 'block', x: 17, y: 0.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
+      crateBlock(2, 17, 0.5),
       { id: 3, kind: 'block', x: 17, y: 1.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
       { id: 4, kind: 'block', x: 17, y: 2.5, props: { ...defaultProps('block'), size: '1x1', material: 'wood' }, locked: true, lockPosition: true },
       { id: 5, kind: 'block', x: 17, y: 3.5, props: { ...defaultProps('block'), size: '2x1', material: 'wood' }, locked: true, lockPosition: true },
@@ -629,11 +641,13 @@ export const LEVELS: CatapultLevel[] = [
   // shot topples more than two), so these are 'domino' slabs (0.4 x 2 m wood). Lying flat they
   // stand 0.4 m tall, under the 1.2 m line. The solution (Medium power, 30 degrees, defaults
   // otherwise) is wide: Medium power at 15/30/45 with the Flower or Fur fuzz on the Short arm all
-  // pass; a shot that lands past the first domino leaves it standing.
+  // pass; a shot that lands past the first domino leaves it standing. 2026-10-15: the last domino
+  // is a crate, so the row ends with a smash when it slams down (44 of the 46 one-shot passes over
+  // 200 tunings break it; it was 46 passes with wood).
   {
     id: 'chain',
     title: 'Chain reaction',
-    bruno: "Five dominoes in a row! Which one should we hit to drop them all?",
+    bruno: 'Five dominoes in a row, and the last one is a crate. Which one should we hit first?',
     goals: [{ metric: 'aboveLine', op: '==', value: 0, label: 'Nothing left above the line' }],
     palette: [],
     shots: 2,
@@ -652,7 +666,7 @@ export const LEVELS: CatapultLevel[] = [
       { id: 3, kind: 'block', x: 16.4, y: 1, props: { ...defaultProps('block'), size: 'domino', material: 'wood' }, locked: true, lockPosition: true },
       { id: 4, kind: 'block', x: 17.8, y: 1, props: { ...defaultProps('block'), size: 'domino', material: 'wood' }, locked: true, lockPosition: true },
       { id: 5, kind: 'block', x: 19.2, y: 1, props: { ...defaultProps('block'), size: 'domino', material: 'wood' }, locked: true, lockPosition: true },
-      { id: 6, kind: 'block', x: 20.6, y: 1, props: { ...defaultProps('block'), size: 'domino', material: 'wood' }, locked: true, lockPosition: true },
+      crateBlock(6, 20.6, 1, 'domino'),
     ],
     hints: [
       'That toss lands short. The fuzz has to reach the very first domino.',
@@ -675,7 +689,7 @@ export const LEVELS: CatapultLevel[] = [
       { id: 3, kind: 'block', x: 16.4, y: 1, props: { ...defaultProps('block'), size: 'domino', material: 'wood' }, locked: true, lockPosition: true },
       { id: 4, kind: 'block', x: 17.8, y: 1, props: { ...defaultProps('block'), size: 'domino', material: 'wood' }, locked: true, lockPosition: true },
       { id: 5, kind: 'block', x: 19.2, y: 1, props: { ...defaultProps('block'), size: 'domino', material: 'wood' }, locked: true, lockPosition: true },
-      { id: 6, kind: 'block', x: 20.6, y: 1, props: { ...defaultProps('block'), size: 'domino', material: 'wood' }, locked: true, lockPosition: true },
+      crateBlock(6, 20.6, 1, 'domino'),
     ],
   },
 
@@ -690,16 +704,18 @@ export const LEVELS: CatapultLevel[] = [
   // bridge is too sturdy for a fuzz (under 10 of 120 tunings move its top block at all). The
   // preset (Low, 45, Flower) never reaches the stack, so doing nothing fails. The old splitting
   // fuzz passed a few more in each level (42, 33, 39, 58 of 120) without trivialising any. `altSolutions` records
-  // other passing tunings, each proven on its own by levels.test.ts.
+  // other passing tunings, each proven on its own by levels.test.ts. 2026-10-15: each stack has
+  // crates in it now (see each level), re-swept: every one is a little more lenient than before.
 
   // 10. pyramid --------------------------------------------------------------------------------
   // A 3-2-1 wood pyramid at x = 13 with two blocks balanced on its peak, each half hanging off.
   // Line 3.5 (peak 3, hat blocks' tops 4): knock both hat blocks down. 29 of those 120 tunings pass
-  // in one shot (Low 4, Medium 16, High 4, Max 5).
+  // in one shot (Low 4, Medium 16, High 4, Max 5). 2026-10-15: the hat is two crates, which smash
+  // when they hit the ground: 55 of 200 pass (31 of the old 120), every pass smashing both.
   {
     id: 'pyramid',
     title: 'Pyramid hats',
-    bruno: 'My pyramid is wearing two blocks for a hat! Knock the hat off so nothing stays above the line.',
+    bruno: 'My pyramid is wearing two crates for a hat! Knock the hat off so nothing stays above the line.',
     goals: [{ metric: 'aboveLine', op: '==', value: 0, label: 'Nothing left above the line' }],
     palette: [],
     shots: 3,
@@ -707,7 +723,7 @@ export const LEVELS: CatapultLevel[] = [
     parts: [stackCatapult(STACK_PRESET), ...pyramidStack()],
     hints: [
       'That soft toss does not even reach the pyramid.',
-      'Those two top blocks are wobbly. Any good bump to the pyramid can shake them off.',
+      'Those two top crates are wobbly. Any good bump to the pyramid can shake them off.',
       'Lots of settings work here. Try more power, a heavier fuzz, or a new angle, and see what happens!',
     ],
     failHints: { outOfShots: 'Out of fuzzes! The hat is still on. Try more power or a heavier fuzz.' },
@@ -718,18 +734,19 @@ export const LEVELS: CatapultLevel[] = [
       { power: 'Medium', angle: '30', fuzz: 'Metal', arm: 'Short' },
       { power: 'High', angle: '15', fuzz: 'Metal', arm: 'Short' },
       { power: 'Max', angle: '15', fuzz: 'Metal', arm: 'Short' },
-      { power: 'Max', angle: '75', fuzz: 'Fur', arm: 'Short' },
+      { power: 'Max', angle: '75', fuzz: 'Metal', arm: 'Short' },
     ],
   },
 
   // 11. towers ---------------------------------------------------------------------------------
   // Two wood towers (a 1x2 post and a 1x1 each) at x = 15 with a 2x1 plank across them and a block
   // balanced on each end of the plank. Line 4.5 (plank top 4, end blocks' tops 5). 30 of those 120
-  // tunings pass in one shot (Low 1, Medium 12, High 11, Max 6).
+  // tunings pass in one shot (Low 1, Medium 12, High 11, Max 6). 2026-10-15: each tower's top block
+  // is a crate; smash one and the plank drops: 57 of 200 pass (33 of the old 120), 28 by a smash.
   {
     id: 'towers',
     title: 'Twin towers',
-    bruno: 'Two towers holding up a plank, with a block on each end. Get both blocks below the line!',
+    bruno: 'Two towers with crates on top hold up a plank. Get both end blocks below the line!',
     goals: [{ metric: 'aboveLine', op: '==', value: 0, label: 'Nothing left above the line' }],
     palette: [],
     shots: 3,
@@ -737,7 +754,7 @@ export const LEVELS: CatapultLevel[] = [
     parts: [stackCatapult(STACK_PRESET), ...towersStack()],
     hints: [
       'That soft toss lands way short of the towers.',
-      'Shake the towers and those end blocks slide right off. You do not have to knock it all down.',
+      'Shake the towers and the end blocks slide off. Or smash a crate and the plank drops.',
       'Try a heavier fuzz or more power, then try a flatter or a higher angle. Plenty of shots work!',
     ],
     failHints: { outOfShots: 'Out of fuzzes! A block is still up there. Try a heavier fuzz or more power.' },
@@ -756,11 +773,12 @@ export const LEVELS: CatapultLevel[] = [
   // A 2x1 plank wall at x = 13, bricks on the bottom row for a heavier feel: two brick planks, one
   // wood plank centered on them, then two wood planks balanced half off its ends. Line 2.5 (middle
   // row top 2, top row 3). 26 of those 120 tunings pass in one shot (Low 1, Medium 16, High 5,
-  // Max 4).
+  // Max 4). 2026-10-15: the top row is two 2x1 crates, which smash when they fall: 53 of 200 pass
+  // (25 of the old 120), every pass smashing both.
   {
     id: 'wall',
     title: 'Wobbly wall',
-    bruno: 'A brick wall with wooden planks on top! Knock the top row down below the line.',
+    bruno: 'A brick wall with two crates on top! Knock the top row down below the line.',
     goals: [{ metric: 'aboveLine', op: '==', value: 0, label: 'Nothing left above the line' }],
     palette: [],
     shots: 3,
@@ -768,10 +786,10 @@ export const LEVELS: CatapultLevel[] = [
     parts: [stackCatapult(STACK_PRESET), ...wallStack()],
     hints: [
       'That toss does not reach the wall yet.',
-      'The bricks are heavy, but the top planks are only half on. Rattle the wall and they tip.',
+      'The bricks are heavy, but the top crates are only half on. Rattle the wall and they tip.',
       'Experiment! Try more power or a heavier fuzz, and try a few different angles.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! A plank is still above the line. Try a new angle or more power.' },
+    failHints: { outOfShots: 'Out of fuzzes! A crate is still above the line. Try a new angle or more power.' },
     markers: [{ kind: 'hline', y: 2.5, color: LINE_COLOR, label: 'Nothing above this line!' }],
     solution: [stackCatapult({ power: 'Medium', angle: '45', fuzz: 'Metal' }), ...wallStack()],
     altSolutions: [
@@ -788,10 +806,12 @@ export const LEVELS: CatapultLevel[] = [
   // balanced on each plank end). Hit the dominoes or the tower: either knocks the end blocks off.
   // Line 3.5 (plank top 3, end blocks' tops 4). 41 of those 120 tunings pass in one shot (Low 11,
   // Medium 13, High 10, Max 7) - the most lenient of the four, a fun finale before free play.
+  // 2026-10-15: the plank is a 2x1 crate; smash it and the end blocks fall: 75 of 200 pass (41 of
+  // the old 120).
   {
     id: 'dominoes',
     title: 'Domino drop',
-    bruno: 'Dominoes, then a tower. How many ways can we bring it down?',
+    bruno: 'Dominoes, then a tower with a crate on top. How many ways can we bring it down?',
     goals: [{ metric: 'aboveLine', op: '==', value: 0, label: 'Nothing left above the line' }],
     palette: [],
     shots: 3,
@@ -799,7 +819,7 @@ export const LEVELS: CatapultLevel[] = [
     parts: [stackCatapult(STACK_PRESET), ...dominoesStack()],
     hints: [
       'A light toss. What would hit harder?',
-      'Knock any domino and it pushes the rest into the tower. Or hit the tower straight on!',
+      'Knock any domino and it pushes the rest into the tower. Or smash the crate on top!',
       'Try a heavier fuzz first, then more power. Lots of settings bring it down.',
     ],
     failHints: { outOfShots: 'Out of fuzzes! Something is still above the line. Try a heavier fuzz or more power.' },
@@ -838,7 +858,7 @@ export const LEVELS: CatapultLevel[] = [
       { id: 4, kind: 'bullseye', x: 25.5, y: 5, props: { ...defaultProps('bullseye') }, locked: true, lockPosition: true },
     ],
     hints: [
-      'Try rolling the catapult around, or add your own cans, blocks and walls from the palette.',
+      'Add your own cans, blocks and walls from the palette. A block can be a crate, too.',
       'Stack blocks into your own tower, or line up a shelf just where you want it.',
       "There's no wrong answer in free play, just have fun flinging fuzzes!",
     ],

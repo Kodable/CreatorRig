@@ -33,12 +33,13 @@ async function fireAllShots(parts: CatapultLevel['parts'], level: CatapultLevel,
 }
 
 describe('catapult levels: structure', () => {
-  it('has 14 entries with unique ids, free play last (no move level since 2026-10-15)', () => {
+  it('has 14 entries with unique ids, free play last (no move or Bullseye level since 2026-10-15)', () => {
     expect(LEVELS).toHaveLength(14);
     // Stakeholder direction 2026-09-22: intro levels (one new mechanic each) up front, then a run
-    // of challenge levels that mix everything.
+    // of challenge levels that mix everything. 2026-10-15: the Bullseye level ('both') is gone and
+    // Smash it introduces the breakable crates right before the challenge run.
     expect(LEVELS.map((level) => level.id)).toEqual([
-      'power', 'angle', 'weight', 'arm', 'donut', 'both', 'tower', 'line', 'chain',
+      'power', 'angle', 'weight', 'arm', 'donut', 'smash', 'tower', 'line', 'chain',
       // Stakeholder request 2026-09-22: stack levels with a lenient line, before free play.
       'pyramid', 'towers', 'wall', 'dominoes',
       'free',
@@ -48,7 +49,7 @@ describe('catapult levels: structure', () => {
 
   it('the first five levels each introduce at most one code, and together introduce exactly ' +
     'power, angle, fuzz (the weight level), arm and the Donut option (fuzz:Donut, its own level); ' +
-    'the challenge levels introduce nothing', () => {
+    'Smash it and the challenge levels introduce nothing (crates are a target, not a drawer row)', () => {
     const introLevels = LEVELS.slice(0, 5);
     const challengeLevels = LEVELS.slice(5);
 
@@ -135,7 +136,13 @@ describe('catapult levels: line, chain, donut', () => {
     const level = findLevel('chain')!;
     const parts = level.solution!;
     const sim = await createCatapultSim(parts, level);
-    const dominoes = sim.handles().filter((h) => h.kind === 'block').sort((a, b) => a.bounds.x - b.bounds.x);
+    // Body ids up front: the last domino is a crate (2026-10-15), and a broken crate's handle
+    // gives up its body.
+    const dominoes = sim
+      .handles()
+      .filter((h) => h.kind === 'block')
+      .sort((a, b) => a.bounds.x - b.bounds.x)
+      .map((h) => ({ partId: h.partId, body: h.bodies[0]!.id }));
     const tippedAt = new Map<number, number>();
     let crash = false;
     sim.play();
@@ -143,8 +150,9 @@ describe('catapult levels: line, chain, donut', () => {
       sim.step();
       const snap = sim.snapshot();
       for (const d of dominoes) {
-        const t = snap.transforms.get(d.bodies[0]!.id)!;
-        if (!tippedAt.has(d.partId) && Math.abs(t.angle) > Math.PI / 4) tippedAt.set(d.partId, tick);
+        const t = snap.transforms.get(d.body);
+        // Gone = smashed: the crate domino only breaks when it slams down, so it tipped first.
+        if (!tippedAt.has(d.partId) && (!t || Math.abs(t.angle) > Math.PI / 4)) tippedAt.set(d.partId, tick);
       }
       if ((snap.overlay ?? []).some((o) => o.kind === 'sprite' && o.textureKey === 'fx-crash')) crash = true;
     }
@@ -153,6 +161,7 @@ describe('catapult levels: line, chain, donut', () => {
     for (let i = 1; i < order.length; i++) expect(order[i]!).toBeGreaterThan(order[i - 1]!);
     expect(crash).toBe(true);
     expect(sim.metrics().aboveLine).toBe(0);
+    expect(sim.metrics().smashed).toBe(1); // the crate at the end of the row
     sim.destroy();
   });
 
@@ -258,6 +267,66 @@ describe('catapult levels: the catapult never moves (2026-10-15)', () => {
       const cp = level.parts.find((p) => p.kind === 'catapult')!;
       expect(cp.lockPosition, level.id).toBe(true);
       expect(cp.region, level.id).toBeUndefined();
+    }
+  });
+});
+
+// Gao, 2026-10-15: "from level 7 and on, we want to introduce breakable boxes, if hit with enough
+// force, they just get destroyed". Smash it introduces the crates gently; every challenge level
+// after it mixes some in; nothing before it shows one (a concept not yet introduced stays hidden).
+describe('catapult levels: crates', () => {
+  const crates = (level: CatapultLevel) =>
+    level.parts.filter((p) => p.kind === 'block' && p.props.material === 'crate').length;
+
+  it('no crate before Smash it; one on Smash it; some in every challenge level from Timber! on', () => {
+    const smash = LEVELS.findIndex((l) => l.id === 'smash');
+    expect(smash).toBe(5);
+    for (const level of LEVELS.slice(0, smash)) expect(crates(level), level.id).toBe(0);
+    expect(crates(findLevel('smash')!)).toBe(1);
+    for (const level of LEVELS.slice(smash + 1)) {
+      if (level.id === 'free') continue;
+      expect(crates(level), level.id).toBeGreaterThan(0);
+    }
+    // The solution keeps the preset's crates exactly (only the catapult's tuning differs).
+    for (const level of LEVELS) {
+      if (!level.solution) continue;
+      expect(level.solution.filter((p) => p.kind !== 'catapult')).toEqual(level.parts.filter((p) => p.kind !== 'catapult'));
+    }
+  });
+
+  it('smash: power and angle are locked, and the goal is a smashed crate (shoving it over is not enough)', () => {
+    const level = findLevel('smash')!;
+    for (const parts of [level.parts, level.solution!]) {
+      const cp = parts.find((p) => p.kind === 'catapult')!;
+      expect(cp.lockedProps).toEqual(['power', 'angle']);
+      expect(cp.props).toMatchObject({ power: 'Medium', angle: '45' });
+    }
+    expect(level.goals).toEqual([expect.objectContaining({ metric: 'smashed', op: '>=', value: 1 })]);
+  });
+
+  it('smash: the lesson - the light Flower hits the crate and bounces off, a heavier fuzz on the same arc smashes it', async () => {
+    const level = findLevel('smash')!;
+    const cp = level.parts.find((p) => p.kind === 'catapult')!;
+    const run = async (fuzz: string) => {
+      const parts = level.parts.map((p) => (p.kind === 'catapult' ? { ...cp, props: { ...cp.props, fuzz } } : p));
+      const sim = await createCatapultSim(parts, { ...level, shots: 1 });
+      const crate = sim.handles().find((h) => h.kind === 'block')!.bodies[0]!.id;
+      let touched = false;
+      sim.play();
+      for (let tick = 0; tick < MAX_TICKS_PER_SHOT && sim.outcome === 'running'; tick++) {
+        sim.step();
+        // The BOOM burst marks the fuzz's first touch on a block that did not break.
+        if ((sim.snapshot().overlay ?? []).some((o) => o.kind === 'sprite' && (o.textureKey === 'fx-boom' || o.textureKey === 'fx-smash'))) touched = true;
+      }
+      const m = sim.metrics();
+      const alive = sim.snapshot().transforms.has(crate);
+      sim.destroy();
+      return { touched, smashed: m.smashed, alive };
+    };
+    const weak = await run('Flower');
+    expect(weak).toEqual({ touched: true, smashed: 0, alive: true });
+    for (const fuzz of ['Fur', 'Helmet', 'Metal']) {
+      expect(await run(fuzz), fuzz).toEqual({ touched: true, smashed: 1, alive: false });
     }
   });
 });

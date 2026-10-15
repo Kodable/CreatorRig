@@ -13,6 +13,7 @@ import {
   fireSpot,
   fuzzTextureKey,
   hookSprite,
+  isCrate,
   isTarget,
   REST_ANGLE,
   STRING_HOOK_H,
@@ -20,7 +21,7 @@ import {
   stringAnchor,
   FUZZ_PART_ID,
 } from './build';
-import { ARM, FUZZ, FUZZ_TINT, LAUNCH_SPEED, SPLIT_ANGLE_DEG, SPLIT_OFFSET, fuzzName, fuzzSpec } from './catalog';
+import { ARM, CRATE_BREAK, FUZZ, FUZZ_TINT, LAUNCH_SPEED, SPLIT_ANGLE_DEG, SPLIT_OFFSET, fuzzName, fuzzSpec } from './catalog';
 import type {
   BodyId,
   BodyRole,
@@ -37,7 +38,7 @@ import type {
 } from './types';
 import { createWorld, FIXED_DT, FIXED_SUBSTEPS } from '../../../physics';
 import { dotsAlong, flightPath, previewAlpha, previewOverlay } from './preview';
-import type { PhysicsWorld, Transform } from '../../../physics/types';
+import type { ImpactEvent, PhysicsWorld, Transform } from '../../../physics/types';
 
 /** Ticks the pre-roll runs before a shot may be fired, so cans settle onto their shelves. */
 export const SETTLE_TICKS = 60;
@@ -73,6 +74,14 @@ export const SPLIT_PUFF_SIZE = 0.6;
 export const SPLIT_PUFF_TIME = 0.3;
 const HIT_BURST_SIZE = 2.4;
 const HIT_BURST_TIME = 0.7;
+/** A crate breaking (catalog.ts `CRATE_BREAK`): a SMASH! burst over where it was, and
+ * CRATE_DEBRIS cosmetic planks (overlay sprites, no physics) that tumble out and fade. */
+export const SMASH_SIZE = 2.4;
+export const SMASH_TIME = 0.8;
+export const CRATE_DEBRIS = 5;
+export const DEBRIS_TIME = 0.9;
+/** The debris planks' pictures (spec.ts `textures`), used in turn. */
+export const DEBRIS_TEXTURES = ['crate-debris-1', 'crate-debris-2', 'crate-debris-3'] as const;
 /** Collision group for a splitting fuzz (the Donut): its pieces collide with everything except
  * each other, so the three fuzzes of a split (spawned 0.1 m apart, closer than their radii) never
  * shove each other apart. Every other fuzz keeps the default filter, so the shipped levels'
@@ -150,6 +159,20 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   private readonly preStepSpeed = new Map<BodyId, number>();
   /** The fuzzes this shot launched (the original first, then a Donut split's two children). */
   private shotFuzzes: FuzzBody[] = [];
+  /** Breakable crates (blocks with `material: 'crate'`) still standing, and the ones broken so far
+   * with where they were when they broke (their bodies are gone; a broken crate counts as knocked
+   * down and is never above the line). */
+  private readonly crateBodies = new Set<BodyId>();
+  private readonly brokenCrates = new Map<BodyId, Vec2>();
+  /** Crates that break at the end of the current step (`step()` fills it from the impacts before
+   * the contact handlers run, so a breaking crate gets the SMASH! instead of a BOOM or dust). */
+  private breakingNow = new Set<BodyId>();
+  /** Every dynamic body's velocity just before the current step: how fast a body was closing on a
+   * crate when it hit (`cratesToBreak`). Static bodies are absent (velocity 0). */
+  private readonly preStepVel = new Map<BodyId, Vec2>();
+  /** This shot's tumbling crate planks (cosmetic, `debrisOverlay`). Sim-time stamped. */
+  private debris: { id: string; key: string; p0: Vec2; v: Vec2; a0: number; spin: number; size: number; t0: number }[] = [];
+  private debrisCounter = 0;
 
   private shotsLeftInternal: number;
   private shotsUsed = 0;
@@ -223,6 +246,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
         this.targetBodies.push(body.id);
         this.dynamicBodies.add(body.id);
         this.targetKind.set(body.id, part.kind === 'block' ? 'block' : 'can');
+        if (isCrate(part)) this.crateBodies.add(body.id);
         const visual = handle.visuals[0]!;
         this.targetVisual.set(body.id, visual);
         if (visual.shape.kind === 'box') {
@@ -389,6 +413,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     this.knockedThisShot = [];
     this.crashShown = false;
     this.shotFuzzes = [];
+    this.debris = [];
   }
 
   step(): void {
@@ -418,8 +443,12 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
 
     const result = this.world.step(FIXED_DT, FIXED_SUBSTEPS);
 
+    // Crates break after the step, never mid-step: the world is stepped whole, then the crates
+    // that took a hard enough hit during it are taken out.
+    this.breakingNow = this.cratesToBreak(result.impacts);
     this.updateFuzzContacts(result.contacts);
     this.handleContacts(result.contacts);
+    this.breakCrates();
     this.updateLatches();
     this.updateSplits();
     this.updateMaxRange();
@@ -427,7 +456,10 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     const quiet = this.allQuiet();
     this.quietElapsed = quiet ? this.quietElapsed + FIXED_DT : 0;
 
-    if ((this.shotElapsed >= MIN_SHOT_TIME && this.quietElapsed >= QUIET_TIME) || this.shotElapsed >= MAX_SHOT_TIME) {
+    // A shot does not end on quiet while a broken crate's planks are still tumbling, so the
+    // effect plays out instead of freezing mid-air (the overlay ages on sim time).
+    const settled = this.quietElapsed >= QUIET_TIME && !this.debrisBusy();
+    if ((this.shotElapsed >= MIN_SHOT_TIME && settled) || this.shotElapsed >= MAX_SHOT_TIME) {
       this.finishShot();
     }
   }
@@ -460,6 +492,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
       }
     }
     // The loaded fuzz's name is shown by the fuzz shelf widget (spec.ts), not by a label here.
+    overlay.push(...this.debrisOverlay());
     overlay.push(...this.burstOverlay());
     overlay.push(...this.bandOverlay());
     overlay.push(...this.stringOverlay());
@@ -476,6 +509,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
       targetsLeft: this.targetBodies.length - this.knockedBodies.size,
       maxRange: this.maxRangeValue,
       aboveLine: this.countAboveLine(),
+      smashed: this.brokenCrates.size,
     };
   }
 
@@ -700,7 +734,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
    * records a hit-burst sprite (at most once per body per shot). Anything else (ground, a wall,
    * another fuzz) is ignored. */
   private recordBurst(otherId: BodyId, fuzzId: BodyId): void {
-    if (this.burstedBodies.has(otherId)) return;
+    if (this.burstedBodies.has(otherId) || this.breakingNow.has(otherId)) return;
     const kind = this.targetKind.get(otherId);
     const isBullseye = this.bullseyeBodies.has(otherId);
     if (!kind && !isBullseye) return;
@@ -720,15 +754,19 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
 
   private recordPreStepSpeeds(): void {
     for (const id of this.targetBodies) {
+      if (this.brokenCrates.has(id)) continue;
       const v = this.world.getLinearVelocity(id);
       this.preStepSpeed.set(id, Math.hypot(v.x, v.y));
     }
+    this.preStepVel.clear();
+    if (this.crateBodies.size === 0) return;
+    for (const id of this.dynamicBodies) this.preStepVel.set(id, this.world.getLinearVelocity(id));
   }
 
   /** A target landing on the ground or a shelf/wall faster than DUST_SPEED this shot: one dust
    * puff (at most one per body per shot) just above where it came down. */
   private recordDust(target: BodyId): void {
-    if (this.dustedBodies.has(target)) return;
+    if (this.dustedBodies.has(target) || this.breakingNow.has(target)) return;
     if ((this.preStepSpeed.get(target) ?? 0) <= DUST_SPEED) return;
     const info = this.shapeInfo.get(target);
     if (!info) return;
@@ -745,9 +783,9 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     let sx = 0;
     let sy = 0;
     for (const id of this.knockedThisShot) {
-      const t = this.world.getTransform(id);
-      sx += t.position.x;
-      sy += t.position.y;
+      const p = this.brokenCrates.get(id) ?? this.world.getTransform(id).position;
+      sx += p.x;
+      sy += p.y;
     }
     const n = this.knockedThisShot.length;
     this.pushBurst('fx-crash', { x: sx / n, y: Math.min(sy / n + 2, 13) }, CRASH_SIZE, CRASH_TIME, -0.08);
@@ -760,12 +798,107 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     if (line === undefined) return 0;
     let n = 0;
     for (const id of this.targetBodies) {
+      if (this.brokenCrates.has(id)) continue; // a broken crate is gone: nothing left above
       const info = this.shapeInfo.get(id);
       if (!info) continue;
       const b = this.rotatedBoxBounds(this.world.getTransform(id), info);
       if (b.y + b.h / 2 > line + 1e-3) n++;
     }
     return n;
+  }
+
+  /** The live crates hit hard this step (catalog.ts `CRATE_BREAK`): more than `impulse` N s from
+   * one other body (the fuzz, a block, the ground, a shelf; one impact report per body pair from
+   * the physics adapter) that was closing on it at `speed` m/s or more before the step. */
+  private cratesToBreak(impacts: ImpactEvent[]): Set<BodyId> {
+    const out = new Set<BodyId>();
+    const zero = { x: 0, y: 0 };
+    for (const imp of impacts) {
+      if (imp.impulse <= CRATE_BREAK.impulse) continue;
+      const va = this.preStepVel.get(imp.bodyA) ?? zero;
+      const vb = this.preStepVel.get(imp.bodyB) ?? zero;
+      if (Math.hypot(va.x - vb.x, va.y - vb.y) < CRATE_BREAK.speed) continue;
+      for (const id of [imp.bodyA, imp.bodyB]) {
+        if (this.crateBodies.has(id) && !this.brokenCrates.has(id)) out.add(id);
+      }
+    }
+    return out;
+  }
+
+  /** Takes out every crate in `breakingNow`: a SMASH! burst and the tumbling planks where it was,
+   * its body destroyed (after the step), its picture dropped, and it counts as knocked down. */
+  private breakCrates(): void {
+    for (const id of this.breakingNow) {
+      const t = this.world.getTransform(id);
+      const v = this.world.getLinearVelocity(id);
+      const info = this.shapeInfo.get(id);
+      this.spawnDebris(t, v, info ?? { hw: 0.5, hh: 0.5, symmetry: Math.PI / 2 });
+      this.pushBurst('fx-smash', { x: t.position.x, y: t.position.y + 0.9 }, SMASH_SIZE, SMASH_TIME, -0.1);
+
+      this.world.destroyBody(id);
+      this.crateBodies.delete(id);
+      this.brokenCrates.set(id, { ...t.position });
+      this.dynamicBodies.delete(id);
+      this.burstedBodies.add(id);
+      for (const f of this.fuzzBodies) f.contacts.delete(id);
+      if (!this.knockedBodies.has(id)) {
+        this.knockedBodies.add(id);
+        this.knockedThisShot.push(id);
+      }
+      const handle = this.partHandles.find((h) => h.bodies.some((b) => b.id === id));
+      if (handle) {
+        handle.bodies = [];
+        handle.visuals = [];
+        handle.bounds = { x: t.position.x, y: t.position.y, w: 0, h: 0 };
+      }
+    }
+    this.breakingNow = new Set();
+  }
+
+  /** CRATE_DEBRIS planks flying out of a broken crate: spread across its box, thrown outward and up
+   * (plus a share of the crate's own motion), each spinning its own way. Fixed numbers per piece,
+   * no randomness, so a replay breaks the same way. */
+  private spawnDebris(t: Transform, v: Vec2, info: ShapeInfo): void {
+    const c = Math.cos(t.angle);
+    const s = Math.sin(t.angle);
+    // A plank most of the crate's longest side (0.8 m for a 1 x 1), within 0.5 .. 1.1 m.
+    const size = Math.max(0.5, Math.min(1.1, 1.6 * Math.max(info.hw, info.hh)));
+    for (let i = 0; i < CRATE_DEBRIS; i++) {
+      const u = i / (CRATE_DEBRIS - 1) - 0.5; // -0.5 .. 0.5
+      const lx = u * info.hw * 1.4;
+      const ly = (i % 2 === 0 ? 0.3 : -0.3) * info.hh;
+      const p0 = { x: t.position.x + c * lx - s * ly, y: t.position.y + s * lx + c * ly };
+      this.debrisCounter++;
+      this.debris.push({
+        id: `debris-${this.debrisCounter}`,
+        key: DEBRIS_TEXTURES[i % DEBRIS_TEXTURES.length]!,
+        p0,
+        v: { x: 0.35 * v.x + u * 5, y: 0.2 * Math.max(0, v.y) + 3 + (i % 3) * 0.9 },
+        a0: t.angle + i * 1.1,
+        spin: (i % 2 === 0 ? 1 : -1) * (5 + i * 1.5),
+        size,
+        t0: this.shotElapsed,
+      });
+    }
+  }
+
+  private debrisBusy(): boolean {
+    return this.debris.some((d) => this.shotElapsed - d.t0 < DEBRIS_TIME);
+  }
+
+  /** The tumbling planks: ballistic under the world's gravity (sim time, so deterministic), full
+   * alpha for the first half of DEBRIS_TIME, then fading out. */
+  private debrisOverlay(): OverlayItem[] {
+    const items: OverlayItem[] = [];
+    for (const d of this.debris) {
+      const age = this.shotElapsed - d.t0;
+      if (age < 0 || age >= DEBRIS_TIME) continue;
+      const p = { x: d.p0.x + d.v.x * age, y: d.p0.y + d.v.y * age + 0.5 * GRAVITY_Y * age * age };
+      const half = DEBRIS_TIME / 2;
+      const alpha = age < half ? 1 : 1 - (age - half) / half;
+      items.push({ kind: 'sprite', id: d.id, textureKey: d.key, p, size: d.size, alpha, angle: d.a0 + d.spin * age });
+    }
+    return items;
   }
 
   /** `snapshot().overlay` sprites for every burst younger than its lifetime `dur`. A hit burst

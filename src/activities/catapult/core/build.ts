@@ -1,5 +1,5 @@
 // Turns a PlacedPart into Rapier bodies/shapes plus the RenderItems the scene draws.
-import { ARM, BAND_COLOR, BAND_COUNT, CAN_COLORS, FUZZ_TINT, LAUNCH_SPEED, MATERIALS, blockSize, fuzzName, fuzzSpec } from './catalog';
+import { ARM, BAND_COLOR, BAND_COUNT, CAN_COLORS, CRATE_BREAK, FUZZ_TINT, LAUNCH_SPEED, MATERIALS, blockSize, fuzzName, fuzzSpec } from './catalog';
 import type { BodyId, Bounds, Material, OverlayItem, PartHandle, PlacedPart, RenderItem, Shape, Vec2 } from './types';
 import type { PhysicsWorld } from '../../../physics/types';
 
@@ -556,19 +556,54 @@ function buildCan(world: PhysicsWorld, part: PlacedPart): PartHandle {
   };
 }
 
+/** A crate's picture key (spec.ts's `textures`) for a block `size`: one picture per size, drawn
+ * at that size's aspect so its planks never stretch. */
+export function crateTexture(size: string): string {
+  return `crate-${blockSizeKey(size)}`;
+}
+
+/** The block sizes, as their option values ('1x1' for anything unknown, like `blockSize`). */
+export const BLOCK_SIZES = ['1x1', '2x1', '1x2', 'domino'] as const;
+
+function blockSizeKey(size: string): string {
+  return (BLOCK_SIZES as readonly string[]).includes(size) ? size : '1x1';
+}
+
+/** True for a block that breaks when hit hard enough (catalog.ts `CRATE_BREAK`). */
+export function isCrate(part: PlacedPart): boolean {
+  return part.kind === 'block' && part.props.material === 'crate';
+}
+
 function buildBlock(world: PhysicsWorld, part: PlacedPart): PartHandle {
   const material = (part.props.material as Material) ?? 'wood';
   const spec = MATERIALS[material] ?? MATERIALS.wood;
-  const { w, h } = blockSize(part.props.size ?? '1x1');
+  const size = part.props.size ?? '1x1';
+  const { w, h } = blockSize(size);
+  const crate = isCrate(part);
   const id = world.createBody({ type: 'dynamic', position: { x: part.x, y: part.y } });
-  world.addShape(id, { kind: 'box', halfWidth: w / 2, halfHeight: h / 2 }, { density: spec.density, friction: spec.friction });
+  world.addShape(
+    id,
+    { kind: 'box', halfWidth: w / 2, halfHeight: h / 2 },
+    { density: spec.density, friction: spec.friction, ...(crate ? { impactForce: CRATE_BREAK.force } : {}) },
+  );
   const shape: Shape = { kind: 'box', w, h };
   return {
     partId: part.id,
     kind: part.kind,
     bodies: [{ id, role: 'block' }],
     joints: [],
-    visuals: [{ partId: part.id, body: id, shape, color: spec.color, role: 'block', locked: !!part.locked, lockPosition: !!part.lockPosition }],
+    visuals: [
+      {
+        partId: part.id,
+        body: id,
+        shape,
+        color: spec.color,
+        role: 'block',
+        locked: !!part.locked,
+        lockPosition: !!part.lockPosition,
+        ...(crate ? { textureKey: crateTexture(size) } : {}),
+      },
+    ],
     bounds: boxBounds(part.x, part.y, w, h),
   };
 }

@@ -11,7 +11,8 @@
 // was dragged) and stays done: once the new control was used and a shot has gone (`runs`), the
 // child is on their own for the rest of that level load. A fresh load starts over. Level 1 also
 // points at Next level after the pass, as the rover's level 1 does. Nothing on the Donut level
-// (its new thing, the split, is locked in and needs no tap) or on the challenges.
+// (its new thing, the split, is locked in and needs no tap), on Smash it (the crates' level: Bruno's
+// line and the hints teach it, and picking a fuzz is already known) or on the challenges.
 import type { CoachContext, CoachGesture, CoachStep, CoachTarget } from '../../kit/types';
 import { gatedOptions, isOptionKnown, knownConcepts } from '../../kit/concepts';
 import { CATALOG } from './core/catalog';

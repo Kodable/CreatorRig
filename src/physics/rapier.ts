@@ -6,6 +6,7 @@ import type {
   BodyId,
   BodyType,
   ContactEvent,
+  ImpactEvent,
   JointDef,
   JointId,
   RayHit,
@@ -112,7 +113,12 @@ export class RapierWorld extends BaseWorld {
     desc.setRestitution(options.restitution ?? 0);
     desc.setSensor(options.sensor ?? false);
     if (options.filter) desc.setCollisionGroups(((options.filter.group & 0xffff) << 16) | (options.filter.mask & 0xffff));
-    if (options.events ?? true) desc.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+    let active = (options.events ?? true) ? RAPIER.ActiveEvents.COLLISION_EVENTS : RAPIER.ActiveEvents.NONE;
+    if (options.impactForce !== undefined) {
+      active |= RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS;
+      desc.setContactForceEventThreshold(options.impactForce);
+    }
+    if (active !== RAPIER.ActiveEvents.NONE) desc.setActiveEvents(active);
     const collider = this.world.createCollider(desc, rb);
     this.idByColliderHandle.set(collider.handle, body);
   }
@@ -283,10 +289,14 @@ export class RapierWorld extends BaseWorld {
   }
 
   private pendingForceBodies = new Set<BodyId>();
+  private impacts: ImpactEvent[] = [];
 
   protected stepEngine(dt: number, subSteps: number): ContactEvent[] {
     const out: ContactEvent[] = [];
-    this.world.timestep = dt / subSteps;
+    const h = dt / subSteps;
+    this.world.timestep = h;
+    const impacts: ImpactEvent[] = [];
+    const impactByPair = new Map<string, ImpactEvent>();
     for (let i = 0; i < subSteps; i++) {
       this.world.step(this.events);
       this.events.drainCollisionEvents((h1, h2, started) => {
@@ -294,9 +304,30 @@ export class RapierWorld extends BaseWorld {
         const b = this.idByColliderHandle.get(h2);
         if (a !== undefined && b !== undefined) out.push({ bodyA: a, bodyB: b, began: started });
       });
+      this.events.drainContactForceEvents((e) => {
+        const a = this.idByColliderHandle.get(e.collider1());
+        const b = this.idByColliderHandle.get(e.collider2());
+        if (a === undefined || b === undefined) return;
+        const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+        const impulse = e.totalForceMagnitude() * h;
+        const seen = impactByPair.get(key);
+        if (seen) seen.impulse += impulse;
+        else {
+          const ev = { bodyA: a, bodyB: b, impulse };
+          impactByPair.set(key, ev);
+          impacts.push(ev);
+        }
+      });
     }
+    this.impacts = impacts;
     for (const id of this.pendingForceBodies) this.bodyById.get(id)?.resetForces(false);
     this.pendingForceBodies.clear();
+    return out;
+  }
+
+  protected override takeImpacts(): ImpactEvent[] {
+    const out = this.impacts;
+    this.impacts = [];
     return out;
   }
 

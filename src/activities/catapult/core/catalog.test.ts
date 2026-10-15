@@ -5,6 +5,7 @@ import {
   BAND_COUNT,
   CATALOG,
   CAN_COLORS,
+  CRATE_BREAK,
   FUZZ,
   FUZZ_NAMES,
   FUZZ_TINT,
@@ -52,7 +53,7 @@ describe('catapult catalog', () => {
     const block = CATALOG.block;
     expect(block.descriptors.map((d) => d.code)).toEqual(['size', 'material']);
     expect(block.descriptors[0]!.options.map((o) => o.value)).toEqual(['1x1', '2x1', '1x2', 'domino']);
-    expect(block.descriptors[1]!.options.map((o) => o.value)).toEqual(['wood', 'brick', 'steel']);
+    expect(block.descriptors[1]!.options.map((o) => o.value)).toEqual(['wood', 'brick', 'steel', 'crate']);
 
     const shelf = CATALOG.shelf;
     expect(shelf.descriptors[0]!.options.map((o) => o.value)).toEqual(['2', '4']);
@@ -104,6 +105,12 @@ describe('catapult catalog', () => {
     expect(MATERIALS.wood).toEqual({ density: 0.6, friction: 0.6, color: 0xc98a4b });
     expect(MATERIALS.brick).toEqual({ density: 1.8, friction: 0.7, color: 0xb0413e });
     expect(MATERIALS.steel).toEqual({ density: 4, friction: 0.5, color: 0x9aa1c0 });
+  });
+
+  it('the crate (2026-10-15) stacks like wood and breaks above a 1.8 N s hit closing at 4 m/s', () => {
+    expect(MATERIALS.crate.density).toBe(MATERIALS.wood.density);
+    expect(MATERIALS.crate.friction).toBe(MATERIALS.wood.friction);
+    expect(CRATE_BREAK).toEqual({ impulse: 1.8, speed: 4, force: 60 });
   });
 
   it('CAN_COLORS has the three cosmetic colours', () => {

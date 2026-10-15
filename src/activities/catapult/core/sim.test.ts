@@ -1076,3 +1076,129 @@ describe('CatapultSim: the Donut, the split shot', () => {
     for (const fuzz of FUZZ_NAMES.filter((name) => name !== 'Donut')) expect(await tryFuzz(fuzz), fuzz).toBe(0);
   });
 });
+
+// Gao, 2026-10-15: "breakable boxes, if hit with enough force, they just get destroyed". A crate is
+// a block with `material: 'crate'`; the rule is catalog.ts CRATE_BREAK (an impulse over 1.8 N s in
+// one step from a body closing on it at 4 m/s or more). The scenes use the Smash it level's
+// geometry: a 1x1 crate on the ground 10 m out, where a Medium / 45 degree shot comes down.
+describe('CatapultSim: breakable crates', () => {
+  function crate(x = 15, y = 0.5, size = '1x1'): PlacedPart {
+    return { id: id(), kind: 'block', x, y, props: { size, material: 'crate' } };
+  }
+
+  async function shoot(fuzz: string, extra: PlacedPart[] = [], line?: number) {
+    const parts = [catapult({ fuzz }), crate(), ...extra];
+    const level = { ...makeLevel(parts, 2), ...(line !== undefined ? { line } : {}) };
+    const sim = await createCatapultSim(parts, level);
+    const crateBody = sim.handles().find((h) => h.partId === parts[1]!.id)!.bodies[0]!.id;
+    const before = sim.metrics();
+    sim.play();
+    const seen = new Set<string>();
+    let brokeAt = -1;
+    for (let tick = 0; tick < 700 && sim.outcome === 'running'; tick++) {
+      sim.step();
+      for (const o of sim.snapshot().overlay ?? []) if (o.kind === 'sprite') seen.add(o.textureKey);
+      if (brokeAt < 0 && !sim['world'].bodies().includes(crateBody)) brokeAt = tick;
+    }
+    return { sim, parts, crateBody, before, seen, brokeAt };
+  }
+
+  it('a crate hit hard (the Fur fuzz, Medium power) breaks: SMASH!, tumbling planks, its body and picture gone, counted as knocked down', async () => {
+    const { sim, parts, crateBody, seen, brokeAt } = await shoot('Fur');
+    expect(brokeAt).toBeGreaterThan(0);
+    const m = sim.metrics();
+    expect(m.smashed).toBe(1);
+    expect(m.knockedDown).toBe(1);
+    expect(m.targetsLeft).toBe(0);
+    expect(sim.outcome).toBe('cleared'); // the only target is gone
+    expect(sim['world'].bodies()).not.toContain(crateBody);
+    expect(sim.snapshot().transforms.has(crateBody)).toBe(false);
+    const handle = sim.handles().find((h) => h.partId === parts[1]!.id)!;
+    expect(handle.bodies).toEqual([]);
+    expect(handle.visuals).toEqual([]);
+    expect(sim.renderItems().some((it) => it.body === crateBody)).toBe(false);
+    expect(seen.has('fx-smash')).toBe(true);
+    expect([...seen].filter((k) => k.startsWith('crate-debris-')).length).toBeGreaterThanOrEqual(2);
+    // The smash replaces the BOOM on the crate it breaks.
+    expect(seen.has('fx-boom')).toBe(false);
+    sim.destroy();
+  });
+
+  it('the shot does not end while the planks are still tumbling, and they are gone (faded) by the end', async () => {
+    const { sim } = await shoot('Metal');
+    const overlay = sim.snapshot().overlay ?? [];
+    expect(overlay.some((o) => o.kind === 'sprite' && o.textureKey.startsWith('crate-debris-'))).toBe(false);
+    sim.destroy();
+  });
+
+  it('a gentle hit (the light Flower) only bumps it: a BOOM, no smash, the crate stays', async () => {
+    const { sim, crateBody, seen, brokeAt } = await shoot('Flower');
+    expect(seen.has('fx-boom')).toBe(true); // it did hit the crate
+    expect(brokeAt).toBe(-1);
+    expect(seen.has('fx-smash')).toBe(false);
+    expect(sim.metrics().smashed).toBe(0);
+    expect(sim['world'].bodies()).toContain(crateBody);
+    sim.destroy();
+  });
+
+  it('crates resting in a stack never break on their own, and a shot that misses leaves them all', async () => {
+    const stack = [crate(17, 0.5), crate(17, 1.5), crate(17, 2.5), crate(17, 3.5)];
+    const parts = [catapult({ power: 'Low', fuzz: 'Metal' }), ...stack];
+    const sim = await createCatapultSim(parts, makeLevel(parts, 3));
+    for (let shot = 0; shot < 3; shot++) {
+      sim.play();
+      await runUntilNotRunning(sim);
+    }
+    expect(sim.metrics().smashed).toBe(0);
+    expect(sim.metrics().knockedDown).toBe(0);
+    expect(sim.handles().filter((h) => h.kind === 'block').every((h) => h.bodies.length === 1)).toBe(true);
+    sim.destroy();
+  });
+
+  it('a hard hit on the block on top of a crate stack does not break the crates under it (they were resting)', async () => {
+    // High / 30 / Metal strikes the top of a 4-high stack 12 m out; the push runs down through
+    // every crate under it into the ground in that same step, far over 1.8 N s - but nothing under
+    // the top was moving, so the speed gate keeps them whole.
+    const top: PlacedPart = { id: id(), kind: 'block', x: 17, y: 3.5, props: { size: '1x1', material: 'wood' } };
+    const stack = [crate(17, 0.5), crate(17, 1.5), crate(17, 2.5), top];
+    const parts = [catapult({ power: 'High', angle: '30', fuzz: 'Metal' }), ...stack];
+    const sim = await createCatapultSim(parts, makeLevel(parts, 1));
+    sim.play();
+    let hitTick = -1;
+    for (let tick = 0; tick < 700 && sim.outcome === 'running' && hitTick < 0; tick++) {
+      sim.step();
+      if ((sim.snapshot().overlay ?? []).some((o) => o.kind === 'sprite' && o.textureKey === 'fx-boom')) hitTick = tick;
+    }
+    expect(hitTick).toBeGreaterThan(0); // the fuzz hit the top block
+    expect(sim.metrics().smashed).toBe(0);
+    sim.destroy();
+  });
+
+  it('breaks the same way every time: same tick, same count, same world (fixed step)', async () => {
+    const a = await shoot('Fur');
+    const b = await shoot('Fur');
+    expect(a.brokeAt).toBe(b.brokeAt);
+    expect(a.sim.metrics()).toEqual(b.sim.metrics());
+    expect(a.sim['world'].hash()).toBe(b.sim['world'].hash());
+    a.sim.destroy();
+    b.sim.destroy();
+  });
+
+  it('a broken crate is never above the line', async () => {
+    const { sim, before } = await shoot('Fur', [], 0.5);
+    expect(before.aboveLine).toBe(1);
+    expect(sim.metrics().aboveLine).toBe(0);
+    sim.destroy();
+  });
+
+  it('a level with no crates steps exactly as before (the crate code reports nothing)', async () => {
+    const block: PlacedPart = { id: id(), kind: 'block', x: 15, y: 0.5, props: { size: '1x1', material: 'wood' } };
+    const parts = [catapult({ fuzz: 'Metal' }), block];
+    const sim = await createCatapultSim(parts, makeLevel(parts, 1));
+    sim.play();
+    await runUntilNotRunning(sim);
+    expect(sim.metrics().smashed).toBe(0);
+    expect(sim.handles().find((h) => h.partId === block.id)!.bodies).toHaveLength(1);
+    sim.destroy();
+  });
+});

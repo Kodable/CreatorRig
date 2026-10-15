@@ -20,7 +20,7 @@ import type {
 export type { Bounds, BodyId, CourseSim, Goal, GoalResult, JointId, OverlayItem, RenderItem, Shape, SimSnapshot, Vec2 };
 
 export type PartKind = 'catapult' | 'can' | 'block' | 'shelf' | 'wall' | 'bullseye';
-export type Material = 'wood' | 'brick' | 'steel';
+export type Material = 'wood' | 'brick' | 'steel' | 'crate';
 /** Rapier body roles. Ground/wall bodies belong to the world, not a placed part. */
 export type BodyRole = 'base' | 'wheel' | 'frame' | 'arm' | 'can' | 'block' | 'solid' | 'bullseye' | 'post' | 'fuzz' | 'ground' | 'wall';
 
@@ -40,6 +40,9 @@ export type Metrics = {
   maxRange: number;
   /** Targets whose live AABB top is above `level.line`; 0 when the level has no line. */
   aboveLine: number;
+  /** Crates broken so far (2026-10-15: a crate hit hard enough breaks; catalog.ts CRATE_BREAK).
+   * Each also counts in `knockedDown`. */
+  smashed: number;
   // Index signature so `Metrics` satisfies the kit's `CourseSpec<K, M extends Record<string, number>, ...>`.
   [key: string]: number;
 };

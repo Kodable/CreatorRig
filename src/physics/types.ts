@@ -39,6 +39,11 @@ export interface ShapeOptions {
    * group intersects `mask`. Default: group 1, mask everything. Shapes of one vehicle use
    * group 0x2 / mask 0xFFFD so they never collide with each other. */
   filter?: { group: number; mask: number };
+  /** Report this shape's hard contacts as `StepResult.impacts`: any sub-step whose summed contact
+   * force with one other body exceeds this many newtons adds its impulse (force x sub-step time)
+   * to that pair's total for the step. Unset: no impact reports (the default; reporting never
+   * changes the physics). 2026-10-15: the catapult's breakable crates. */
+  impactForce?: number;
 }
 
 export type Shape =
@@ -118,6 +123,15 @@ export interface ContactEvent {
   began: boolean;
 }
 
+/** A hard contact on a shape with `ShapeOptions.impactForce`, totalled over one `step()`. */
+export interface ImpactEvent {
+  bodyA: BodyId;
+  bodyB: BodyId;
+  /** Contact impulse in N s: the sum, over the step's sub-steps whose summed contact force passed
+   * the threshold, of that force times the sub-step time. Deterministic (fixed step). */
+  impulse: number;
+}
+
 export interface RayHit {
   body: BodyId;
   point: Vec2;
@@ -134,6 +148,9 @@ export interface StepResult {
   contacts: ContactEvent[];
   /** Joints destroyed this step because their anchors exceeded breakDistance. */
   broken: JointId[];
+  /** Hard contacts this step on shapes that asked for them (`ShapeOptions.impactForce`), one per
+   * body pair, in first-seen order. */
+  impacts: ImpactEvent[];
 }
 
 export interface PhysicsWorld {

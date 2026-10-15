@@ -3,6 +3,7 @@ import type {
   AdapterId,
   BodyId,
   ContactEvent,
+  ImpactEvent,
   JointDef,
   JointId,
   PhysicsWorld,
@@ -103,12 +104,18 @@ export abstract class BaseWorld implements PhysicsWorld {
 
   step(dt: number, subSteps: number): StepResult {
     const contacts = this.stepEngine(dt, subSteps);
+    const impacts = this.takeImpacts();
     const broken = this.checkBreakables();
-    return { contacts, broken };
+    return { contacts, broken, impacts };
   }
 
   /** Engine step; returns the contact events collected during it. */
   protected abstract stepEngine(dt: number, subSteps: number): ContactEvent[];
+
+  /** The impacts the last `stepEngine` collected (`ShapeOptions.impactForce`); none by default. */
+  protected takeImpacts(): ImpactEvent[] {
+    return [];
+  }
 
   abstract setGravity(gravity: Vec2): void;
   abstract createBody(def?: import('./types').BodyDef): BodyId;

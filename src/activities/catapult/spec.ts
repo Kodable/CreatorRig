@@ -18,7 +18,9 @@ import {
   armAngleFor,
   BAND_ASPECTS,
   bandSegments,
+  BLOCK_SIZES,
   CAN_TEXTURE,
+  crateTexture,
   catapultPocketAtRest,
   crossbarPoseFor,
   LEVER_LENGTH,
@@ -28,7 +30,7 @@ import {
   WORLD_H,
 } from './core/build';
 import { PARALLAX } from '../../kit/parallax';
-import { createCatapultSim } from './core/sim';
+import { createCatapultSim, DEBRIS_TEXTURES } from './core/sim';
 import { LEVELS } from './core/levels';
 import { catapultCoach } from './coach';
 
@@ -335,6 +337,7 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
     maxRange: 0,
     // The settled sim knows the real rest pose; without one, read the placed boxes.
     aboveLine: sim ? sim.metrics().aboveLine : placedAboveLine(parts, level),
+    smashed: 0,
   }),
 
   canPlay: (parts) => parts.some((p) => p.kind === 'catapult'),
@@ -474,6 +477,12 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
     // when one shot knocks down three. The dust also marks the Donut's split.
     'fx-dust': { url: 'fx/dust.svg' },
     'fx-crash': { url: 'fx/crash.svg' },
+    // Breakable crates (2026-10-15, core/sim.ts): one picture per block size, drawn at that size's
+    // aspect so the planks never stretch (core/build.ts crateTexture); a SMASH! burst and three
+    // plank pictures for the debris that tumbles out when one breaks.
+    ...Object.fromEntries(BLOCK_SIZES.map((size) => [crateTexture(size), { url: `parts/catapult/${crateTexture(size)}.png` }])),
+    ...Object.fromEntries(DEBRIS_TEXTURES.map((key) => [key, { url: `parts/catapult/${key}.png` }])),
+    'fx-smash': { url: 'fx/smash.svg' },
   },
 
   resultCard: (parts, level, m, outcome, passed) => {
@@ -539,6 +548,7 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
       wood: 'Wood',
       brick: 'Brick',
       steel: 'Steel',
+      crate: 'Crate',
       '15': '15°',
       '30': '30°',
       '45': '45°',
@@ -574,6 +584,8 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
           return `${current.toFixed(1)} of ${goal.value.toFixed(1)} m`;
         case 'aboveLine':
           return `${Math.round(current)} above the line`;
+        case 'smashed':
+          return `${Math.round(current)} of ${Math.round(goal.value)}`;
         default:
           return `${current} of ${goal.value}`;
       }
