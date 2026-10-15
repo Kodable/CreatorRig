@@ -30,7 +30,7 @@ import {
 import { PARALLAX } from '../../kit/parallax';
 import { createCatapultSim } from './core/sim';
 import { LEVELS } from './core/levels';
-import { BUILD_WIDGET, catapultCoach } from './coach';
+import { catapultCoach } from './coach';
 
 /** Stage px per world meter (`world.ppm`). */
 const PPM = 32;
@@ -280,17 +280,6 @@ function placedAboveLine(parts: PlacedPart<PartKind>[], level: CatapultLevel): n
  * the arm are set from the properties drawer; FIRE is the bottom bar's yellow button since
  * 2026-10-15 (it was an in-scene tap button by the trigger string, `action: 'play'`; the string's
  * snip burst still plays there, core/build.ts `fireSpot`). */
-/** The BUILD pill's centre relative to the catapult's anchor (m): UNDER the machine, in the brown
- * ground band (2026-10-15, Gao: "the build button is kind of in the way of the preview, maybe put
- * it under or to the right"). Nothing else ever sits there, so it never covers the arc, a wall or
- * a target; to the right it ran into level 2's wall. */
-const BUILD_DX = 0.6;
-/** 36 px tall at bigScale 0.75: centred in the 48 px ground band with room above and below. */
-const BUILD_Y = -0.75;
-/** A little smaller than the rover's pill (Gao: "put it under, and make it a little smaller"). */
-const BUILD_SCALE = 0.75;
-/** The pill's centre never goes left of this (m): it is ~4.4 m wide at zoom 1. */
-const BUILD_MIN_X = 2.6;
 /** How far past the lever's tip the angle knob rides (m): clear of the lever's blue pad. */
 const KNOB_OUT_M = 0.55;
 
@@ -442,16 +431,8 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
 
   widgets: catapultWidgets,
 
-  // 2026-10-15 (Gao: "put the build button like on the rover course above the catapult"): while
-  // nothing is selected, a big blue BUILD pill floats over the catapult (the rover's look and
-  // size); a tap selects the machine, which zooms in and opens its parts drawer.
-  idleWidgets: (parts): Widget[] => {
-    const cp = parts.find((p) => p.kind === 'catapult');
-    if (!cp) return [];
-    return [
-      { kind: 'tap', id: BUILD_WIDGET, style: 'big', action: 'select', partId: cp.id, at: { x: Math.max(BUILD_MIN_X, cp.x + BUILD_DX), y: cp.y + BUILD_Y }, size: 84, icon: '🔧', label: 'BUILD', color: 0x05aeed, bigScale: BUILD_SCALE },
-    ];
-  },
+  // No BUILD pill (2026-10-15: tried above, then under the catapult; Gao: "just remove the build
+  // button, it doesnt look good"): the child taps the catapult itself, and the coach points there.
 
   // Tap tutorials on the five intro levels (coach.ts): tap the catapult, the new control, FIRE.
   coach: catapultCoach,
