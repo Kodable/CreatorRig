@@ -8,8 +8,10 @@ import {
   parallaxOffset,
   rideTarget,
   stepCamera,
+  EDGE_SCROLL_MAX, INTRO_MS, PANEL_RECT, VIEW_W, backdropSpanPx, coasterCamWorld, edgeScrollSpeed, editFrame,
+  editFrameAt, inPanel, introFrame, introPan, screenToStage, scrollOf, stageToScreen,
 } from './rideCamera';
-import { WORLD_H, WORLD_W } from './view';
+import { WORLD_H, WORLD_W, toPx } from './view';
 import type { FrameState } from '../kit/camera';
 
 /** The frame's visible rect in world meters. */
@@ -114,3 +116,122 @@ describe('ride camera', () => {
     }
   });
 });
+
+// ---- 2026-10-15: wide levels ----
+
+describe('wide levels: the camera per level width', () => {
+  const wide = coasterCamWorld(150);
+
+  it('a 60 m world is today\'s one screen: no scroll, the edit frame is FULL_FRAME', () => {
+    expect(VIEW_W).toBe(60);
+    expect(coasterCamWorld(60)).toMatchObject({ worldW: 60, worldH: COASTER_CAM_WORLD.worldH });
+    expect(editFrame(10)).toEqual(FULL_FRAME);
+    expect(editFrame(100, coasterCamWorld(60))).toEqual(FULL_FRAME);
+    expect(scrollOf(FULL_FRAME)).toBeNull();
+    expect(introPan(COASTER_CAM_WORLD, { x: 56, y: 3, r: 2.5 })).toBeNull();
+  });
+
+  it('the edit view scrolls across a wide world at zoom 1, never past either end', () => {
+    expect(editFrameAt(0, wide)).toEqual({ cx: 30, cy: FULL_FRAME.cy, zoom: 1 });
+    expect(editFrameAt(1, wide)).toEqual({ cx: 120, cy: FULL_FRAME.cy, zoom: 1 });
+    expect(editFrameAt(0.5, wide).cx).toBeCloseTo(75, 9);
+    expect(editFrame(-50, wide).cx).toBe(30);
+    expect(editFrame(500, wide).cx).toBe(120);
+    expect(scrollOf(editFrameAt(0.25, wide), wide)).toEqual({ t: 0.25, view: 0.4 });
+  });
+
+  it('the ride camera clamps to the level\'s width: it follows the fuzz past 60 m, up to the far edge', () => {
+    // At 60 m wide the camera stops at cx 45 (zoom 2); at 150 m it follows the fuzz out to 135.
+    expect(rideTarget({ x: 100, y: 15 }, { x: 0, y: 0 }).cx).toBe(45);
+    expect(rideTarget({ x: 100, y: 15 }, { x: 0, y: 0 }, RIDE_ZOOM, wide).cx).toBe(100);
+    expect(rideTarget({ x: 149, y: 15 }, { x: 10, y: 0 }, RIDE_ZOOM, wide).cx).toBe(135);
+    const f = stepCamera({ cx: 130, cy: 15, zoom: 2 }, { cx: 140, cy: 15, zoom: 2 }, 16.667, wide);
+    expect(f.cx).toBeLessThanOrEqual(135);
+    expect(f.cx).toBeGreaterThan(130);
+  });
+
+  it('the intro pan starts on the flag, ends on the station, and eases between (start, middle, end)', () => {
+    const pan = introPan(wide, { x: 146, y: 18, r: 2.5 })!;
+    expect(pan.ms).toBe(INTRO_MS);
+    expect(pan.ms).toBe(2500);
+    expect(pan.from).toEqual({ cx: 120, cy: FULL_FRAME.cy, zoom: 1 }); // the flag at 146 m, clamped
+    expect(pan.to).toEqual({ cx: 30, cy: FULL_FRAME.cy, zoom: 1 }); // the station's view
+    expect(introFrame(pan, -100)).toEqual(pan.from);
+    expect(introFrame(pan, 0)).toEqual(pan.from);
+    expect(introFrame(pan, pan.ms / 2).cx).toBeCloseTo(75, 9);
+    expect(introFrame(pan, pan.ms)).toEqual(pan.to);
+    expect(introFrame(pan, pan.ms * 3)).toEqual(pan.to);
+    // Eased: slow at both ends, quick in the middle.
+    const at = (k: number): number => introFrame(pan, pan.ms * k).cx;
+    expect(120 - at(0.1)).toBeLessThan(at(0.45) - at(0.55));
+    for (let k = 0; k < 1; k += 0.05) expect(at(k + 0.05)).toBeLessThanOrEqual(at(k) + 1e-9);
+    // The flag is in view at the start (and the zoom never changes).
+    expect(Math.abs(146 - pan.from.cx)).toBeLessThan(VIEW_W / 2);
+    expect(introFrame(pan, 1234).zoom).toBe(1);
+  });
+
+  it('a wide level with no flag pans from the far end; a flag near the station needs no pan', () => {
+    const free = introPan(wide, undefined)!;
+    expect(free.from.cx).toBe(120);
+    expect(introPan(wide, { x: 50, y: 5, r: 2.5 })).toBeNull();
+    expect(introPan(coasterCamWorld(120), { x: 116, y: 6, r: 2.5 })!.from.cx).toBe(90);
+  });
+
+  it('taps map through the camera: a point drawn on screen maps back to itself, scrolled or zoomed', () => {
+    for (const f of [FULL_FRAME, editFrameAt(0.5, wide), editFrameAt(1, wide), { cx: 100, cy: 12, zoom: 2 }]) {
+      for (const w of [{ x: f.cx, y: f.cy }, { x: f.cx - 20, y: 5 }, { x: f.cx + 25, y: 30 }]) {
+        const stage = toPx(w);
+        const screen = stageToScreen(stage, f);
+        const back = screenToStage(screen, f);
+        expect(back.x).toBeCloseTo(stage.x, 9);
+        expect(back.y).toBeCloseTo(stage.y, 9);
+      }
+    }
+    // Scrolled to the far end, the panel's left edge shows world x 90 and its right edge 150.
+    const end = editFrameAt(1, wide);
+    expect((screenToStage({ x: PANEL_RECT.x0, y: 389 }, end).x - 32) / 16).toBeCloseTo(90, 9);
+    expect((screenToStage({ x: PANEL_RECT.x1, y: 389 }, end).x - 32) / 16).toBeCloseTo(150, 9);
+    // At the full frame the mapping is the identity (the one-screen levels, unchanged).
+    expect(screenToStage({ x: 300, y: 500 }, FULL_FRAME)).toEqual({ x: 300, y: 500 });
+    expect(inPanel({ x: 31, y: 300 })).toBe(false);
+    expect(inPanel({ x: 500, y: 701 })).toBe(false);
+    expect(inPanel({ x: 500, y: 300 })).toBe(true);
+  });
+
+  it('dragging a point near the panel\'s edge scrolls that way, faster nearer the edge', () => {
+    expect(edgeScrollSpeed(512)).toBe(0);
+    expect(edgeScrollSpeed(PANEL_RECT.x0 + 70)).toBe(0);
+    expect(edgeScrollSpeed(PANEL_RECT.x1 - 70)).toBe(0);
+    expect(edgeScrollSpeed(PANEL_RECT.x1 - 32)).toBeCloseTo(EDGE_SCROLL_MAX / 2, 9);
+    expect(edgeScrollSpeed(PANEL_RECT.x1)).toBe(EDGE_SCROLL_MAX);
+    expect(edgeScrollSpeed(PANEL_RECT.x1 + 100)).toBe(EDGE_SCROLL_MAX);
+    expect(edgeScrollSpeed(PANEL_RECT.x0 + 32)).toBeCloseTo(-EDGE_SCROLL_MAX / 2, 9);
+    expect(edgeScrollSpeed(0)).toBe(-EDGE_SCROLL_MAX);
+  });
+
+  it('backdrop layers cover what the camera can show: one panel on a one-screen level, more on a wide one', () => {
+    for (const f of [0.15, 0.35, 0.75, 1]) expect(backdropSpanPx(60, f)).toBe(960);
+    expect(backdropSpanPx(150, 1)).toBe(2400);
+    expect(backdropSpanPx(150, 0)).toBe(960);
+    expect(backdropSpanPx(150, 0.35)).toBeCloseTo(0.35 * 2400 + 0.65 * 960, 9);
+    // Check the bound against the camera: for frames across the world (zoom 1 and 2), the part of
+    // a layer's own space on screen stays within [0, span] (panel-relative px).
+    for (const fx of [0.15, 0.35, 0.55, 0.75]) {
+      const span = backdropSpanPx(150, fx);
+      for (const zoom of [1, 2]) {
+        for (let cx = 0; cx <= 150; cx += 5) {
+          const f = clampFrameFor(wide, cx, zoom);
+          const o = parallaxOffset(f, fx, 1);
+          const c = frameCentrePx(f).x - 32;
+          const half = 480 / zoom;
+          expect(c - half - o.x, `f ${fx} z ${zoom} cx ${cx}`).toBeGreaterThanOrEqual(-1e-6);
+          expect(c + half - o.x, `f ${fx} z ${zoom} cx ${cx}`).toBeLessThanOrEqual(span + 1e-6);
+        }
+      }
+    }
+  });
+});
+
+function clampFrameFor(world: ReturnType<typeof coasterCamWorld>, cx: number, zoom: number): FrameState {
+  return rideTarget({ x: cx, y: 15 }, { x: 0, y: 0 }, zoom, world);
+}

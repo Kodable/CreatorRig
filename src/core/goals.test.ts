@@ -244,12 +244,12 @@ describe('allPass', () => {
 });
 
 describe('LEVELS', () => {
-  it('has exactly 12 levels', () => {
-    expect(LEVELS).toHaveLength(12);
+  it('has exactly 16 levels', () => {
+    expect(LEVELS).toHaveLength(16);
   });
 
   it('has levels in correct order with correct ids', () => {
-    const expectedIds = ['drop', 'complete', 'speed', 'length', 'hang', 'loop', 'intense', 'double', 'thrill', 'express', 'grand', 'free'];
+    const expectedIds = ['drop', 'complete', 'speed', 'length', 'hang', 'loop', 'intense', 'double', 'thrill', 'express', 'grand', 'loopgate', 'tour', 'finale', 'marathon', 'free'];
     const actualIds = LEVELS.map(level => level.id);
     expect(actualIds).toEqual(expectedIds);
   });
@@ -329,7 +329,7 @@ describe('findLevel', () => {
   });
 
   it('finds all levels by their id', () => {
-    const ids = ['drop', 'complete', 'speed', 'length', 'hang', 'loop', 'intense', 'double', 'thrill', 'express', 'grand', 'free'];
+    const ids = ['drop', 'complete', 'speed', 'length', 'hang', 'loop', 'intense', 'double', 'thrill', 'express', 'grand', 'loopgate', 'tour', 'finale', 'marathon', 'free'];
     ids.forEach(id => {
       const level = findLevel(id);
       expect(level).toBeDefined();

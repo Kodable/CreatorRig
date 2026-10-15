@@ -238,11 +238,119 @@ export const LEVELS: Level[] = [
       fell: "Too slow at the top! The fuzz fell out of the loop. Move the loop a little lower."
     }
   },
+  // ---- Long rides (2026-10-15, coaster review: Gao "levels where you can scroll", Jon "some
+  // levels with a portion of the track already in there, as a variety thing"). Each world is wider
+  // than the screen (`worldW`, src/core/world.ts): the edit view scrolls (the scrollbar under the
+  // scene, or drag a point to the panel's edge), and the level opens with a pan from the flag back
+  // to the station. Two of them come with a locked, prebuilt part of the track. Each has a recorded
+  // passing track and failing naive tracks in levels.test.ts.
+  {
+    id: 'loopgate',
+    title: 'Loop in the middle',
+    bruno: "Challenge! My loop is built. Let's slide the station to a height that's not too slow or too fast.",
+    goals: [
+      { metric: 'loopsCompleted', op: '>=', value: 1, label: 'Ride through a loop' },
+      { metric: 'maxG', op: '<=', value: 9, label: 'Stay under 9 g' },
+      { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' }
+    ],
+    // The station only slides up and down (and stays on Clear); the loop and its two feet are
+    // locked. From the starting 8 m the fuzz cannot get round the loop; from 12.5 m to 20.5 m it
+    // loops under 9 g; higher, the loop squishes past 9 g (levels.test.ts sweeps the band). Then the
+    // child builds on from the loop's exit to the flag, two screens away.
+    worldW: 120,
+    preset: [
+      { x: 2, y: 8, kind: 'curve' },
+      { x: 40, y: 3, kind: 'curve', locked: true },
+      { x: 52, y: 2, kind: 'loop', locked: true },
+      { x: 64, y: 3, kind: 'curve', locked: true }
+    ],
+    finish: { x: 116, y: 6, r: 2.5 },
+    stationVertical: true,
+    // The tutorial hand drags the station up once the pan and the goals are done.
+    coach: ['drag-station'],
+    hints: {
+      rolledBack: "The fuzz rolled back. Keep the track lower than the station.",
+      stuck: "Too slow for my loop. Let's slide the station up a little.",
+      fell: "Too slow at the top of the loop. Let's slide the station up a bit."
+    }
+  },
+  {
+    id: 'tour',
+    title: 'Grand tour',
+    bruno: "A big park needs a long ride. Let's add hills and a loop, all the way to the high flag.",
+    goals: [
+      { metric: 'loopsCompleted', op: '>=', value: 1, label: 'Ride through a loop' },
+      { metric: 'hangTime', op: '>=', value: 1, label: '1 second of air time' },
+      { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' }
+    ],
+    // The flag stands 18 m up at the far end of a 150 m park: a loop and the floaty hills on the
+    // way have to leave the fuzz enough speed for the last climb.
+    worldW: 150,
+    preset: [{ x: 2, y: 34, kind: 'curve', locked: true }],
+    finish: { x: 146, y: 18, r: 2.5 },
+    hints: {
+      rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",
+      stuck: "Out of speed. Let's make the hills lower so the fuzz can reach the flag.",
+      fell: "The fuzz fell out of the loop. Let's move the loop lower, where it's faster."
+    }
+  },
+  {
+    id: 'finale',
+    title: 'Big finish',
+    bruno: "I built a big finish with two loops. Let's connect to it and give the fuzz 2 seconds of air.",
+    goals: [
+      { metric: 'hangTime', op: '>=', value: 2, label: '2 seconds of air time' },
+      { metric: 'loopsCompleted', op: '>=', value: 2, label: 'Ride through 2 loops' },
+      { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' }
+    ],
+    // The station and the finale (a dip, two loops and the end on the flag) are locked. The rail
+    // from the station to the finale is the child's (`openAfter`): taps on it, or on the sky above
+    // it, add points there. The plain rail floats the fuzz for under a second; floaty humps give
+    // the air, but humps taller than the station strand it.
+    worldW: 150,
+    preset: [
+      { x: 2, y: 28, kind: 'curve', locked: true, openAfter: true },
+      { x: 96, y: 16, kind: 'curve', locked: true },
+      { x: 104, y: 10, kind: 'curve', locked: true },
+      { x: 112, y: 9, kind: 'loop', locked: true },
+      { x: 124, y: 9, kind: 'loop', locked: true },
+      { x: 134, y: 10, kind: 'curve', locked: true },
+      { x: 146, y: 8, kind: 'curve', locked: true }
+    ],
+    finish: { x: 146, y: 8, r: 2.5 },
+    hints: {
+      rolledBack: "The fuzz rolled back. Keep the humps lower than the station.",
+      stuck: "Not enough speed for that hump. Let's make the humps a little lower.",
+      fell: "Too slow for my loops. Let's make the humps lower to save some speed."
+    }
+  },
+  {
+    id: 'marathon',
+    title: 'Marathon',
+    bruno: "Marathon time! Can we build a 240 meter track that still gets to the flag?",
+    goals: [
+      { metric: 'length', op: '>=', value: 240, label: 'Track at least 240 m long' },
+      { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
+      { metric: 'reachedEnd', op: '==', value: 1, label: 'Fuzz reaches the end' }
+    ],
+    // A straight run to the flag is 165 m: the extra length has to come from hills, each lower
+    // than the station (and than the hill before, to keep the speed).
+    worldW: 170,
+    preset: [{ x: 2, y: 30, kind: 'curve', locked: true }],
+    finish: { x: 166, y: 12, r: 2.5 },
+    hints: {
+      rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",
+      stuck: "Out of speed on that hill. Let's make each hill a bit lower than the last.",
+      fell: "Off the track! Let's find where it flew off and smooth that spot."
+    }
+  },
   {
     id: 'free',
     title: 'Free play',
     bruno: "Build anything! All the meters are on.",
     goals: [],
+    // 2026-10-15: free play is a wide park too, room for a long ride.
+    worldW: 150,
     hints: {
       rolledBack: "Start higher! The fuzz rolled back to the station.",
       stuck: "Not enough speed for that hill. Try a bigger drop first.",

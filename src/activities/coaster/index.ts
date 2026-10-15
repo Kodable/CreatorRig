@@ -58,6 +58,7 @@ export const coaster: ActivityDef = {
       setTool: (tool: EditTool) => app?.setTool(tool),
       setSkin: (id: string) => app?.setSkin(id),
       skinTrayOpened: () => app?.skinTrayOpened(),
+      scrollTo: (t: number) => app?.scrollTo(t),
       exit: () => host.exit(),
     });
 

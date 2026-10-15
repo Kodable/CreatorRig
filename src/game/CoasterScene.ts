@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { COLORS, ORIGIN_X, GROUND_Y, PANEL_TOP_Y, PPM, WORLD_W, WORLD_H, STAGE_W, STAGE_H, RENDER_SCALE, toPx, toWorld } from './view';
 import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, EditTool } from '../core/types';
-import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
-import { OPEN_RULES, canGrab, clearedPoints, dragTarget, samePoints, type EditRules } from '../core/editRules';
+import { insertionIndex, clonePoints, openGapIndex } from '../core/trackPoints';
+import { OPEN_RULES, canAppend, canDeletePoint, canGrab, clearedPoints, dragTarget, samePoints, type EditRules } from '../core/editRules';
 import { dragHandPose, tapHandFrame } from '../core/coach';
 import { airCounterText, type AirPreview, type AirStretch } from '../core/airPreview';
 import { entrancePose } from '../core/entrance';
@@ -12,9 +12,14 @@ import {
   knotArcLengths, pointScale, railOffset, railReveal, type BuildAnim,
 } from '../core/buildJuice';
 import { BrunoStage } from '../ui/brunoStage';
-import type { FrameState } from '../kit/camera';
+import type { FrameState, WorldDims } from '../kit/camera';
+import { clampToWorld } from '../core/world';
 import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
-import { FULL_FRAME, RIDE_ZOOM, frameCentrePx, parallaxOffset, rideTarget, stepCamera } from './rideCamera';
+import {
+  COASTER_CAM_WORLD, FOLLOW_LERP, FULL_FRAME, RIDE_ZOOM, SCROLL_LERP, backdropSpanPx, coasterCamWorld, edgeScrollSpeed,
+  editFrame, editFrameAt, frameCentrePx, inPanel, introFrame, parallaxOffset, rideTarget, screenToStage, scrollOf,
+  stepCamera, type IntroPan,
+} from './rideCamera';
 import { PARALLAX } from '../kit/parallax';
 
 interface Gesture {
@@ -25,18 +30,13 @@ interface Gesture {
 }
 
 const WORLD_X0 = ORIGIN_X;
-const WORLD_X1 = ORIGIN_X + WORLD_W * PPM;
 const WORLD_Y0 = PANEL_TOP_Y; // GROUND_Y - WORLD_H * PPM: stage y 78
 const WORLD_Y1 = GROUND_Y;
 
-/** Points stay this far (m) inside the world's edges. A loop point is the loop's bottom and the
- * loop rises 2 radii above it, so its point stops lower: the whole loop stays in the sky
- * (2026-10-07: with the 38.25 m world a loop point may sit at 29.75 m, still above the 29.5 m
- * every point had in the 30 m world, and the loop no longer leaves the picture at the top). */
-const EDGE = 0.5;
-const POINT_X_MAX = WORLD_W - EDGE;
-const POINT_Y_MAX = WORLD_H - EDGE;
-const LOOP_Y_MAX = WORLD_H - EDGE - 2 * LOOP_RADIUS;
+/* Points stay 0.5 m inside the world's edges (src/core/world.ts clampToWorld). A loop point is the
+   loop's bottom and the loop rises 2 radii above it, so its point stops lower: the whole loop stays
+   in the sky (2026-10-07: with the 38.25 m world a loop point may sit at 29.75 m). 2026-10-15: the
+   right edge is the level's own (`Level.worldW`, wide levels). */
 
 const HIT_RADIUS = 20;
 const MOVE_THRESHOLD = 6;
@@ -379,6 +379,21 @@ export class CoasterScene extends Phaser.Scene {
 
   private backdrop: BackdropPiece[] = [];
   private drifters: Drifter[] = [];
+  /** The backdrop's tiled pictures (sky, hills, trees, grass) and clouds for the current world
+   * width, rebuilt by `setWorld` (the ferris wheel is built once: one landmark). */
+  private backdropTiles: Phaser.GameObjects.GameObject[] = [];
+
+  // ---- 2026-10-15 wide levels (src/core/world.ts, rideCamera.ts) ----
+  /** The level's world width (m) and the camera's clamp band for it. */
+  private worldW = WORLD_W;
+  private camWorld: WorldDims = COASTER_CAM_WORLD;
+  /** The edit view's centre across (m): where the scrollbar / edge scroll put it. */
+  private editCx = FULL_FRAME.cx;
+  /** The opening pan from the flag back to the station: waiting behind Bruno's intro (t < 0), or
+   * running (t ms in); `done` resolves when it ends or a tap skips it. */
+  private intro: { pan: IntroPan; t: number; done: (() => void) | null } | null = null;
+  /** The dragging finger's last screen position (stage px), for the edge scroll. */
+  private dragScreen: Vec2 | null = null;
   private wheel!: Phaser.GameObjects.Graphics;
   private wheelCars: Phaser.GameObjects.Graphics[] = [];
   private wheelAngle = 0;
@@ -560,35 +575,60 @@ export class CoasterScene extends Phaser.Scene {
    * (createCornerCaps), which stay put while the world camera zooms.
    */
   private createBackdrop(): void {
+    this.buildBackdropTiles();
+    this.createFerrisWheel();
+  }
+
+  /**
+   * The backdrop's pictures for the current world width (2026-10-15: wide levels). Each layer is
+   * laid side by side, every other copy mirrored so the seams match, as far as the camera can ever
+   * show it for this world (`backdropSpanPx`: one copy on a one-screen level, exactly as before);
+   * one more set of three clouds per extra screen. The ferris wheel stays one landmark.
+   */
+  private buildBackdropTiles(): void {
+    for (const o of this.backdropTiles) {
+      this.backdrop = this.backdrop.filter((p) => p.obj !== (o as unknown as BackdropPiece['obj']));
+      o.destroy();
+    }
+    this.backdropTiles = [];
+    this.drifters = [];
+
     const w = PANEL_X1 - PANEL_X0;
     const addLayer = (key: string, y: number, h: number, depth: number, px: { x: number; y: number }): void => {
-      const img = this.onWorld(this.add.image(PANEL_X0, y, key));
-      img.setOrigin(0, 0);
-      img.setDisplaySize(w, h);
-      img.setDepth(depth);
-      this.backdrop.push({ obj: img, x: PANEL_X0, y, px });
+      const n = Math.max(1, Math.ceil(backdropSpanPx(this.worldW, px.x) / w - 1e-6));
+      for (let k = 0; k < n; k++) {
+        const img = this.onWorld(this.add.image(PANEL_X0 + k * w, y, key));
+        img.setOrigin(0, 0);
+        img.setDisplaySize(w, h);
+        img.setFlipX(k % 2 === 1);
+        img.setDepth(depth);
+        this.backdropTiles.push(img);
+        this.backdrop.push({ obj: img, x: PANEL_X0 + k * w, y, px });
+      }
     };
     addLayer('cb-sky', PANEL_Y0, PANEL_Y1 - PANEL_Y0, DEPTH_SKY, PX_SKY);
     addLayer('cb-far', PANEL_Y1 - FAR_H, FAR_H, DEPTH_FAR, PX_FAR);
     addLayer('cb-mid', PANEL_Y1 - MID_H, MID_H, DEPTH_MID, PX_MID);
     // The ground strip moves with the track (factor 1): the supports stand on it.
-    const ground = this.onWorld(this.add.image(PANEL_X0, PANEL_Y1 - GROUND_STRIP_H, 'cb-ground'));
-    ground.setOrigin(0, 0);
-    ground.setDisplaySize(w, GROUND_STRIP_H);
-    ground.setDepth(DEPTH_GROUND);
+    addLayer('cb-ground', PANEL_Y1 - GROUND_STRIP_H, GROUND_STRIP_H, DEPTH_GROUND, { x: 1, y: 1 });
 
-    // Sky drifters: three clouds creep left to right and wrap (the textures are 2x).
+    // Sky drifters: three clouds per screen creep left to right and wrap (the textures are 2x).
     const drifter = (key: string, x: number, y: number, speed: number, bob: number, depth: number): void => {
       const img = this.onWorld(this.add.image(x, y, key));
       img.setScale(0.5);
       img.setDepth(depth);
+      this.backdropTiles.push(img);
       this.drifters.push({ img, x, y, speed, bob, phase: x * 0.01 });
     };
-    drifter('cb-cloud1', 300, 300, 5, 0, DEPTH_CLOUDS);
-    drifter('cb-cloud2', 720, 175, 3.5, 0, DEPTH_CLOUDS);
-    drifter('cb-cloud3', 860, 420, 6, 0, DEPTH_CLOUDS);
-
-    this.createFerrisWheel();
+    const screens = Math.max(1, Math.ceil(backdropSpanPx(this.worldW, PX_FLYERS.x) / w - 1e-6));
+    for (let k = 0; k < screens; k++) {
+      const dx = k * w;
+      // Later screens get their clouds a little shuffled, so the sky does not repeat.
+      const jig = k === 0 ? 0 : ((k * 137) % 90) - 45;
+      drifter('cb-cloud1', 300 + dx + jig, 300 - (k % 2) * 40, 5, 0, DEPTH_CLOUDS);
+      drifter('cb-cloud2', 720 + dx - jig, 175 + (k % 2) * 30, 3.5, 0, DEPTH_CLOUDS);
+      drifter('cb-cloud3', 860 + dx + jig / 2, 420 - (k % 3) * 25, 6, 0, DEPTH_CLOUDS);
+    }
   }
 
   /**
@@ -794,16 +834,44 @@ export class CoasterScene extends Phaser.Scene {
   private updateCamera(dtMs: number): void {
     if (this.camReleaseAt !== null && this.nowMs >= this.camReleaseAt) {
       this.camReleaseAt = null;
-      this.camFollow = false;
+      this.releaseFollow();
     }
-    let target = FULL_FRAME;
+    // 2026-10-15: the opening pan on a wide level (held at its start behind Bruno's intro).
+    const intro = this.intro;
+    if (intro) {
+      if (intro.t >= 0) intro.t += Math.min(dtMs, 50);
+      this.camCur = introFrame(intro.pan, Math.max(0, intro.t));
+      this.applyCamera();
+      if (intro.t >= intro.pan.ms) this.endIntro();
+      return;
+    }
+    // While a point is dragged near the panel's edge on a wide level, the edit view scrolls.
+    const dt = Math.min(dtMs, 100) / 1000;
+    if (this.gesture?.moved && this.dragScreen && this.editable && !this.camFollow) {
+      const v = edgeScrollSpeed(this.dragScreen.x);
+      if (v !== 0) this.editCx = editFrame(this.editCx + v * dt, this.camWorld).cx;
+    }
+    let target = editFrame(this.editCx, this.camWorld);
+    let lerp = SCROLL_LERP;
     if (this.camFollow && this.fuzz.visible) {
-      target = rideTarget(toWorld({ x: this.fuzz.x, y: this.fuzz.y }), this.fuzzVel, RIDE_ZOOM);
+      target = rideTarget(toWorld({ x: this.fuzz.x, y: this.fuzz.y }), this.fuzzVel, RIDE_ZOOM, this.camWorld);
     }
+    // The ride's zoom in and out keeps its own pace; a pure scroll at zoom 1 glides quicker.
+    if (this.camFollow || Math.abs(this.camCur.zoom - 1) > 1e-4) lerp = FOLLOW_LERP;
     // A long frame (tab switch) must not overshoot or stall: approach maths are exponential, so a
     // clamp on dt only bounds the jump.
-    this.camCur = stepCamera(this.camCur, target, Math.min(dtMs, 100));
+    const before = this.camCur.cx;
+    this.camCur = stepCamera(this.camCur, target, Math.min(dtMs, 100), this.camWorld, lerp);
     this.applyCamera();
+    // The view moved under a dragging finger: the dragged point follows the finger.
+    if (this.gesture?.moved && this.dragScreen && Math.abs(this.camCur.cx - before) > 1e-6) this.dragTo(this.dragScreen);
+  }
+
+  /** The ride camera lets go: the edit view takes over where the ride left it (the fuzz's spot,
+   * clamped), so on a wide level the child sees where the run ended. */
+  private releaseFollow(): void {
+    if (this.camFollow) this.editCx = editFrame(this.camCur.cx, this.camWorld).cx;
+    this.camFollow = false;
   }
 
   /** Parallax, drifting clouds, the turning wheel. */
@@ -816,11 +884,13 @@ export class CoasterScene extends Phaser.Scene {
     }
     const fly = parallaxOffset(f, PX_FLYERS.x, PX_FLYERS.y);
     const t = this.nowMs / 1000;
+    // The clouds' own span for this world (one panel on a one-screen level).
+    const flyRight = PANEL_X0 + backdropSpanPx(this.worldW, PX_FLYERS.x);
     for (const d of this.drifters) {
       d.x += d.speed * dt;
       const half = d.img.displayWidth / 2;
       // wrap well outside the panel, past the largest parallax shift, so no cloud pops in view
-      if (d.x - half > PANEL_X1 + 220) d.x = PANEL_X0 - 220 - half;
+      if (d.x - half > flyRight + 220) d.x = PANEL_X0 - 220 - half;
       const bob = d.bob ? Math.sin(t * 0.9 + d.phase) * d.bob : 0;
       d.img.setPosition(d.x + fly.x, d.y + bob + fly.y);
     }
@@ -829,10 +899,121 @@ export class CoasterScene extends Phaser.Scene {
     this.placeWheelCars(parallaxOffset(f, PX_WHEEL.x, PX_WHEEL.y));
   }
 
-  /** A pointer's position in stage px through the world camera (zoom and scroll included). */
-  private stagePoint(pointer: Phaser.Input.Pointer): Vec2 {
-    const p = this.worldCam.getWorldPoint(pointer.x, pointer.y);
-    return { x: p.x, y: p.y };
+  /** A pointer's position on the screen, in stage px (the canvas is RENDER_SCALE x the stage). */
+  private screenPoint(pointer: Phaser.Input.Pointer): Vec2 {
+    return { x: pointer.x / RENDER_SCALE, y: pointer.y / RENDER_SCALE };
+  }
+
+  /** A screen point (stage px) in the world camera's space (zoom and scroll included). The same
+   * maths as the camera's own transform (rideCamera.ts screenToStage), applied to the frame the
+   * camera shows, so it holds right after a scroll in the same frame. */
+  private stagePoint(screen: Vec2): Vec2 {
+    return screenToStage(screen, this.camCur);
+  }
+
+  /** A world point clamped into the level's world for a point of `kind` (src/core/world.ts). */
+  private clampPoint(x: number, y: number, kind: PointKind): Vec2 {
+    return clampToWorld({ x, y }, kind, this.worldW, WORLD_H);
+  }
+
+  // ---------------- wide levels (2026-10-15) ----------------
+
+  /**
+   * The level's world width (src/core/world.ts levelWorldW): the camera's clamp band, the points'
+   * clamp and the backdrop's tiles follow it. The edit view goes to the left end (the station) and
+   * any opening pan is dropped. Called on every level load.
+   */
+  setWorld(worldW: number): void {
+    const changed = Math.abs(worldW - this.worldW) > 1e-9;
+    this.worldW = worldW;
+    this.camWorld = coasterCamWorld(worldW);
+    this.editCx = editFrameAt(0, this.camWorld).cx;
+    this.cancelIntro();
+    this.camFollow = false;
+    this.camReleaseAt = null;
+    this.camCur = editFrame(this.editCx, this.camWorld);
+    this.applyCamera();
+    if (changed) this.buildBackdropTiles();
+  }
+
+  /** The level's world width (m). */
+  worldWidth(): number {
+    return this.worldW;
+  }
+
+  /** Holds the camera on the opening pan's first frame (the flag), behind Bruno's intro; null
+   * drops it. `playIntro` starts it. */
+  prepareIntro(pan: IntroPan | null): void {
+    this.cancelIntro();
+    if (!pan) return;
+    this.intro = { pan, t: -1, done: null };
+    this.camCur = { ...pan.from };
+    this.applyCamera();
+  }
+
+  /** Starts the held opening pan (flag -> station, a tap skips it); resolves when it is over.
+   * Resolves at once when no pan is held. */
+  playIntro(): Promise<void> {
+    const intro = this.intro;
+    if (!intro) return Promise.resolve();
+    return new Promise((resolve) => {
+      const prev = intro.done;
+      intro.done = (): void => {
+        prev?.();
+        resolve();
+      };
+      if (intro.t < 0) intro.t = 0;
+    });
+  }
+
+  /** Jumps a running (or held) opening pan to its end: the station's view. */
+  skipIntro(): void {
+    if (this.intro) this.endIntro();
+  }
+
+  /** The opening pan is held or running (dev checks; taps only skip it meanwhile). */
+  isIntroActive(): boolean {
+    return this.intro !== null;
+  }
+
+  private endIntro(): void {
+    const intro = this.intro;
+    if (!intro) return;
+    this.intro = null;
+    this.editCx = intro.pan.to.cx;
+    this.camCur = { ...intro.pan.to };
+    this.applyCamera();
+    intro.done?.();
+  }
+
+  /** Drops the opening pan without moving the camera (a new level loads); a waiting promise still
+   * resolves, so nothing hangs on it. */
+  private cancelIntro(): void {
+    const intro = this.intro;
+    this.intro = null;
+    intro?.done?.();
+  }
+
+  /** The scrollbar moved: the edit view glides to `t` of the scrollable range (0 = the left end).
+   * Ends an opening pan where it is. No-op on a one-screen level or while the ride camera follows. */
+  scrollTo(t: number): void {
+    if (this.camFollow || !scrollOf(this.camCur, this.camWorld)) return;
+    // A drag on the scrollbar during the opening pan ends it where it is (the child took over).
+    this.cancelIntro();
+    this.editCx = editFrameAt(t, this.camWorld).cx;
+  }
+
+  /** The scrollbar's state (HudState.scroll): where the view the camera is heading for sits and
+   * how much it shows; null on a one-screen level and while the ride camera follows the fuzz. */
+  scrollState(): { t: number; view: number } | null {
+    if (this.camFollow) return null;
+    const f = this.intro ? this.camCur : editFrame(this.editCx, this.camWorld);
+    return scrollOf(f, this.camWorld);
+  }
+
+  /** The camera frame on screen (dev checks: world m centre and zoom). */
+  cameraFrame(): FrameState {
+    return { ...this.camCur };
   }
 
   // ---------------- public API ----------------
@@ -857,6 +1038,7 @@ export class CoasterScene extends Phaser.Scene {
     if (!on) {
       // cancel any in-progress drag cleanly, without finalizing it (no delete, no undo push)
       this.gesture = null;
+      this.dragScreen = null;
       this.gestureBefore = null;
       this.activePointerId = null;
       // the ride shows the whole track, settled
@@ -1449,12 +1631,14 @@ export class CoasterScene extends Phaser.Scene {
    */
   setRideCamera(follow: boolean, holdMs = 0): void {
     if (follow) {
+      // Play during a wide level's opening pan: the pan ends on the station, the ride takes over.
+      this.skipIntro();
       this.camFollow = true;
       this.camReleaseAt = null;
     } else if (holdMs > 0 && this.camFollow) {
       this.camReleaseAt = this.nowMs + holdMs;
     } else {
-      this.camFollow = false;
+      this.releaseFollow();
       this.camReleaseAt = null;
     }
   }
@@ -1515,6 +1699,11 @@ export class CoasterScene extends Phaser.Scene {
   // ---------------- gestures ----------------
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    // 2026-10-15: a tap during a wide level's opening pan skips it (and does nothing else).
+    if (this.intro && this.intro.t >= 0 && pointer.isDown) {
+      this.skipIntro();
+      return;
+    }
     if (!this.editable) {
       // A tap while the fuzz hops on skips the hop.
       if (this.entering) this.onEntranceSkip?.();
@@ -1523,8 +1712,12 @@ export class CoasterScene extends Phaser.Scene {
     if (!pointer.isDown) return;
     if (this.activePointerId !== null) return; // ignore a second concurrent pointer
 
-    const { x: sx, y: sy } = this.stagePoint(pointer);
-    if (sx < WORLD_X0 || sx > WORLD_X1 || sy < WORLD_Y0 || sy > WORLD_Y1) return;
+    // Only inside the world panel on the screen, and inside the level's world (it may scroll).
+    const screen = this.screenPoint(pointer);
+    if (!inPanel(screen)) return;
+    const { x: sx, y: sy } = this.stagePoint(screen);
+    if (sx < WORLD_X0 || sx > ORIGIN_X + this.worldW * PPM || sy < WORLD_Y0 || sy > WORLD_Y1) return;
+    this.dragScreen = screen;
 
     // The "▶" bubble over the waiting fuzz starts the ride, like the bar's Play.
     if (this.playBubble.visible && Math.hypot(sx - this.playBubbleAt.x, sy - this.playBubbleAt.y) <= PLAY_BUBBLE_R + 6) {
@@ -1555,11 +1748,12 @@ export class CoasterScene extends Phaser.Scene {
     if (!this.rules.canAdd) return;
 
     const w = toWorld({ x: sx, y: sy });
-    const wx = clamp(w.x, EDGE, POINT_X_MAX);
-    const wy = clamp(w.y, EDGE, this.toolKind() === 'loop' ? LOOP_Y_MAX : POINT_Y_MAX);
+    const { x: wx, y: wy } = this.clampPoint(w.x, w.y, this.toolKind());
 
     if (this.track) {
-      const i = insertionIndex(this.points, { x: wx, y: wy }, HIT_RADIUS / PPM);
+      // A tap on the rail goes into the rail there; on a prebuilt-track level a tap on the sky over
+      // the open stretch goes into that stretch (src/core/trackPoints.ts openGapIndex).
+      const i = insertionIndex(this.points, { x: wx, y: wy }, HIT_RADIUS / PPM) ?? openGapIndex(this.points, wx);
       if (i !== null) {
         this.activePointerId = pointer.id;
         this.gestureBefore = clonePoints(this.points);
@@ -1572,6 +1766,9 @@ export class CoasterScene extends Phaser.Scene {
         return;
       }
     }
+
+    // The track already ends on the flag at a locked point (a prebuilt finale): nothing to append.
+    if (!canAppend(this.points, this.finish)) return;
 
     if (this.points.length > 0) {
       const last = this.points[this.points.length - 1]!;
@@ -1597,8 +1794,17 @@ export class CoasterScene extends Phaser.Scene {
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
     if (!this.editable) return;
     if (!this.gesture || pointer.id !== this.activePointerId) return;
+    const screen = this.screenPoint(pointer);
+    this.dragScreen = screen;
+    this.dragTo(screen);
+  }
 
-    const { x: sx, y: sy } = this.stagePoint(pointer);
+  /** The dragged point goes under the finger at `screen` (a pointer move, or the view scrolled
+   * under a still finger on a wide level). */
+  private dragTo(screen: Vec2): void {
+    if (!this.gesture) return;
+    const { x: sx, y: sy } = this.stagePoint(screen);
+    // The threshold is measured on the screen-side stage point (a scroll moves it too).
     const dist = Math.hypot(sx - this.gesture.startPx.x, sy - this.gesture.startPx.y);
     if (dist > MOVE_THRESHOLD) this.gesture.moved = true;
 
@@ -1607,8 +1813,7 @@ export class CoasterScene extends Phaser.Scene {
     const prevKind = this.points[this.gesture.index]!.kind;
     // A vertical-only station (level 1) or hilltop (the air time lesson) keeps its x (dragTarget).
     const w = dragTarget(this.rules, this.points, this.gesture.index, toWorld({ x: sx, y: sy }));
-    const wx = clamp(w.x, EDGE, POINT_X_MAX);
-    const wy = clamp(w.y, EDGE, prevKind === 'loop' ? LOOP_Y_MAX : POINT_Y_MAX);
+    const { x: wx, y: wy } = this.clampPoint(w.x, w.y, prevKind);
     // Keeps the point's flags (a vertical-only hilltop stays vertical-only).
     this.points[this.gesture.index] = { ...this.points[this.gesture.index]!, x: wx, y: wy, kind: prevKind };
     this.pointsDirty = true;
@@ -1619,8 +1824,9 @@ export class CoasterScene extends Phaser.Scene {
     if (!this.gesture || pointer.id !== this.activePointerId) return;
 
     const g = this.gesture;
+    this.dragScreen = null;
     let deleted = -1;
-    if (!g.moved && !g.isNew && this.rules.canDelete) {
+    if (!g.moved && !g.isNew && canDeletePoint(this.rules, this.points, g.index)) {
       // The rail it shaped stays on screen a moment, retracting or sinking away (drawing only).
       this.captureGhost(g.index);
       this.points.splice(g.index, 1);

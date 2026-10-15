@@ -39,8 +39,17 @@ describe('coaster tutorial hand (2026-10-15)', () => {
     expect(coachSteps(findLevel('loop')!)).toEqual(['loop-tool']);
   });
 
-  it('only levels 1, 2, the air time lesson and the loop lesson have a hand', () => {
-    expect(LEVELS.filter((l) => coachSteps(l).length > 0).map((l) => l.id)).toEqual(['drop', 'complete', 'hang', 'loop']);
+  it('only levels 1, 2, the air time lesson, the loop lesson and the loop-in-the-middle level have a hand', () => {
+    expect(LEVELS.filter((l) => coachSteps(l).length > 0).map((l) => l.id)).toEqual(['drop', 'complete', 'hang', 'loop', 'loopgate']);
+  });
+
+  it('loop in the middle (2026-10-15): the hand drags the vertical-only station up, and stops once it moves', () => {
+    const gate = findLevel('loopgate')!;
+    expect(coachSteps(gate)).toEqual(['drag-station']);
+    expect(gate.stationVertical).toBe(true);
+    const preset = gate.preset!;
+    expect(stationMoved(preset, preset)).toBe(false);
+    expect(stationMoved(preset, preset.map((p, k) => (k === 0 ? { ...p, y: p.y + 2 } : p)))).toBe(true);
   });
 
   it('air time lesson: the hand drags the hilltop up into the floaty band, and stops once it moves', () => {

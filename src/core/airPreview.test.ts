@@ -103,8 +103,8 @@ describe('air time preview (2026-10-15)', () => {
     expect(mergeStretches([{ s0: 5, s1: 6 }, { s0: 1, s1: 2 }, { s0: 2.3, s1: 3 }])).toEqual([{ s0: 1, s1: 3 }, { s0: 5, s1: 6 }]);
   });
 
-  it('the float counter shows on the levels with an air time goal: the lesson (0.5 s) and Thrill ride (1 s)', () => {
-    expect(LEVELS.filter((l) => airGoal(l) !== null).map((l) => [l.id, airGoal(l)])).toEqual([['hang', 0.5], ['thrill', 1]]);
+  it('the float counter shows on the levels with an air time goal: the lesson (0.5 s), Thrill ride (1 s) and two long rides', () => {
+    expect(LEVELS.filter((l) => airGoal(l) !== null).map((l) => [l.id, airGoal(l)])).toEqual([['hang', 0.5], ['thrill', 1], ['tour', 1], ['finale', 2]]);
   });
 
   it('the blue preview shows on the air time lesson only, never on the Thrill ride (2026-10-15)', () => {

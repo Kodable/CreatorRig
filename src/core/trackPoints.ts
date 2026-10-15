@@ -7,15 +7,56 @@ export const LOOP_PITCH = 2;    // horizontal shift from loop entry to loop exit
 export const LOOP_STEPS = 8;    // control points around the circle (9 points incl. the return to the bottom)
 
 const SAMPLES_PER_SEGMENT = 24;
+/** The longest gap (m) between the samples a tap is matched against (insertionIndex). */
+const INSERT_SPACING = 0.25;
 
-/** Deep copy of a TrackPoint list, preserving kind, locked and vertical. */
+/** Deep copy of a TrackPoint list, preserving kind, locked, vertical and openAfter. */
 export function clonePoints(points: readonly TrackPoint[]): TrackPoint[] {
   return points.map((p) => {
     const copy: TrackPoint = { x: p.x, y: p.y, kind: p.kind };
     if (p.locked) copy.locked = true;
     if (p.vertical) copy.vertical = true;
+    if (p.openAfter) copy.openAfter = true;
     return copy;
   });
+}
+
+/** May a point go between points i and i + 1? Not between two locked points (a level's prebuilt
+ * part stays whole), unless the first one is `openAfter` (the stretch the child builds, on the
+ * prebuilt-track levels). */
+export function gapOpen(points: readonly TrackPoint[], i: number): boolean {
+  const a = points[i];
+  const b = points[i + 1];
+  if (!a) return false;
+  if (!b) return true;
+  return !(a.locked && b.locked) || !!a.openAfter;
+}
+
+/**
+ * A tap on empty sky on a prebuilt-track level (2026-10-15): when its x falls inside an open
+ * stretch between two locked points (`openAfter`, e.g. from the station to a prebuilt loop in the
+ * middle), the new point goes into that stretch, not after the track's end. Returns the index i
+ * such that the point is inserted at i + 1, or null (the tap appends at the end, as before).
+ * Only `openAfter` stretches count, so every other level's sky taps are unchanged.
+ */
+export function openGapIndex(points: readonly TrackPoint[], x: number): number | null {
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]!;
+    if (!a.openAfter || !a.locked) continue;
+    // The stretch runs from this locked point through the child's points to the next locked one.
+    let j = i + 1;
+    while (j < points.length && !points[j]!.locked) j++;
+    const b = points[j];
+    if (!b) return null;
+    const lo = Math.min(a.x, b.x);
+    const hi = Math.max(a.x, b.x);
+    if (x <= lo || x >= hi) continue;
+    // Keep the stretch's points in x order: after the last point left of the tap.
+    let at = i;
+    for (let k = i + 1; k < j; k++) if (points[k]!.x < x) at = k;
+    return at;
+  }
+  return null;
 }
 
 /** Expand a TrackPoint list into the Vec2 control points that buildTrack/sampleCatmullRom
@@ -76,7 +117,13 @@ export function insertionIndex(points: readonly TrackPoint[], p: Vec2, maxDist: 
   if (points.length < 2) return null;
 
   const expanded = expandTrackPoints(points);
-  const raw = sampleCatmullRom(expanded.pts, SAMPLES_PER_SEGMENT);
+  // 2026-10-15 (wide levels): enough samples per segment that the longest one is sampled every
+  // INSERT_SPACING m at most, so a tap right on a long stretch of rail (a 90 m run across a wide
+  // world) still finds it within `maxDist`.
+  let longest = 0;
+  for (let k = 1; k < expanded.pts.length; k++) longest = Math.max(longest, dist(expanded.pts[k - 1]!, expanded.pts[k]!));
+  const perSeg = Math.max(SAMPLES_PER_SEGMENT, Math.ceil(longest / INSERT_SPACING));
+  const raw = sampleCatmullRom(expanded.pts, perSeg);
 
   let bestK = -1;
   let bestDist = Infinity;
@@ -90,15 +137,13 @@ export function insertionIndex(points: readonly TrackPoint[], p: Vec2, maxDist: 
 
   if (bestK < 0 || bestDist > maxDist) return null;
 
-  let seg = Math.floor(bestK / SAMPLES_PER_SEGMENT);
+  let seg = Math.floor(bestK / perSeg);
   if (seg > expanded.pts.length - 2) seg = expanded.pts.length - 2;
   if (seg < 0) seg = 0;
 
   const i = expanded.owner[seg]!;
 
-  const a = points[i]!;
-  const b = points[i + 1];
-  if (a.locked && b && b.locked) return null;
+  if (!gapOpen(points, i)) return null;
 
   return i;
 }

@@ -7,7 +7,10 @@ export const DS = 0.1;                       // resample spacing, meters
  * placed by the level: the child cannot move or delete it. A vertical point (2026-10-15, the air
  * time lesson's hump top) only slides up and down: a drag keeps its x (src/core/editRules.ts). */
 export type PointKind = 'curve' | 'loop';
-export interface TrackPoint { x: number; y: number; kind: PointKind; locked?: boolean; vertical?: boolean }
+/** `openAfter` (2026-10-15, the prebuilt-track levels): the rail from this locked point to the next
+ * one is the child's to build. Two locked neighbours otherwise refuse a tap on the rail between them
+ * (the level's prebuilt part stays whole, src/core/trackPoints.ts insertionIndex). */
+export interface TrackPoint { x: number; y: number; kind: PointKind; locked?: boolean; vertical?: boolean; openAfter?: boolean }
 /** A finish zone in world meters: the track's last point must lie inside the circle. */
 export interface FinishZone { x: number; y: number; r: number }
 
@@ -57,6 +60,10 @@ export interface Level {
   coach?: CoachStep[];
   /** Where the 'add-point' hand taps (world m): an empty sky spot toward the flag. */
   coachSpot?: Vec2;
+  /** The level's world width in meters (2026-10-15, wide levels; src/core/world.ts). Default 60,
+   * one screen. A wider world scrolls sideways in edit mode (a scrollbar, and auto-scroll while a
+   * point is dragged near the panel's edge) and opens with a pan from the flag back to the station. */
+  worldW?: number;
 }
 
 export type Mode = 'edit' | 'play' | 'done';
@@ -69,4 +76,8 @@ export interface HudState {
   /** The tutorial hand step the HUD draws over a bar button ('skin', 'play', 'loop-tool'), else null
    * (the in-scene steps are drawn by CoasterScene). */
   coach: CoachStep | null;
+  /** The edit view's scrollbar on a wide level (2026-10-15): where the view sits (0 = the left end,
+   * 1 = the right end) and how much of the world it shows (0..1, the thumb's width). Null or absent
+   * on a one-screen level and while the ride camera follows the fuzz. */
+  scroll?: { t: number; view: number } | null;
 }

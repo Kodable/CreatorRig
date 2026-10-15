@@ -20,11 +20,21 @@ export interface HudCallbacks {
   setSkin(id: string): void;
   /** 2026-10-15: the child opened the skin tray (the tutorial hand's 'skin' step is done). */
   skinTrayOpened?(): void;
+  /** 2026-10-15: the child moved the scrollbar on a wide level (0 = the left end, 1 = the right). */
+  scrollTo?(t: number): void;
   exit(): void;
 }
 
 const STAGE_W = 1024;
-const G_MAX = 6; // g value that maps to a full (100%) intense-o-meter gauge
+const G_MAX = 6;
+
+/* 2026-10-15 (wide levels): the world scrollbar, the builder kit's (src/kit/BuilderHud.ts) moved
+   down onto the world panel's bottom edge: its grip sits over the dirt band under the grass line
+   and the navy gap above the bar, so it never covers a point (the lowest points sit at 0.5 m, stage
+   y 682; the bar's hit area starts at 684). `.coaster-scroll` in style.css. */
+const SCROLL_LEFT = 48;
+const SCROLL_RIGHT = 976;
+const SCROLL_THUMB_MIN = 88; // g value that maps to a full (100%) intense-o-meter gauge
 
 /* 2026-10-07 (Gao: "put the same treatment of the goal, the stats, and the bottom for the coaster"):
    the rover's layout. No dash any more: the goals sit over the world panel's top-left corner
@@ -145,6 +155,15 @@ export class Hud {
   private skinBackdrop!: HTMLDivElement;
   private skinFaces = new Map<SkinId, HTMLButtonElement>();
   private skin: SkinId | null = null;
+
+  // ---- 2026-10-15 the world scrollbar (wide levels; shown while HudState.scroll is set) ----
+  private scrollEl!: HTMLDivElement;
+  private scrollThumbEl!: HTMLDivElement;
+  /** Where the thumb sits (0..1) and how much of the world the view shows (0..1). */
+  private scrollT = 0;
+  private scrollView = 1;
+  private scrollDrag: { pointerId: number; grab: number } | null = null;
+  private scrollLayoutKey = '';
 
   private readonly syncHandler = (): void => this.syncTransform();
   private intervalId: ReturnType<typeof setInterval> | undefined;
@@ -375,6 +394,7 @@ export class Hud {
     this.toolLoopBtn = toolLoopBtn;
 
     this.buildSkinPicker(bottombar);
+    this.buildScrollbar();
 
     // Play, Stop and Next level share one centred box, side by side whichever of them show (after
     // a passed run: Stop and Next level).
@@ -566,6 +586,110 @@ export class Hud {
 
   private setDisabled(btn: HTMLButtonElement, disabled: boolean): void {
     if (btn.disabled !== disabled) btn.disabled = disabled;
+  }
+
+  /** The world scrollbar: a thin track along the world panel's bottom edge and a wide thumb.
+   * Dragging the thumb (or tapping/dragging the track, which centres the thumb on the finger)
+   * calls `scrollTo(t)`. Hidden until `HudState.scroll` is set (a wide level, not mid-ride). */
+  private buildScrollbar(): void {
+    const wrap = document.createElement('div');
+    wrap.className = 'coaster-scroll';
+    wrap.hidden = true;
+    this.boolCache.set(wrap, true);
+    const track = document.createElement('div');
+    track.className = 'coaster-scroll-track';
+    const thumb = document.createElement('div');
+    thumb.className = 'coaster-scroll-thumb';
+    const grip = document.createElement('div');
+    grip.className = 'coaster-scroll-grip';
+    thumb.appendChild(grip);
+    wrap.append(track, thumb);
+    this.root.appendChild(wrap);
+    this.scrollEl = wrap;
+    this.scrollThumbEl = thumb;
+
+    const trackW = SCROLL_RIGHT - SCROLL_LEFT;
+    const down = (onThumb: boolean) => (e: PointerEvent): void => {
+      if (wrap.hidden || this.scrollDrag) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const thumbW = this.scrollThumbW();
+      const x = this.scrollPointerX(e);
+      const left = this.scrollT * (trackW - thumbW);
+      this.scrollDrag = { pointerId: e.pointerId, grab: onThumb ? x - left : thumbW / 2 };
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        // Capture is a nicety (the drag keeps going off the bar); moves over the bar still work.
+      }
+      thumb.classList.add('dragging');
+      if (!onThumb) this.scrollFromPointer(e);
+    };
+    const move = (e: PointerEvent): void => {
+      if (this.scrollDrag?.pointerId !== e.pointerId) return;
+      e.preventDefault();
+      this.scrollFromPointer(e);
+    };
+    const up = (e: PointerEvent): void => {
+      if (this.scrollDrag?.pointerId !== e.pointerId) return;
+      this.scrollDrag = null;
+      thumb.classList.remove('dragging');
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // Already released (pointercancel, element hidden).
+      }
+    };
+    thumb.addEventListener('pointerdown', down(true));
+    track.addEventListener('pointerdown', down(false));
+    for (const el of [thumb, track]) {
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      el.addEventListener('lostpointercapture', up);
+    }
+  }
+
+  private scrollThumbW(): number {
+    const trackW = SCROLL_RIGHT - SCROLL_LEFT;
+    return Math.min(trackW, Math.max(SCROLL_THUMB_MIN, this.scrollView * trackW));
+  }
+
+  /** The pointer's x along the track, in stage px (the HUD root is CSS-scaled onto the canvas). */
+  private scrollPointerX(e: PointerEvent): number {
+    const rect = this.scrollEl.getBoundingClientRect();
+    return rect.width > 0 ? ((e.clientX - rect.left) * (SCROLL_RIGHT - SCROLL_LEFT)) / rect.width : 0;
+  }
+
+  private scrollFromPointer(e: PointerEvent): void {
+    const drag = this.scrollDrag;
+    if (!drag) return;
+    const span = SCROLL_RIGHT - SCROLL_LEFT - this.scrollThumbW();
+    if (span <= 0) return;
+    const t = Math.max(0, Math.min(1, (this.scrollPointerX(e) - drag.grab) / span));
+    this.scrollT = t;
+    this.layoutScrollbar();
+    this.cb.scrollTo?.(t);
+  }
+
+  /** Writes the thumb's size and offset from `scrollT` / `scrollView` (only when they change). */
+  private layoutScrollbar(): void {
+    const trackW = SCROLL_RIGHT - SCROLL_LEFT;
+    const thumbW = this.scrollThumbW();
+    const left = this.scrollT * (trackW - thumbW);
+    const key = `${thumbW.toFixed(1)}:${left.toFixed(2)}`;
+    if (key === this.scrollLayoutKey) return;
+    this.scrollLayoutKey = key;
+    this.scrollThumbEl.style.width = `${thumbW}px`;
+    this.scrollThumbEl.style.transform = `translateX(${left}px)`;
+  }
+
+  /** Where the scrollbar's thumb is (dev checks): its left edge and width in stage px, or null
+   * when the bar is hidden. */
+  scrollbarShown(): { left: number; width: number; t: number } | null {
+    if (this.scrollEl.hidden) return null;
+    const thumbW = this.scrollThumbW();
+    return { left: SCROLL_LEFT + this.scrollT * (SCROLL_RIGHT - SCROLL_LEFT - thumbW), width: thumbW, t: this.scrollT };
   }
 
   setLevel(level: Level, all: Level[]): void {
@@ -803,6 +927,18 @@ export class Hud {
 
     // ---- park button ----
     this.setDisabled(this.parkBtn, playMode);
+
+    // ---- the world scrollbar (wide levels, not mid-ride); the finger wins while it drags ----
+    const scroll = playMode ? null : state.scroll ?? null;
+    this.setHidden(this.scrollEl, !scroll);
+    if (scroll) {
+      this.scrollView = scroll.view;
+      if (!this.scrollDrag) this.scrollT = scroll.t;
+      this.layoutScrollbar();
+    } else if (this.scrollDrag) {
+      this.scrollDrag = null;
+      this.scrollThumbEl.classList.remove('dragging');
+    }
 
     // ---- the tutorial hand over a bar button (after the buttons' visibility is set) ----
     this.syncCoachHand(editMode ? state.coach : null);

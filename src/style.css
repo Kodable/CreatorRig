@@ -296,6 +296,40 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 }
 #bottombar .bar-centre button:active { transform: translateY(2px); }
 
+/* ---- Coaster world scrollbar (2026-10-15, wide levels; src/ui/hud.ts buildScrollbar): the kit's
+   bar (src/kit/builder.css .world-scroll) moved onto the world panel's bottom edge, x 48..976,
+   y 684..712: the dark track line sits on the panel's edge (y 697..703), the grip (y 693..707)
+   over the dirt band and the navy gap above the bar's buttons (from y 713); no point sits below
+   stage y 682. ---- */
+.coaster-scroll {
+  position: absolute; left: 48px; top: 684px; width: 928px; height: 28px; pointer-events: none;
+}
+.coaster-scroll-track {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0; cursor: pointer;
+  pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+.coaster-scroll-track::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 13px; height: 6px; border-radius: 3px;
+  background: rgba(11, 16, 48, 0.7); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+.coaster-scroll-thumb {
+  position: absolute; left: 0; top: 0; width: 88px; height: 28px; cursor: grab;
+  pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+.coaster-scroll-thumb.dragging { cursor: grabbing; }
+.coaster-scroll-grip {
+  position: absolute; left: 0; right: 0; top: 7px; height: 16px; box-sizing: border-box;
+  border-radius: 8px; border: 2px solid #3d4a80; background: rgba(242, 244, 248, 0.95);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+/* Three short grip lines in the middle of the thumb: "this slides". */
+.coaster-scroll-grip::after {
+  content: ''; position: absolute; left: 50%; top: 3px; width: 14px; height: 6px; margin-left: -7px;
+  background: repeating-linear-gradient(90deg, #3d4a80 0 2px, transparent 2px 6px);
+}
+.coaster-scroll-thumb.dragging .coaster-scroll-grip { background: #05aeed; border-color: #ffffff; }
+
 /* ---- Coaster bar (src/ui/hud.ts): Undo and Clear at the right end. ---- */
 .bar-end { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
@@ -413,7 +447,7 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 /* The kit's properties drawer keeps its own slide (builder.css) while the dim animates. */
 #ui.bd-fade > .prop-drawer { transition: filter 250ms ease, transform 260ms cubic-bezier(.2, .8, .2, 1); }
 #ui.bd-dim > .prop-drawer, #ui.bd-dim > .meters-col.overlay { filter: brightness(0.45); }
-#ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll,
+#ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll, #ui.bd-open > .coaster-scroll,
 #ui.bd-open > .coach-hand, #ui.bd-open > .win-banner, #ui.bd-open > .skin-tray,
 #ui.bd-open > .skin-backdrop, #ui.bd-open > .unlock-callout-wrap {
   opacity: 0; visibility: hidden; transition: opacity 250ms ease, visibility 0s linear 250ms;
@@ -484,7 +518,7 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 @media (prefers-reduced-motion: reduce) {
   .bd-box.bd-in, .bd-box.bd-out, .bd-quick.bd-in, .bd-typing .bd-w, .bd-cue.bd-show, .bd-quick.pass .bd-face { animation: none !important; }
   #ui.bd-fade > .meters-col.overlay, #ui.bd-fade > .prop-drawer, #bottombar,
-  #ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll,
+  #ui.bd-open > .goals-overlay, #ui.bd-open > .world-scroll, #ui.bd-open > .coaster-scroll,
   #ui.bd-open > .coach-hand, #ui.bd-open > .win-banner, #ui.bd-open > .skin-tray,
   #ui.bd-open > .skin-backdrop, #ui.bd-open > .unlock-callout-wrap { transition: none; }
 }

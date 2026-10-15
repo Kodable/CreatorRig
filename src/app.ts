@@ -17,7 +17,8 @@ import { ENTRANCE_MS } from './core/entrance';
 import type { Hud } from './ui/hud';
 import type { CoasterScene } from './game/CoasterScene';
 import { isSkinId, loadSkin, saveSkin, type SkinId } from './game/skins';
-import { END_HOLD_MS } from './game/rideCamera';
+import { END_HOLD_MS, coasterCamWorld, introPan } from './game/rideCamera';
+import { levelWorldW } from './core/world';
 import { makeDialogRunner, type BrunoDialogRunner } from './ui/brunoDialog';
 
 /**
@@ -132,6 +133,11 @@ export class App {
 
     this.hud.setLevel(level, LEVELS);
     this.scene.setRideCamera(false);
+    // 2026-10-15 (wide levels): the level's world width; a wide level's camera waits on the flag
+    // behind Bruno's intro, then pans back to the station (src/game/rideCamera.ts introPan).
+    const worldW = levelWorldW(level);
+    this.scene.setWorld(worldW);
+    this.scene.prepareIntro(introPan(coasterCamWorld(worldW), level.finish));
     this.scene.setEditable(true);
     this.scene.setRules(editRules(level));
     this.scene.setTool(this.tool);
@@ -157,15 +163,21 @@ export class App {
         if (gen === this.lessonGen) this.coachReady = true;
       });
     };
-    if (!this.dialogs) {
+    // 2026-10-15: on a wide level the track builds in as the camera pans from the flag back to the
+    // station (a tap skips the pan); the goals intro waits for the pan to end.
+    const buildAndPan = (then: boolean): void => {
       this.scene.buildIn();
-      goalsThenCoach();
+      void this.scene.playIntro().then(() => {
+        if (gen === this.lessonGen && then) goalsThenCoach();
+      });
+    };
+    if (!this.dialogs) {
+      buildAndPan(true);
       return;
     }
     void this.dialogs.play({ label: level.title, text: level.bruno }).then((done) => {
       if (gen !== this.lessonGen) return;
-      this.scene.buildIn();
-      if (done) goalsThenCoach();
+      buildAndPan(done);
     });
   }
 
@@ -254,6 +266,12 @@ export class App {
     saveSkin(id);
     this.scene.setSkin(id, true);
     this.hud.setSkin(id);
+  }
+
+  /** The scrollbar (wide levels): the edit view glides to `t` (0 = the left end, 1 = the right). */
+  scrollTo(t: number): void {
+    if (this.mode === 'play') return;
+    this.scene.scrollTo(t);
   }
 
   setTool(tool: EditTool): void {
@@ -425,6 +443,7 @@ export class App {
       canPlay: this.mode === 'edit' && this.track !== null,
       canUndo: this.scene.canUndo(),
       coach,
+      scroll: this.mode === 'play' ? null : this.scene.scrollState(),
     };
   }
 

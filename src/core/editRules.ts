@@ -1,4 +1,4 @@
-import type { EditTool, Level, TrackPoint, Vec2 } from './types';
+import type { EditTool, FinishZone, Level, TrackPoint, Vec2 } from './types';
 import { clonePoints } from './trackPoints';
 
 /**
@@ -58,6 +58,15 @@ export function canGrab(points: readonly TrackPoint[], i: number): boolean {
   return !!p && !p.locked;
 }
 
+/** May a tap (no drag) on point `i` delete it? Only where the level lets points be added, and
+ * never a vertical-only station (2026-10-15, the "Loop in the middle" level: the station is the
+ * level's own, only its height is the child's) or a vertical-only point. */
+export function canDeletePoint(rules: EditRules, points: readonly TrackPoint[], i: number): boolean {
+  const p = points[i];
+  if (!p || p.locked || p.vertical || !rules.canDelete) return false;
+  return !(rules.stationVertical && i === 0);
+}
+
 /** Where a drag of point `i` to world point `to` puts it (before the scene's edge clamp): the
  * station keeps its x under `stationVertical`, and so does any point flagged `vertical` (the air
  * time lesson's hump top). */
@@ -67,10 +76,20 @@ export function dragTarget(rules: EditRules, points: readonly TrackPoint[], i: n
   return { x: to.x, y: to.y };
 }
 
-/** The points after Clear: the preset again when nothing may be added, else the locked points. */
+/** May a tap on the sky add a point after the track's end? Not when the end is a locked point on
+ * the flag (2026-10-15, the "Big finish" level's prebuilt finale): the track already ends where it
+ * should, and a point past it would only pull the end off the flag. */
+export function canAppend(points: readonly TrackPoint[], finish: FinishZone | null | undefined): boolean {
+  const last = points[points.length - 1];
+  if (!last || !last.locked || !finish) return true;
+  return Math.hypot(last.x - finish.x, last.y - finish.y) > finish.r;
+}
+
+/** The points after Clear: the preset again when nothing may be added, else the locked points
+ * (and a vertical-only station, which belongs to the level: it stays where the child slid it). */
 export function clearedPoints(rules: EditRules, points: readonly TrackPoint[]): TrackPoint[] {
   if (rules.resetTo) return clonePoints(rules.resetTo);
-  return clonePoints(points.filter((p) => p.locked));
+  return clonePoints(points.filter((p, i) => p.locked || (rules.stationVertical && i === 0)));
 }
 
 /** Same points, same order (Clear and a no-op gesture push no undo step). */
@@ -80,6 +99,7 @@ export function samePoints(a: readonly TrackPoint[], b: readonly TrackPoint[]): 
     const p = a[i]!;
     const q = b[i]!;
     if (p.x !== q.x || p.y !== q.y || p.kind !== q.kind || !!p.locked !== !!q.locked || !!p.vertical !== !!q.vertical) return false;
+    if (!!p.openAfter !== !!q.openAfter) return false;
   }
   return true;
 }
