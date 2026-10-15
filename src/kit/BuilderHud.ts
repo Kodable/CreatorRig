@@ -975,9 +975,15 @@ export class BuilderHud<
     // A 'bar' target (e.g. the centred DRIVE pill) is wide and the label sits in its middle, so the
     // glove instead hangs off the button's right end: 92%/60% instead of 82%/78% (Gao, 2026-10-05
     // round 2 — "move the hand on the DRIVE button up and to the right a bit").
+    // 2026-10-15 (Gao: "put the side ways hand on the rover course too"): on a bar button the glove
+    // lies on its side, finger pointing left (`.coach-hand.side` in src/style.css, turned about the
+    // fingertip), as on the coaster: the bar sits on the stage's bottom edge, where the upright glove
+    // was cut off. The fingertip is on the button's right end at mid-height, the glove in the bar
+    // to its right.
     const isBar = step.target.type === 'bar';
+    this.coachHandEl.classList.toggle('side', isBar);
     const fx = rect.x + rect.w * (isBar ? 0.92 : 0.82);
-    const fy = rect.y + rect.h * (isBar ? 0.6 : 0.78);
+    const fy = rect.y + rect.h * (isBar ? 0.55 : 0.78);
     // The glove box is COACH_HAND_W x COACH_HAND_H; this frame's fingertip sits at
     // (frame.fx, frame.fy) as a fraction of that box — place that exact point at the target.
     this.coachHandEl.style.left = `${(fx - frame.fx * COACH_HAND_W).toFixed(1)}px`;
