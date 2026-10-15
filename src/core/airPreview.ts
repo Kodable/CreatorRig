@@ -7,7 +7,7 @@ import { FIXED_DT } from './stepper';
  * Pure: a quiet dry run of the same deterministic sim the ride uses, on the track being edited, that
  * reports where along the rail the fuzz would float (seat g under 0.3, CartSnapshot.airborne) and
  * for how long. CoasterScene paints those stretches as a light-blue glow on the rail in edit mode,
- * on levels with an air time goal. The run is capped (AIR_PREVIEW_MAX_S of sim time): a real ride
+ * on the air time lesson only (`showsAirPreview`; no number since 2026-10-15). The run is capped (AIR_PREVIEW_MAX_S of sim time): a real ride
  * on a lesson track ends well inside it, so the preview's air time is the ride's `hangTime` (the
  * same steps, the same FIXED_DT per airborne step, src/core/meters.ts).
  */
@@ -71,14 +71,25 @@ export function mergeStretches(stretches: readonly AirStretch[]): AirStretch[] {
   return out;
 }
 
-/** The level's air time goal in seconds (its `hangTime >=` goal), or null: the preview, the float
- * counter and the goal pop show only on levels that have one (the lesson and Thrill ride). */
+/** The level's air time goal in seconds (its `hangTime >=` goal), or null: the float counter and
+ * its goal pop show only on levels that have one (the lesson and Thrill ride). */
 export function airGoal(level: Level): number | null {
   const g = level.goals.find((goal) => goal.metric === 'hangTime' && goal.op === '>=');
   return g ? g.value : null;
 }
 
-/** The longest stretch (where the scene puts the preview's number), or null. */
+/** The levels that paint the blue floaty stretches in edit mode: the air time lesson only
+ * (2026-10-15, Jon: "I like the effect on the fuzz. I like the timer on the fuzz. I just don't like
+ * ... seeing the track"; Gao: keep the highlight on the tutorial, no number anywhere, and nothing on
+ * the Thrill ride, where finding the air is the challenge). */
+export const AIR_PREVIEW_LEVELS: readonly string[] = ['hang'];
+
+/** Does this level show the air preview (the blue stretches; never a number)? */
+export function showsAirPreview(level: Level): boolean {
+  return AIR_PREVIEW_LEVELS.includes(level.id) && airGoal(level) !== null;
+}
+
+/** The longest stretch (the crest the lesson's glow marks), or null. */
 export function longestStretch(stretches: readonly AirStretch[]): AirStretch | null {
   let best: AirStretch | null = null;
   for (const st of stretches) if (!best || st.s1 - st.s0 > best.s1 - best.s0) best = st;

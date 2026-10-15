@@ -4,7 +4,13 @@ import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, Edit
 import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
 import { OPEN_RULES, canGrab, clearedPoints, dragTarget, samePoints, type EditRules } from '../core/editRules';
 import { dragHandPose, tapHandFrame } from '../core/coach';
-import { airCounterText, longestStretch, type AirPreview, type AirStretch } from '../core/airPreview';
+import { airCounterText, type AirPreview, type AirStretch } from '../core/airPreview';
+import { entrancePose } from '../core/entrance';
+import { FlipTrigger, flipPose, happyBounce, landingHit, landingSquish, speedStretch } from '../core/rideJuice';
+import {
+  BUILD_TOTAL_MS, GHOST_MS, INSERT_DROP_PX, animDone, beamDelay, beamRise, ghostBeam, ghostRetract, ghostSink, knot,
+  knotArcLengths, pointScale, railOffset, railReveal, type BuildAnim,
+} from '../core/buildJuice';
 import { BrunoStage } from '../ui/brunoStage';
 import type { FrameState } from '../kit/camera';
 import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
@@ -75,9 +81,9 @@ const COACH_TIP_OFFSET = { x: 5, y: 5 };
 export type SceneCoach = { kind: 'drag'; index: number; risePx: number } | { kind: 'tap'; at: Vec2 } | null;
 
 /* 2026-10-15 (Gao: level 5 "too hard, kids won't understand hang time"): air time made visible.
-   Edit mode, on levels with an air time goal: the stretches of rail where a dry run of the sim
-   floats the fuzz (src/core/airPreview.ts) glow light blue, with a small "Air time: 0.3 s" pill
-   under the longest one (green once it meets the goal). The ride, every level: while the fuzz is
+   Edit mode, on the air time lesson only (2026-10-15 later, Jon: no spoiler on the Thrill ride; no
+   number anywhere): the stretches of rail where a dry run of the sim floats the fuzz
+   (src/core/airPreview.ts) glow light blue. The ride, every level: while the fuzz is
    airborne (seat g under 0.3) it eases up off the rail with a soft shadow left on the rail and a
    trail of sparkles; on levels with an air time goal a counter over it counts the ride's air time
    up and pops (gold, a sparkle burst) the moment the goal is met. Cosmetic: the sim and the
@@ -86,8 +92,6 @@ const AIR_GLOW = 0xffffff;       // the soft halo under the floaty stretch
 const AIR_EDGE = 0x1f6fc2;       // the floaty stretch's rail: a blue edge...
 const AIR_RAIL = 0x7fd8ff;       // ...a light-blue rail...
 const AIR_SHINE = 0xe9fbff;      // ...and a bright shine line
-const AIR_PILL = 0x2b8fd6;       // the preview pill (under the goal)
-const AIR_PILL_MET = 0x3f9e2c;   // the preview pill once the preview meets the goal
 const AIR_TEXT_STROKE = '#1b2a5c';
 const AIR_FONT = '"Nunito", "Arial Rounded MT Bold", ui-rounded, -apple-system, "Segoe UI", Roboto, sans-serif';
 /** The float's ease (ms time constants): up quickly, down a little slower, so it never pops. */
@@ -208,6 +212,45 @@ interface Drifter {
   phase: number;
 }
 
+/** Rail that was just removed, still drawn while it goes: the tail retracts (the last point was
+ * deleted) or the stretch sinks and fades (a middle point). Stage px, every other sample. */
+interface TrackGhost {
+  kind: 'retract' | 'sink';
+  t0: number;
+  rail: Vec2[];
+  lower: Vec2[];
+  beams: { x: number; y: number; u: number }[];
+}
+
+/** The rail's lower rail sits this far under the main rail (stage px). */
+const RAIL_GAP = 8;
+
+/** The "▶" bubble: radius, and its centre's height over the station deck (stage px). */
+const PLAY_BUBBLE_R = 13;
+const PLAY_BUBBLE_RISE = 58;
+/** The goals panel covers the scene's top-left down to about stage y 215: a bubble whose top would
+ * be above this hangs under the station deck instead. */
+const PLAY_BUBBLE_MIN_Y = 228;
+
+/* 2026-10-15 (Jon: "finish line hard to see"): a tall pole with a big waving checkered flag and a
+   glowing ring on the ground zone. */
+const FINISH_POLE_H = 92;
+const FINISH_CELL = 7;
+const FINISH_COLS = 6;
+const FINISH_ROWS = 4;
+const FINISH_GOLD = 0xffd23d;
+
+/** Fills the quad x0,y0 .. x3,y3 (the waving flag's cells). */
+function fillQuad(g: Phaser.GameObjects.Graphics, q: readonly number[]): void {
+  g.beginPath();
+  g.moveTo(q[0]!, q[1]!);
+  g.lineTo(q[2]!, q[3]!);
+  g.lineTo(q[4]!, q[5]!);
+  g.lineTo(q[6]!, q[7]!);
+  g.closePath();
+  g.fillPath();
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -215,6 +258,10 @@ function clamp(v: number, lo: number, hi: number): number {
 export class CoasterScene extends Phaser.Scene {
   onPointsChanged?: (pts: TrackPoint[]) => void;
   onUpdate?: (deltaMs: number) => void;
+  /** A tap while the fuzz hops onto the rail (the App starts the ride at once). */
+  onEntranceSkip?: () => void;
+  /** A tap on the "▶" bubble over the waiting fuzz (the App's Play). */
+  onPlayTap?: () => void;
 
   private points: TrackPoint[] = [];
   private undoStack: TrackPoint[][] = [];
@@ -237,9 +284,6 @@ export class CoasterScene extends Phaser.Scene {
   private airDirty = false;
   private airGfx!: Phaser.GameObjects.Graphics;
   private airCoreGfx!: Phaser.GameObjects.Graphics;
-  private airPill!: Phaser.GameObjects.Container;
-  private airPillBg!: Phaser.GameObjects.Graphics;
-  private airPillText!: Phaser.GameObjects.Text;
   /** 0 on the rail, 1 fully floating (eased, FLOAT_IN_MS / FLOAT_OUT_MS). */
   private floatK = 0;
   private lastCartMs: number | null = null;
@@ -255,6 +299,44 @@ export class CoasterScene extends Phaser.Scene {
 
   private finish: FinishZone | null = null;
   private finishReached = false;
+
+  // ---- 2026-10-15 track-building juice (src/core/buildJuice.ts) ----
+  /** The running build animations (drawing only: the track data is already final). */
+  private buildAnims: BuildAnim[] = [];
+  /** Removed rail still on screen (retracting or sinking away), in stage px. */
+  private ghosts: TrackGhost[] = [];
+  /** The s of each control point on the current track (for the animations' index ranges). */
+  private knotS: number[] = [];
+  private dust!: Phaser.GameObjects.Particles.ParticleEmitter;
+
+  // ---- 2026-10-15 the entrance and the ride's juice (src/core/entrance.ts, rideJuice.ts) ----
+  /** Hopping from the station onto the rail (the App holds the sim meanwhile). */
+  private entering = false;
+  private entranceFrom: Vec2 = { x: 0, y: 0 };
+  private entranceTo: Vec2 = { x: 0, y: 0 };
+  private entranceUp: Vec2 = { x: 0, y: -1 };
+  private entranceTheta = 0;
+  /** The drawn fuzz before the juice: centre (stage px), rotation, scale, its up (stage), face roll. */
+  private base = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, upX: 0, upY: -1 };
+  private rollAngle = 0;
+  /** +1 when rolling forward turns the face clockwise on screen. */
+  private rollDir = 1;
+  /** Added to the roll after a backflip, so the face carries on from where the flip left it. */
+  private spinOffset = 0;
+  private readonly flipTrigger = new FlipTrigger();
+  private flipAt = -Infinity;
+  private flipRoll = 0;
+  private flipBaked = true;
+  private landAt = -Infinity;
+  private landK = 0;
+  private prevG = 1;
+  private prevAirborne = false;
+  private happyAt = -Infinity;
+  /** The "▶" bubble over the waiting fuzz (Jon: "put the play button where the fuzz is"). */
+  private playBubble!: Phaser.GameObjects.Container;
+  private playBubbleAt: Vec2 = { x: 0, y: 0 };
+  private playBubbleBelow = false;
+  private finishTime = 0;
 
   private trackDirty = false;
   private pointsDirty = false;
@@ -351,26 +433,40 @@ export class CoasterScene extends Phaser.Scene {
     this.trackGfx = this.onWorld(this.add.graphics());
     this.trackGfx.setDepth(DEPTH_TRACK);
 
-    // The air preview: a glow under the rail and a bright core line over it, then the pill.
+    // The air preview: a glow under the rail and a bright core line over it.
     this.airGfx = this.onWorld(this.add.graphics());
     this.airGfx.setDepth(DEPTH_TRACK - 0.05);
     this.airCoreGfx = this.onWorld(this.add.graphics());
     this.airCoreGfx.setDepth(DEPTH_TRACK + 0.05);
-    this.airPillBg = this.add.graphics();
-    this.airPillText = this.add.text(0, 0, '', {
-      fontFamily: AIR_FONT, fontSize: '14px', fontStyle: 'bold', color: '#ffffff',
-    });
-    this.airPillText.setOrigin(0.5, 0.5);
-    this.airPillText.setResolution(RENDER_SCALE * 2);
-    this.airPill = this.onWorld(this.add.container(0, 0, [this.airPillBg, this.airPillText]));
-    this.airPill.setDepth(DEPTH_POINTS + 0.2);
-    this.airPill.setVisible(false);
 
     this.pointsGfx = this.onWorld(this.add.graphics());
     this.pointsGfx.setDepth(DEPTH_POINTS);
 
+    // The finish flag stands under the point handles, so the end point stays grabbable-looking.
     this.finishGfx = this.onWorld(this.add.graphics());
-    this.finishGfx.setDepth(DEPTH_POINTS);
+    this.finishGfx.setDepth(DEPTH_POINTS - 0.2);
+
+    // A soft puff for the dust at a rising beam's foot.
+    const puff = this.add.graphics();
+    for (let i = 0; i < 4; i++) {
+      puff.fillStyle(0xffffff, 0.3);
+      puff.fillCircle(8, 8, 8 - i * 2);
+    }
+    puff.generateTexture('build-dust', 16, 16);
+    puff.destroy();
+    this.dust = this.onWorld(this.add.particles(0, 0, 'build-dust', {
+      emitting: false,
+      speed: { min: 14, max: 46 },
+      angle: { min: 195, max: 345 },
+      gravityY: 40,
+      lifespan: { min: 320, max: 520 },
+      scale: { start: 0.45, end: 1.1 },
+      alpha: { start: 0.75, end: 0 },
+      tint: [0xf3e6cf, 0xe2d2b4, 0xffffff],
+    }));
+    this.dust.setDepth(DEPTH_SUPPORT + 0.05);
+
+    this.createPlayBubble();
 
     this.createFuzz();
     // 2026-10-12: Bruno left the top bar; he slides in over a dimmed stage when he talks.
@@ -393,10 +489,17 @@ export class CoasterScene extends Phaser.Scene {
     // frames this frame's fuzz, not last frame's (the kit learned that the hard way: a one-frame lag
     // jitters everything it follows).
     this.onUpdate?.(delta);
+    // The juice on the drawn fuzz (the entrance hop, a backflip, a landing squish, the happy bounce)
+    // goes on before the camera reads where the fuzz is.
+    this.applyFuzzPose();
     this.updateCamera(delta);
     this.brunoStage.sync(); // after the camera moved: the dialog stage stays put in the frame
     this.updateBackdrop(delta);
     this.updateStationPulse(time);
+    this.updateBuildAnims(time);
+    this.updatePlayBubble(time);
+    this.finishTime = time;
+    if (this.finish) this.finishDirty = true; // the flag waves and the ring glows
     if (this.trackDirty) {
       this.redrawTrack();
       this.trackDirty = false;
@@ -740,6 +843,7 @@ export class CoasterScene extends Phaser.Scene {
 
   setPoints(pts: TrackPoint[]): void {
     this.points = clonePoints(pts);
+    this.stopBuildAnims();
     this.undoStack = [];
     this.gesture = null;
     this.gestureBefore = null;
@@ -755,6 +859,8 @@ export class CoasterScene extends Phaser.Scene {
       this.gesture = null;
       this.gestureBefore = null;
       this.activePointerId = null;
+      // the ride shows the whole track, settled
+      this.stopBuildAnims();
     }
     this.pointsDirty = true;
     this.airDirty = true;
@@ -804,9 +910,220 @@ export class CoasterScene extends Phaser.Scene {
 
   setTrack(t: Track | null): void {
     this.track = t;
+    this.knotS = t ? knotArcLengths(t.samples, this.points) : [];
     this.trackDirty = true;
     this.airDirty = true;
   }
+
+  // ---------------- track-building juice (2026-10-15) ----------------
+
+  /** Hides the track (rail, beams, handles; the station and the flag stay) until `buildIn`: the
+   * level's preset waits behind Bruno's intro. */
+  holdBuild(): void {
+    this.stopBuildAnims();
+    this.buildAnims = [{ kind: 'build', t0: Infinity }];
+    this.trackDirty = true;
+    this.pointsDirty = true;
+    this.airDirty = true;
+  }
+
+  /** The held track builds in from the station (about 0.6 s, BUILD_TOTAL_MS). No-op when not held. */
+  buildIn(): void {
+    const held = this.buildAnims.find((a) => a.kind === 'build' && !Number.isFinite(a.t0));
+    if (!held) return;
+    held.t0 = this.nowMs;
+    this.schedulePuffs(held);
+  }
+
+  /** The track is building in or held hidden (dev checks: the build-in's progress, 0..1, or null). */
+  buildProgress(): number | null {
+    const b = this.buildAnims.find((a) => a.kind === 'build');
+    if (!b) return null;
+    return Number.isFinite(b.t0) ? Math.min(1, (this.nowMs - b.t0) / BUILD_TOTAL_MS) : 0;
+  }
+
+  /** How many build animations and ghosts are running (dev checks). */
+  buildAnimCount(): number {
+    return this.buildAnims.length + this.ghosts.length;
+  }
+
+  private stopBuildAnims(): void {
+    this.buildAnims = [];
+    this.ghosts = [];
+    this.trackDirty = true;
+    this.pointsDirty = true;
+  }
+
+  private isBuilding(): boolean {
+    return this.buildAnims.some((a) => a.kind === 'build');
+  }
+
+  private addAnim(a: BuildAnim): void {
+    this.buildAnims.push(a);
+    this.trackDirty = true;
+    this.pointsDirty = true;
+  }
+
+  /** Renumbers the running animations after a point was inserted at `at` (delta +1) or deleted from
+   * it (delta -1; animations about the deleted point end). */
+  private shiftAnims(at: number, delta: 1 | -1): void {
+    const sh = (i: number): number => (i >= at ? i + delta : i);
+    this.buildAnims = this.buildAnims.flatMap((a): BuildAnim[] => {
+      switch (a.kind) {
+        case 'build': return [a];
+        case 'pop': return delta < 0 && a.index === at ? [] : [{ ...a, index: sh(a.index) }];
+        case 'extend': return delta < 0 && a.from >= at - 1 ? [] : [{ ...a, from: sh(a.from) }];
+        case 'drop':
+        case 'wobble': return delta < 0 && a.a <= at && a.b >= at ? [] : [{ ...a, a: sh(a.a), peak: sh(a.peak), b: sh(a.b) }];
+      }
+    });
+  }
+
+  /** Per frame: drops finished animations; while any run, the track and the handles redraw. */
+  private updateBuildAnims(now: number): void {
+    if (this.buildAnims.length === 0 && this.ghosts.length === 0) return;
+    const wasBuilding = this.isBuilding();
+    this.buildAnims = this.buildAnims.filter((a) => !animDone(a, now));
+    this.ghosts = this.ghosts.filter((g) => now - g.t0 < GHOST_MS);
+    this.trackDirty = true;
+    this.pointsDirty = true;
+    if (wasBuilding && !this.isBuilding()) this.airDirty = true;
+  }
+
+  /** Where a support beam stands at s (the rail's stage point), or null: a post every 4 m where the
+   * rail's ride side points mostly up and the rail is more than 1.2 m above the ground. */
+  private beamSpot(track: Track, s: number, side: number): Vec2 | null {
+    const sample = track.lookup(Math.min(s, track.length));
+    const up = { x: -sample.tangent.y * side, y: sample.tangent.x * side };
+    if (up.y > 0.6 && sample.pos.y > 1.2) return toPx(sample.pos);
+    return null;
+  }
+
+  private trackSide(track: Track): number {
+    return track.lookup(0).tangent.x >= 0 ? 1 : -1;
+  }
+
+  /** A little dust puff at the foot of each beam animation `a` raises, when it starts to rise. */
+  private schedulePuffs(a: BuildAnim): void {
+    const track = this.track;
+    if (!track || !Number.isFinite(a.t0)) return;
+    const side = this.trackSide(track);
+    for (let s = 0; s <= track.length + 1e-6; s += 4) {
+      const spot = this.beamSpot(track, s, side);
+      if (!spot) continue;
+      const d = beamDelay(a, this.knotS, track.length, s);
+      if (d === null) continue;
+      const wait = Math.max(0, a.t0 + d - this.nowMs);
+      this.time.delayedCall(wait, () => {
+        if (this.editable) this.dust.explode(4, spot.x, GROUND_Y - 1);
+      });
+    }
+  }
+
+  /** The tap added point `index` at the end of the rail. */
+  private animAppend(index: number): void {
+    const now = this.nowMs;
+    this.addAnim({ kind: 'pop', index, t0: now });
+    if (index > 0) {
+      const a: BuildAnim = { kind: 'extend', from: index - 1, t0: now };
+      this.addAnim(a);
+      this.schedulePuffs(a);
+    }
+  }
+
+  /** The tap inserted point `index` into the rail. */
+  private animInsert(index: number): void {
+    const now = this.nowMs;
+    this.shiftAnims(index, 1);
+    this.addAnim({ kind: 'pop', index, t0: now });
+    const a: BuildAnim = { kind: 'drop', a: index - 1, peak: index, b: index + 1, px: INSERT_DROP_PX, t0: now };
+    this.addAnim(a);
+    this.schedulePuffs(a);
+  }
+
+  /** Before point `index` is deleted: the rail it shapes, kept on screen while it goes. */
+  private captureGhost(index: number): void {
+    const track = this.track;
+    if (!track || this.points.length < 2) return;
+    const len = track.length;
+    const last = index === this.points.length - 1;
+    const sA = knot(this.knotS, index - 1, len);
+    const sB = last ? len : knot(this.knotS, index + 1, len);
+    if (sB - sA < 1e-3) return;
+    const side = this.trackSide(track);
+    const rail: Vec2[] = [];
+    const lower: Vec2[] = [];
+    const n = Math.max(2, Math.ceil((sB - sA) / 0.2));
+    for (let i = 0; i <= n; i++) {
+      const sample = track.lookup(sA + ((sB - sA) * i) / n);
+      const up = { x: -sample.tangent.y * side, y: sample.tangent.x * side };
+      const p = toPx(sample.pos);
+      rail.push(p);
+      lower.push({ x: p.x - up.x * RAIL_GAP, y: p.y + up.y * RAIL_GAP });
+    }
+    const beams: TrackGhost['beams'] = [];
+    for (let s = Math.ceil(sA / 4) * 4; s <= sB + 1e-6; s += 4) {
+      const spot = this.beamSpot(track, s, side);
+      if (spot) beams.push({ x: spot.x, y: spot.y, u: (s - sA) / (sB - sA) });
+    }
+    this.ghosts.push({ kind: last ? 'retract' : 'sink', t0: this.nowMs, rail, lower, beams });
+  }
+
+  /** After point `index` was deleted: the merged rail between its neighbours drops into place. */
+  private animDeleted(index: number): void {
+    this.shiftAnims(index, -1);
+    if (index > 0 && index < this.points.length) {
+      const a: BuildAnim = { kind: 'drop', a: index - 1, peak: index - 0.5, b: index, px: INSERT_DROP_PX, t0: this.nowMs };
+      this.addAnim(a);
+      this.schedulePuffs(a);
+    }
+    this.trackDirty = true;
+  }
+
+  // ---------------- the entrance (2026-10-15) ----------------
+
+  /** Where the waiting fuzz sits on the station deck for a station point at stage `p`. */
+  private stationFuzzSpot(p: Vec2): Vec2 {
+    const r = FUZZ_R_PX * FUZZ_FUR;
+    return { x: Math.max(PANEL_X0 + r - 1, p.x - 24), y: p.y + 10 - FUZZ_R_PX };
+  }
+
+  /** Play pressed: the fuzz leaves the deck for the start of the rail (`snap0`, the sim at s = 0). */
+  startEntrance(snap0: CartSnapshot): void {
+    const first = this.points[0];
+    if (!first || !this.track) return;
+    this.resetFuzzFallState();
+    this.resetFloat();
+    this.entering = true;
+    this.entranceFrom = this.stationFuzzSpot(toPx(first));
+    this.entranceTo = toPx({ x: snap0.pos.x + snap0.up.x * FUZZ_R, y: snap0.pos.y + snap0.up.y * FUZZ_R });
+    this.entranceUp = { x: snap0.up.x, y: -snap0.up.y };
+    this.entranceTheta = snap0.theta;
+    const tx = Math.cos(snap0.theta);
+    const ty = Math.sin(snap0.theta);
+    this.rollDir = tx * snap0.up.y - ty * snap0.up.x >= 0 ? 1 : -1;
+    this.fuzzVel = { x: 0, y: 0 };
+    this.fuzz.setVisible(true);
+    this.drawEntrance(0);
+  }
+
+  /** The entrance `t` ms in (src/core/entrance.ts). */
+  drawEntrance(t: number): void {
+    if (!this.entering) return;
+    const pose = entrancePose(t, this.entranceFrom, this.entranceTo, FUZZ_R_PX, this.entranceUp);
+    this.base = {
+      x: pose.x, y: pose.y, rot: -this.entranceTheta * pose.tilt, sx: pose.sx, sy: pose.sy,
+      upX: this.entranceUp.x, upY: this.entranceUp.y,
+    };
+    this.rollAngle = this.rollDir * Math.PI * 2 * pose.spin;
+    this.setExcited(pose.excited);
+  }
+
+  /** The fuzz is hopping onto the rail (dev checks). */
+  isEntering(): boolean {
+    return this.entering;
+  }
+
 
   /** The level's air time goal in seconds (the counter's goal pop; the preview shows only when
    * there is one), or null. */
@@ -827,11 +1144,11 @@ export class CoasterScene extends Phaser.Scene {
     this.rideAir = seconds;
   }
 
-  /** The air preview's state (dev checks): the stretches drawn and the pill's text, or null when
-   * nothing is drawn. */
-  airPreviewShown(): { stretches: AirStretch[]; pill: string } | null {
+  /** The air preview's state (dev checks): the stretches drawn, or null when nothing is drawn (no
+   * number is ever shown since 2026-10-15). */
+  airPreviewShown(): { stretches: AirStretch[] } | null {
     if (!this.airGfx?.visible || !this.airPreview) return null;
-    return { stretches: this.airPreview.stretches.map((st) => ({ ...st })), pill: this.airPill.visible ? this.airPillText.text : '' };
+    return { stretches: this.airPreview.stretches.map((st) => ({ ...st })) };
   }
 
   /** The float's state (dev checks): how far the fuzz floats (0..1) and the counter's text. */
@@ -856,6 +1173,7 @@ export class CoasterScene extends Phaser.Scene {
 
   drawCart(snap: CartSnapshot | null): void {
     if (!snap || !this.track) {
+      this.entering = false;
       this.fuzz.setVisible(false);
       this.resetFuzzFallState();
       this.fuzzVel = { x: 0, y: 0 };
@@ -863,6 +1181,7 @@ export class CoasterScene extends Phaser.Scene {
       this.resetFloat();
       return;
     }
+    this.entering = false;
     this.fuzz.setVisible(true);
     this.fuzzVel = snap.outcome === 'running'
       ? { x: snap.v * Math.cos(snap.theta), y: snap.v * Math.sin(snap.theta) }
@@ -875,9 +1194,12 @@ export class CoasterScene extends Phaser.Scene {
     const center = { x: snap.pos.x + snap.up.x * FUZZ_R, y: snap.pos.y + snap.up.y * FUZZ_R };
     const centerPx = toPx(center);
 
-    // Gentle squash: 6 g squashes to 0.85, weightless stretches to 1.08.
-    const sy = clamp(1 / (0.9 + 0.1 * Math.max(snap.gNormal, 0)), 0.85, 1.08);
-    const sx = 1 / sy;
+    // Gentle squash: 6 g squashes to 0.85, weightless stretches to 1.08; and (2026-10-15) a stretch
+    // along the rail with speed, up to 1.14 long at 26 m/s.
+    const gSquash = clamp(1 / (0.9 + 0.1 * Math.max(snap.gNormal, 0)), 0.85, 1.08);
+    const stretch = speedStretch(snap.v);
+    const sy = gSquash / stretch;
+    const sx = stretch / gSquash;
 
     // The float: eased up off the rail while airborne, back down after (never a pop).
     const dtMs = this.lastCartMs === null ? 16 : clamp(this.nowMs - this.lastCartMs, 0, 100);
@@ -891,11 +1213,8 @@ export class CoasterScene extends Phaser.Scene {
     const stageUpX = snap.up.x;
     const stageUpY = -snap.up.y;
 
-    if (!this.fuzzFellStarted) {
-      this.fuzz.setPosition(centerPx.x + stageUpX * liftPx, centerPx.y + stageUpY * liftPx);
-      this.fuzz.setRotation(-snap.theta);
-      this.fuzz.setScale(sx, sy);
-    }
+    // The pose before the juice; applyFuzzPose adds the flip, the landing squish and the happy bounce.
+    this.base = { x: centerPx.x + stageUpX * liftPx, y: centerPx.y + stageUpY * liftPx, rot: -snap.theta, sx, sy, upX: stageUpX, upY: stageUpY };
 
     // The shadow it leaves on the rail, fainter and smaller the higher it floats; the sparkle trail.
     const railPx = toPx(snap.pos);
@@ -921,7 +1240,28 @@ export class CoasterScene extends Phaser.Scene {
     const tx = Math.cos(snap.theta);
     const ty = Math.sin(snap.theta);
     const onLeftNormal = tx * snap.up.y - ty * snap.up.x >= 0;
-    this.fuzzSpin.rotation = (onLeftNormal ? 1 : -1) * (snap.s / FUZZ_R);
+    this.rollDir = onLeftNormal ? 1 : -1;
+    this.rollAngle = this.rollDir * (snap.s / FUZZ_R);
+
+    // 2026-10-15 (Jon: "when it jumps, the fuzz squishes a bit ... maybe a little backflip if it
+    // reaches a second in the air"): a hard landing squishes it, one second of air in one go earns a
+    // backflip, and the end of the track a happy bounce. Cosmetic (src/core/rideJuice.ts).
+    if (snap.outcome === 'running') {
+      const hit = landingHit(this.prevG, snap.gNormal, this.prevAirborne);
+      if (hit > 0 && this.nowMs - this.landAt > 220) {
+        this.landAt = this.nowMs;
+        this.landK = hit;
+      }
+      if (this.flipTrigger.update(floating, dtMs / 1000) && !flipPose(this.nowMs - this.flipAt).active) {
+        this.flipAt = this.nowMs;
+        this.flipRoll = this.rollAngle + this.spinOffset;
+        this.flipBaked = false;
+        this.sparkles.explode(12);
+      }
+    }
+    this.prevG = snap.gNormal;
+    this.prevAirborne = snap.airborne;
+    if (snap.outcome === 'reachedEnd' && this.happyAt === -Infinity) this.happyAt = this.nowMs;
 
     if (snap.outcome === 'fell') {
       this.fuzzBody.setTint(COLORS.pink);
@@ -944,8 +1284,54 @@ export class CoasterScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Puts the drawn fuzz where it goes this frame: the base pose (the ride's drawCart or the entrance)
+   * plus the juice: a backflip (the face's roll held while it turns once backwards, with a little
+   * extra lift), the landing squish and the happy bounce at the end. The fall's tumble owns the fuzz
+   * once it starts.
+   */
+  private applyFuzzPose(): void {
+    if (!this.fuzz.visible || this.fuzzFellStarted) return;
+    const b = this.base;
+    const now = this.nowMs;
+    let lift = 0;
+    /** The happy bounce hops straight up the screen, whatever the rail's slope at the end. */
+    let hop = 0;
+    let squish = 1;
+    let spin = this.rollAngle + this.spinOffset;
+    if (!this.entering) {
+      const f = flipPose(now - this.flipAt);
+      if (f.active) {
+        spin = this.flipRoll - this.rollDir * Math.PI * 2 * f.turns;
+        lift += f.liftPx;
+      } else if (!this.flipBaked) {
+        // The flip is over: roll on from where it left the face (a whole turn, so no jump).
+        this.spinOffset = this.flipRoll - this.rollAngle;
+        this.flipBaked = true;
+        spin = this.rollAngle + this.spinOffset;
+      }
+      squish *= landingSquish(now - this.landAt, this.landK);
+      const h = happyBounce(now - this.happyAt);
+      hop = h.liftPx;
+      squish *= h.sy;
+    }
+    this.fuzz.setPosition(b.x + b.upX * lift, b.y + b.upY * lift - hop);
+    this.fuzz.setRotation(b.rot);
+    this.fuzz.setScale(b.sx / squish, b.sy * squish);
+    this.fuzzSpin.rotation = spin;
+  }
+
   /** Back on the rail, no trail, no counter (a new ride, Stop, or the next level). */
   private resetFloat(): void {
+    this.flipTrigger.reset();
+    this.flipAt = -Infinity;
+    this.flipBaked = true;
+    this.spinOffset = 0;
+    this.landAt = -Infinity;
+    this.landK = 0;
+    this.prevG = 1;
+    this.prevAirborne = false;
+    this.happyAt = -Infinity;
     this.floatK = 0;
     this.lastCartMs = null;
     this.rideAir = 0;
@@ -1102,6 +1488,7 @@ export class CoasterScene extends Phaser.Scene {
   undo(): boolean {
     if (this.undoStack.length === 0) return false;
     const prev = this.undoStack.pop()!;
+    this.stopBuildAnims();
     this.points = prev;
     this.pointsDirty = true;
     this.emitPointsChanged();
@@ -1119,6 +1506,7 @@ export class CoasterScene extends Phaser.Scene {
     const kept = clearedPoints(this.rules, this.points);
     if (samePoints(kept, this.points)) return;
     this.pushUndo(clonePoints(this.points));
+    this.stopBuildAnims();
     this.points = kept;
     this.pointsDirty = true;
     this.emitPointsChanged();
@@ -1127,12 +1515,22 @@ export class CoasterScene extends Phaser.Scene {
   // ---------------- gestures ----------------
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (!this.editable) return;
+    if (!this.editable) {
+      // A tap while the fuzz hops on skips the hop.
+      if (this.entering) this.onEntranceSkip?.();
+      return;
+    }
     if (!pointer.isDown) return;
     if (this.activePointerId !== null) return; // ignore a second concurrent pointer
 
     const { x: sx, y: sy } = this.stagePoint(pointer);
     if (sx < WORLD_X0 || sx > WORLD_X1 || sy < WORLD_Y0 || sy > WORLD_Y1) return;
+
+    // The "▶" bubble over the waiting fuzz starts the ride, like the bar's Play.
+    if (this.playBubble.visible && Math.hypot(sx - this.playBubbleAt.x, sy - this.playBubbleAt.y) <= PLAY_BUBBLE_R + 6) {
+      this.onPlayTap?.();
+      return;
+    }
 
     let bestIdx = -1;
     let bestDist = Infinity;
@@ -1170,6 +1568,7 @@ export class CoasterScene extends Phaser.Scene {
         this.gesture = { index: insertAt, startPx: { x: sx, y: sy }, moved: false, isNew: true };
         this.pointsDirty = true;
         this.emitPointsChanged();
+        this.animInsert(insertAt);
         return;
       }
     }
@@ -1192,6 +1591,7 @@ export class CoasterScene extends Phaser.Scene {
     };
     this.pointsDirty = true;
     this.emitPointsChanged();
+    this.animAppend(this.points.length - 1);
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
@@ -1219,8 +1619,12 @@ export class CoasterScene extends Phaser.Scene {
     if (!this.gesture || pointer.id !== this.activePointerId) return;
 
     const g = this.gesture;
+    let deleted = -1;
     if (!g.moved && !g.isNew && this.rules.canDelete) {
+      // The rail it shaped stays on screen a moment, retracting or sinking away (drawing only).
+      this.captureGhost(g.index);
       this.points.splice(g.index, 1);
+      deleted = g.index;
     }
     // A tap that changed nothing (a no-delete level) leaves no undo step behind.
     const before = this.gestureBefore ?? [];
@@ -1232,6 +1636,8 @@ export class CoasterScene extends Phaser.Scene {
 
     this.pointsDirty = true;
     this.emitPointsChanged();
+    if (deleted >= 0) this.animDeleted(deleted);
+    else if (g.moved) this.addAnim({ kind: 'wobble', a: g.index - 1, peak: g.index, b: g.index + 1, t0: this.nowMs });
   }
 
   // ---------------- helpers ----------------
@@ -1366,10 +1772,10 @@ export class CoasterScene extends Phaser.Scene {
   }
 
   /**
-   * The air preview (edit mode, levels with an air time goal): each floaty stretch of rail turns
-   * light blue (a blue-edged light-blue rail with a shine line over the red one, a soft white halo
-   * under it), and a pill under the longest stretch says how long the fuzz will float ("Air time: 0.3 s"), green once that meets
-   * the goal. The stretches come from the latest dry run, which trails a drag by up to 100 ms.
+   * The air preview (edit mode, the air time lesson only): each floaty stretch of rail turns light
+   * blue (a blue-edged light-blue rail with a shine line over the red one, a soft white halo under
+   * it). No number (2026-10-15). The stretches come from the latest dry run, which trails a drag by
+   * up to 100 ms. Hidden while the track builds in.
    */
   private redrawAirPreview(): void {
     const g = this.airGfx;
@@ -1378,10 +1784,9 @@ export class CoasterScene extends Phaser.Scene {
     core.clear();
     const track = this.track;
     const pv = this.airPreview;
-    const show = this.editable && this.airGoal !== null && !!track && !!pv && pv.stretches.length > 0;
+    const show = this.editable && !this.isBuilding() && !!track && !!pv && pv.stretches.length > 0;
     g.setVisible(show);
     core.setVisible(show);
-    this.airPill.setVisible(false);
     if (!show || !track || !pv) return;
 
     for (const st of pv.stretches) {
@@ -1401,83 +1806,113 @@ export class CoasterScene extends Phaser.Scene {
       this.strokePolyline(core, pts, 6, AIR_RAIL, 1);
       this.strokePolyline(core, pts, 2, AIR_SHINE, 0.9, -1.5);
     }
-
-    const best = longestStretch(pv.stretches);
-    if (!best) return;
-    const mid = toPx(track.lookup((best.s0 + best.s1) / 2).pos);
-    const met = pv.airTime >= (this.airGoal ?? Infinity) - 1e-9;
-    const text = `Air time: ${(Math.floor(pv.airTime * 10 + 1e-6) / 10).toFixed(1)} s`;
-    if (this.airPillText.text !== text) this.airPillText.setText(text);
-    const w = Math.ceil(this.airPillText.width) + 20;
-    const h = 24;
-    this.airPillBg.clear();
-    this.airPillBg.fillStyle(0x000000, 0.18);
-    this.airPillBg.fillRoundedRect(-w / 2, -h / 2 + 2, w, h, h / 2);
-    this.airPillBg.fillStyle(met ? AIR_PILL_MET : AIR_PILL, 1);
-    this.airPillBg.fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-    this.airPillBg.lineStyle(2, COLORS.white, 0.9);
-    this.airPillBg.strokeRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-    // Under the crest, inside the hill's arch (the hilltop's handle and the hand sit over it),
-    // kept off the grass.
-    const x = clamp(mid.x, PANEL_X0 + w / 2 + 6, PANEL_X1 - w / 2 - 6);
-    const y = Math.min(mid.y + clamp((GROUND_Y - mid.y) * 0.45, 34, 80), GROUND_Y - h / 2 - 6);
-    this.airPill.setPosition(x, y);
-    this.airPill.setVisible(true);
   }
 
+  /**
+   * The rail, its lower rail and ties, and the support posts. While a build animation runs
+   * (src/core/buildJuice.ts) only the revealed part is drawn, each part lifted by its drop offset,
+   * and each post as high as it has risen; removed rail (ghosts) is drawn going away underneath.
+   */
   private redrawTrack(): void {
     this.supportGfx.clear();
     this.trackGfx.clear();
+    const now = this.nowMs;
+    this.drawGhosts(now);
     const track = this.track;
     if (!track) return;
 
     const samples = track.samples;
     if (samples.length === 0) return;
+    const len = track.length;
+    const anims = this.buildAnims;
+    const juiced = anims.length > 0;
+    const knots = this.knotS;
+    const reveal = juiced ? railReveal(anims, knots, len, now) : len;
+    if (reveal <= 1e-3) return;
+    const off = (s: number): number => (juiced ? railOffset(anims, knots, len, s, now) : 0);
 
     // ---- supports: a post every 4m where the rail normal points mostly up
     // and the rail sits more than 1.2m above the ground ----
     // The ride side follows the start direction (same rule as the sim), so the top of a
     // loop, where the fuzz hangs upside down, gets no post.
-    const startT = track.lookup(0).tangent;
-    const side = startT.x >= 0 ? 1 : -1;
+    const side = this.trackSide(track);
     this.supportGfx.lineStyle(3, POST_COLOR, 0.6);
-    for (let s = 0; s <= track.length + 1e-6; s += 4) {
-      const sample = track.lookup(Math.min(s, track.length));
-      const up = { x: -sample.tangent.y * side, y: sample.tangent.x * side };
-      if (up.y > 0.6 && sample.pos.y > 1.2) {
-        const p = toPx(sample.pos);
-        this.supportGfx.lineBetween(p.x, p.y, p.x, GROUND_Y);
-      }
+    for (let s = 0; s <= Math.min(len, reveal) + 1e-6; s += 4) {
+      const p = this.beamSpot(track, s, side);
+      if (!p) continue;
+      const rise = juiced ? Math.min(1, beamRise(anims, knots, len, s, now)) : 1;
+      if (rise <= 0) continue;
+      const top = p.y + off(s);
+      this.supportGfx.lineBetween(p.x, GROUND_Y, p.x, GROUND_Y - (GROUND_Y - top) * rise);
     }
 
     // ---- lower rail and ties: a thin second rail 8 px under the main rail (along -up),
     // with a cream tie between the two rails every 1 m ----
-    const RAIL_GAP = 8;
-    const under = (sample: { pos: Vec2; tangent: Vec2 }): { p: Vec2; q: Vec2 } => {
+    const under = (sample: { s: number; pos: Vec2; tangent: Vec2 }): { p: Vec2; q: Vec2 } => {
       const up = { x: -sample.tangent.y * side, y: sample.tangent.x * side };
       const p = toPx(sample.pos);
+      p.y += off(sample.s);
       // stage direction of world "up" is (up.x, -up.y)
       return { p, q: { x: p.x - up.x * RAIL_GAP, y: p.y + up.y * RAIL_GAP } };
     };
     this.supportGfx.lineStyle(2, TIE_COLOR, 0.9);
-    for (let s = 0; s <= track.length + 1e-6; s += 1) {
-      const { p, q } = under(track.lookup(Math.min(s, track.length)));
+    for (let s = 0; s <= reveal + 1e-6; s += 1) {
+      const { p, q } = under(track.lookup(Math.min(s, len)));
       this.supportGfx.lineBetween(p.x, p.y, q.x, q.y);
     }
     const lowerPts: Vec2[] = [];
-    for (let i = 0; i < samples.length; i += 2) lowerPts.push(under(samples[i]!).q);
-    lowerPts.push(under(samples[samples.length - 1]!).q);
-    this.strokePolyline(this.supportGfx, lowerPts, 3, TRACK_DARK_RED, 1);
-
-    // ---- rail polyline: every 2nd sample, plus the last ----
     const stagePts: Vec2[] = [];
-    stagePts.push(toPx(samples[0]!.pos));
-    for (let i = 2; i < samples.length; i += 2) stagePts.push(toPx(samples[i]!.pos));
-    stagePts.push(toPx(samples[samples.length - 1]!.pos));
+    for (let i = 0; i < samples.length; i += 2) {
+      const sample = samples[i]!;
+      if (sample.s > reveal) break;
+      const u = under(sample);
+      lowerPts.push(u.q);
+      stagePts.push(u.p);
+    }
+    // ---- the rail ends exactly at the reveal (the last sample when it is all shown) ----
+    const end = under(reveal >= len ? samples[samples.length - 1]! : track.lookup(reveal));
+    lowerPts.push(end.q);
+    stagePts.push(end.p);
+    this.strokePolyline(this.supportGfx, lowerPts, 3, TRACK_DARK_RED, 1);
 
     this.strokePolyline(this.trackGfx, stagePts, 9, TRACK_DARK_RED, 1);
     this.strokePolyline(this.trackGfx, stagePts, 5, TRACK_RED, 1);
     this.strokePolyline(this.trackGfx, stagePts, 1.5, TRACK_HIGHLIGHT, 0.6, -1.5);
+  }
+
+  /** Removed rail going away: a removed tail retracts toward the rail that stays, a removed middle
+   * stretch sinks and fades; their posts sink into the ground. */
+  private drawGhosts(now: number): void {
+    for (const g of this.ghosts) {
+      const t = now - g.t0;
+      let rail = g.rail;
+      let lower = g.lower;
+      let alpha = 1;
+      let dy = 0;
+      if (g.kind === 'retract') {
+        const n = Math.max(1, Math.round((rail.length - 1) * ghostRetract(t)));
+        rail = rail.slice(0, n + 1);
+        lower = lower.slice(0, n + 1);
+      } else {
+        const k = ghostSink(t);
+        alpha = k.alpha;
+        dy = k.offsetPx;
+      }
+      if (alpha <= 0.01) continue;
+      this.supportGfx.lineStyle(3, POST_COLOR, 0.6 * alpha);
+      for (const b of g.beams) {
+        const h = ghostBeam(t, g.kind === 'retract' ? 1 - b.u : b.u);
+        if (h <= 0) continue;
+        this.supportGfx.lineBetween(b.x, GROUND_Y, b.x, GROUND_Y - (GROUND_Y - b.y - dy) * h);
+      }
+      const shift = (pts: Vec2[]): Vec2[] => (dy ? pts.map((p) => ({ x: p.x, y: p.y + dy })) : pts);
+      if (rail.length < 2) continue;
+      this.strokePolyline(this.supportGfx, shift(lower), 3, TRACK_DARK_RED, alpha);
+      const r = shift(rail);
+      this.strokePolyline(this.trackGfx, r, 9, TRACK_DARK_RED, alpha);
+      this.strokePolyline(this.trackGfx, r, 5, TRACK_RED, alpha);
+      this.strokePolyline(this.trackGfx, r, 1.5, TRACK_HIGHLIGHT, 0.6 * alpha, -1.5);
+    }
   }
 
   /** A small station house under the first control point: cream wall, orange roof, dark door. */
@@ -1530,12 +1965,59 @@ export class CoasterScene extends Phaser.Scene {
    */
   private placeStationFuzz(p: Vec2): void {
     if (!this.editable) return;
-    const r = FUZZ_R_PX * FUZZ_FUR;
-    const deckY = p.y + 10; // drawStation's deck top
-    const x = Math.max(PANEL_X0 + r - 1, p.x - 24);
-    this.stationFuzz.setPosition(x, deckY - FUZZ_R_PX);
+    const at = this.stationFuzzSpot(p);
+    this.stationFuzz.setPosition(at.x, at.y);
     this.stationFuzz.setDepth(this.points[0]?.locked ? DEPTH_POINTS + 0.1 : DEPTH_STATION_FUZZ);
     this.stationFuzz.setVisible(true);
+    // The "▶" bubble floats over the canopy, above the waiting fuzz; for a station high in the sky
+    // (where the goals panel sits over the scene's top-left) it hangs under the deck instead,
+    // pointing up at the fuzz.
+    const x = Math.max(PANEL_X0 + PLAY_BUBBLE_R + 3, at.x);
+    const over = at.y + FUZZ_R_PX - PLAY_BUBBLE_RISE;
+    this.playBubbleBelow = over - PLAY_BUBBLE_R < PLAY_BUBBLE_MIN_Y;
+    this.playBubbleAt = { x, y: this.playBubbleBelow ? p.y + 10 + 34 : over };
+  }
+
+  /**
+   * The "▶" bubble over the waiting fuzz (2026-10-15, Jon: "put the play button where the fuzz is"):
+   * a small green speech bubble with a white play triangle, pointing down at the fuzz. A tap starts
+   * the ride like the bar's Play (which stays). Shown in edit mode once the track has built in, and
+   * not while a finger is on the track or the tutorial hand is out.
+   */
+  private createPlayBubble(): void {
+    const g = this.add.graphics();
+    const r = PLAY_BUBBLE_R;
+    g.fillStyle(0x000000, 0.22);
+    g.fillCircle(0, 2.5, r + 1.5);
+    g.fillStyle(COLORS.white, 1);
+    g.fillCircle(0, 0, r + 2);
+    g.fillTriangle(-5, r - 1, 5, r - 1, 0, r + 7);
+    g.fillStyle(0x3f9e2c, 1);
+    g.fillCircle(0, 0, r);
+    g.fillTriangle(-3.5, r - 2, 3.5, r - 2, 0, r + 4.5);
+    g.fillStyle(COLORS.white, 1);
+    g.fillTriangle(-3.5, -6.5, -3.5, 6.5, 7.5, 0);
+    this.playBubble = this.onWorld(this.add.container(0, 0, [g]));
+    this.playBubble.setDepth(DEPTH_POINTS + 0.15);
+    this.playBubble.setVisible(false);
+  }
+
+  private updatePlayBubble(time: number): void {
+    const show = this.editable && !!this.track && this.points.length > 0 && this.buildAnims.length === 0 &&
+      !this.gesture && this.coach === null;
+    this.playBubble.setVisible(show);
+    if (!show) return;
+    // A gentle bob and breathe, so it reads as something to tap.
+    const ph = (time / 900) * Math.PI * 2;
+    this.playBubble.setPosition(this.playBubbleAt.x, this.playBubbleAt.y + Math.sin(ph) * 2);
+    const k = 1 + 0.05 * Math.sin(ph + Math.PI / 2);
+    // Upside down under the deck: the tail points up at the fuzz (the ▶ is symmetric top to bottom).
+    this.playBubble.setScale(k, this.playBubbleBelow ? -k : k);
+  }
+
+  /** Where the "▶" bubble is (stage px), or null when hidden (dev checks). */
+  playBubbleShown(): Vec2 | null {
+    return this.playBubble.visible ? { ...this.playBubbleAt } : null;
   }
 
   /**
@@ -1582,54 +2064,76 @@ export class CoasterScene extends Phaser.Scene {
 
     if (!this.editable) return;
 
+    // 2026-10-15: while a build animation runs, each handle rides its rail's drop offset and pops
+    // in (src/core/buildJuice.ts); every handle is drawn at the origin of a translated canvas.
+    const anims = this.buildAnims;
+    const juiced = anims.length > 0;
+    const len = this.track?.length ?? 0;
+    const now = this.nowMs;
+    const g = this.pointsGfx;
+    const p = { x: 0, y: 0 };
     for (let i = 0; i < this.points.length; i++) {
       const pt = this.points[i]!;
-      const p = toPx(pt);
-      const isStation = i === 0;
-      const locked = !!pt.locked;
+      const at = toPx(pt);
+      const k = juiced && this.track ? pointScale(anims, this.knotS, len, i, now) : 1;
+      if (k <= 0.02) continue;
+      const dy = juiced && this.track ? railOffset(anims, this.knotS, len, knot(this.knotS, i, len), now) : 0;
+      g.save();
+      g.translateCanvas(at.x, at.y + dy);
+      if (k !== 1) g.scaleCanvas(k, k);
+      this.drawHandle(i, pt, p);
+      g.restore();
+    }
+  }
 
-      if (pt.kind === 'loop') {
-        const ringColor = locked ? LOCKED_COLOR : COLORS.orange;
-        this.pointsGfx.lineStyle(4, ringColor, 1);
-        this.pointsGfx.strokeCircle(p.x, p.y, 11);
-        this.pointsGfx.fillStyle(ringColor, 1);
-        this.pointsGfx.fillCircle(p.x, p.y, 3);
-        this.pointsGfx.lineStyle(1.5, COLORS.white, 1);
-        this.pointsGfx.strokeCircle(p.x, p.y, 13);
-        if (locked) this.drawPadlockMark(p);
-        continue;
-      }
+  /** One control point's handle, drawn around `p`. */
+  private drawHandle(i: number, pt: TrackPoint, p: Vec2): void {
+    const g = this.pointsGfx;
+    const isStation = i === 0;
+    const locked = !!pt.locked;
 
-      if (pt.vertical && !locked) {
-        this.drawVerticalHandle(p);
-        continue;
-      }
+    if (pt.kind === 'loop') {
+      const ringColor = locked ? LOCKED_COLOR : COLORS.orange;
+      g.lineStyle(4, ringColor, 1);
+      g.strokeCircle(p.x, p.y, 11);
+      g.fillStyle(ringColor, 1);
+      g.fillCircle(p.x, p.y, 3);
+      g.lineStyle(1.5, COLORS.white, 1);
+      g.strokeCircle(p.x, p.y, 13);
+      if (locked) this.drawPadlockMark(p);
+      return;
+    }
 
-      const r = isStation ? 13 : 9;
-      if (locked) {
-        this.pointsGfx.fillStyle(LOCKED_COLOR, 1);
-        this.pointsGfx.fillCircle(p.x, p.y, r);
-        this.pointsGfx.lineStyle(2, COLORS.white, 1);
-        this.pointsGfx.strokeCircle(p.x, p.y, r);
-        this.drawPadlockMark(p);
-      } else if (isStation) {
-        this.pointsGfx.fillStyle(COLORS.orange, 1);
-        this.pointsGfx.fillCircle(p.x, p.y, 13);
-        this.pointsGfx.lineStyle(2, COLORS.white, 1);
-        this.pointsGfx.strokeCircle(p.x, p.y, this.stationRingR); // pulsing halo, 13..15px
-      } else {
-        this.pointsGfx.fillStyle(COLORS.blue, 1);
-        this.pointsGfx.fillCircle(p.x, p.y, 9);
-        this.pointsGfx.lineStyle(2, COLORS.white, 1);
-        this.pointsGfx.strokeCircle(p.x, p.y, 9);
-      }
+    if (pt.vertical && !locked) {
+      this.drawVerticalHandle(p);
+      return;
+    }
+
+    const r = isStation ? 13 : 9;
+    if (locked) {
+      g.fillStyle(LOCKED_COLOR, 1);
+      g.fillCircle(p.x, p.y, r);
+      g.lineStyle(2, COLORS.white, 1);
+      g.strokeCircle(p.x, p.y, r);
+      this.drawPadlockMark(p);
+    } else if (isStation) {
+      g.fillStyle(COLORS.orange, 1);
+      g.fillCircle(p.x, p.y, 13);
+      g.lineStyle(2, COLORS.white, 1);
+      g.strokeCircle(p.x, p.y, this.stationRingR); // pulsing halo, 13..15px
+    } else {
+      g.fillStyle(COLORS.blue, 1);
+      g.fillCircle(p.x, p.y, 9);
+      g.lineStyle(2, COLORS.white, 1);
+      g.strokeCircle(p.x, p.y, 9);
     }
   }
 
   /**
-   * The finish flag: a dashed-look ring at the finish radius, a pole planted at the zone centre,
-   * and a small checkered flag at the top. Visible in edit and play mode alike. Turns green
-   * (and gains an outer ring) once `finishReached` is set.
+   * The finish (2026-10-15, Jon: "finish line hard to see"): a glowing ring on the ground zone that
+   * breathes, a tall pole (5.75 m) with a gold knob, and a big checkered flag (6 x 4 cells of 7 px)
+   * waving gently from it, drawn under the point handles so the end point stays on top. Redrawn every
+   * frame (a few dozen shapes). Turns green once `finishReached` is set.
    */
   private redrawFinish(): void {
     const g = this.finishGfx;
@@ -1640,30 +2144,60 @@ export class CoasterScene extends Phaser.Scene {
     const center = toPx(zone);
     const rPx = zone.r * PPM;
     const reached = this.finishReached;
+    const t = this.finishTime / 1000;
+    const ring = reached ? COLORS.green : FINISH_GOLD;
 
-    g.lineStyle(2, reached ? COLORS.green : COLORS.white, reached ? 0.9 : 0.5);
+    // The zone: a soft glow disc, a breathing outer halo and a solid ring.
+    const breathe = (Math.sin(t * 3.2) + 1) / 2;
+    g.fillStyle(reached ? COLORS.green : COLORS.white, reached ? 0.2 : 0.14);
+    g.fillCircle(center.x, center.y, rPx);
+    g.lineStyle(6, ring, 0.18 + 0.2 * breathe);
+    g.strokeCircle(center.x, center.y, rPx + 4 + 3 * breathe);
+    g.lineStyle(3, COLORS.white, 0.85);
     g.strokeCircle(center.x, center.y, rPx);
-    if (reached) {
-      g.lineStyle(3, COLORS.green, 1);
-      g.strokeCircle(center.x, center.y, rPx + 4);
+    g.lineStyle(2, ring, 1);
+    g.strokeCircle(center.x, center.y, rPx - 2.5);
+
+    // The pole: a dark outline, a white pole, a gold knob.
+    const poleTopY = center.y - FINISH_POLE_H;
+    g.fillStyle(FLAG_DARK, 0.9);
+    g.fillRect(center.x - 3, poleTopY, 6, FINISH_POLE_H);
+    g.fillStyle(reached ? COLORS.green : COLORS.white, 1);
+    g.fillRect(center.x - 1.5, poleTopY, 3, FINISH_POLE_H);
+    g.fillStyle(FLAG_DARK, 0.9);
+    g.fillCircle(center.x, poleTopY - 1, 5.5);
+    g.fillStyle(FINISH_GOLD, 1);
+    g.fillCircle(center.x, poleTopY - 1, 4);
+
+    // The flag: columns of cells, each column edge riding a travelling wave that grows away from
+    // the pole (the pole side holds still).
+    const flagX = center.x + 3;
+    const flagY = poleTopY + 3;
+    const h = FINISH_ROWS * FINISH_CELL;
+    const edgeX: number[] = [];
+    const edgeY: number[] = [];
+    for (let c = 0; c <= FINISH_COLS; c++) {
+      const u = c / FINISH_COLS;
+      edgeX.push(flagX + c * FINISH_CELL * (1 - 0.03 * u));
+      edgeY.push(flagY + Math.sin(t * 5 - c * 0.9) * 3.2 * u);
     }
-
-    const poleColor = reached ? COLORS.green : STATION_POST;
-    const poleH = 40;
-    const poleTopY = center.y - poleH;
-    g.fillStyle(poleColor, 1);
-    g.fillRect(center.x - 1.5, poleTopY, 3, poleH);
-
-    // checkered flag: 24x16 px, 4 columns x 2 rows of 6x8 cells, attached right of the pole
-    const cellW = 6;
-    const cellH = 8;
-    const flagX = center.x + 1.5;
-    const flagY = poleTopY;
-    for (let row = 0; row < 2; row++) {
-      for (let col = 0; col < 4; col++) {
-        const even = (row + col) % 2 === 0;
-        g.fillStyle(even ? COLORS.white : FLAG_DARK, 1);
-        g.fillRect(flagX + col * cellW, flagY + row * cellH, cellW, cellH);
+    // A dark backing one px bigger all round, so the white cells read against a pale sky.
+    g.fillStyle(FLAG_DARK, 0.9);
+    fillQuad(g, [
+      edgeX[0]! - 1, edgeY[0]! - 1.5,
+      edgeX[FINISH_COLS]! + 1.5, edgeY[FINISH_COLS]! - 1.5,
+      edgeX[FINISH_COLS]! + 1.5, edgeY[FINISH_COLS]! + h + 1.5,
+      edgeX[0]! - 1, edgeY[0]! + h + 1.5,
+    ]);
+    for (let c = 0; c < FINISH_COLS; c++) {
+      for (let r = 0; r < FINISH_ROWS; r++) {
+        g.fillStyle((r + c) % 2 === 0 ? COLORS.white : FLAG_DARK, 1);
+        fillQuad(g, [
+          edgeX[c]!, edgeY[c]! + r * FINISH_CELL,
+          edgeX[c + 1]!, edgeY[c + 1]! + r * FINISH_CELL,
+          edgeX[c + 1]!, edgeY[c + 1]! + (r + 1) * FINISH_CELL,
+          edgeX[c]!, edgeY[c]! + (r + 1) * FINISH_CELL,
+        ]);
       }
     }
   }

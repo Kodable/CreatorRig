@@ -12,7 +12,8 @@ import {
   DRAG_RISE_PX, DRAG_TOP_RISE_PX, LOOP_HAND_TAPS, TAP_PERIOD_MS,
   coachSteps, dragTopIndex, nextCoachStep, pointAdded, stationMoved, topMoved,
 } from './core/coach';
-import { airGoal, previewAir, type AirPreview } from './core/airPreview';
+import { airGoal, previewAir, showsAirPreview, type AirPreview } from './core/airPreview';
+import { ENTRANCE_MS } from './core/entrance';
 import type { Hud } from './ui/hud';
 import type { CoasterScene } from './game/CoasterScene';
 import { isSkinId, loadSkin, saveSkin, type SkinId } from './game/skins';
@@ -68,6 +69,12 @@ export class App {
    * second (a few ms each) and the glow keeps up with the finger. */
   private previewDueMs: number | null = null;
 
+  // ---- the entrance (2026-10-15, src/core/entrance.ts) ----
+  /** ms into the fuzz's hop from the station onto the rail, or null when it is not hopping. The sim
+   * takes no step until the hop is over (ENTRANCE_MS, or a tap skips it): the ride itself, its
+   * metrics and the pass rule are unchanged, it only starts a second later. */
+  entranceMs: number | null = null;
+
   private readonly onVisibilityChange = (): void => {
     // A long background pause would otherwise accumulate a burst of steps.
     if (document.hidden) this.stepper.reset();
@@ -85,6 +92,8 @@ export class App {
 
     this.scene.onPointsChanged = (pts: TrackPoint[]): void => this.onPoints(pts);
     this.scene.onUpdate = (dt: number): void => this.frame(dt);
+    this.scene.onEntranceSkip = (): void => this.skipEntrance();
+    this.scene.onPlayTap = (): void => this.play();
 
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     this.dialogs = makeDialogRunner(this.scene, this.hud.brunoDialog);
@@ -107,6 +116,7 @@ export class App {
     this.sim = null;
     this.lastSnap = null;
     this.prevSnap = null;
+    this.entranceMs = null;
     this.tool = startTool(level);
     this.meters.reset();
     this.stepper.reset();
@@ -129,6 +139,9 @@ export class App {
     this.scene.setFinish(level.finish ?? null);
     // Fires onPointsChanged, which rebuilds the track.
     this.scene.setPoints(clonePoints(level.preset ?? []));
+    // 2026-10-15 (Jon: "the placement needs a lot more juice"): the preset track stays hidden behind
+    // Bruno's intro and builds in (segments drop in, beams rise) the moment he leaves.
+    this.scene.holdBuild();
     // The level's first preview is there from the start (no wait).
     this.refreshAirPreview();
 
@@ -145,11 +158,14 @@ export class App {
       });
     };
     if (!this.dialogs) {
+      this.scene.buildIn();
       goalsThenCoach();
       return;
     }
     void this.dialogs.play({ label: level.title, text: level.bruno }).then((done) => {
-      if (done && gen === this.lessonGen) goalsThenCoach();
+      if (gen !== this.lessonGen) return;
+      this.scene.buildIn();
+      if (done) goalsThenCoach();
     });
   }
 
@@ -217,14 +233,14 @@ export class App {
     this.points = pts;
     this.track = buildTrack(expandTrackPoints(pts).pts);
     this.scene.setTrack(this.track);
-    if (airGoal(this.level) !== null && this.previewDueMs === null) this.previewDueMs = PREVIEW_DELAY_MS;
+    if (showsAirPreview(this.level) && this.previewDueMs === null) this.previewDueMs = PREVIEW_DELAY_MS;
   }
 
-  /** Runs the air time dry run on the current track now (levels with an air time goal) and hands
-   * the floaty stretches to the scene. */
+  /** Runs the air time dry run on the current track now (the air time lesson only,
+   * `showsAirPreview`) and hands the floaty stretches to the scene. */
   private refreshAirPreview(): void {
     this.previewDueMs = null;
-    this.airPreview = airGoal(this.level) !== null && this.track ? previewAir(this.track) : null;
+    this.airPreview = showsAirPreview(this.level) && this.track ? previewAir(this.track) : null;
     this.scene.setAirPreview(this.airPreview);
   }
 
@@ -259,6 +275,16 @@ export class App {
     this.scene.setEditable(false);
     // 2026-10-12: the camera zooms in and follows the fuzz for the ride (rideCamera.ts).
     this.scene.setRideCamera(true);
+    // 2026-10-15 (Jon: "the fuzz like jumps into the roller coaster ... like here I go"): first the
+    // fuzz crouches on the deck and hops onto the rail while the camera zooms in; the sim starts
+    // after (frame).
+    this.entranceMs = 0;
+    this.scene.startEntrance(this.sim.snapshot());
+  }
+
+  /** A tap during the entrance: the fuzz is on the rail at once and the ride starts. */
+  skipEntrance(): void {
+    if (this.mode === 'play' && this.entranceMs !== null) this.entranceMs = ENTRANCE_MS;
   }
 
   stop(): void {
@@ -267,6 +293,7 @@ export class App {
     this.sim = null;
     this.lastSnap = null;
     this.prevSnap = null;
+    this.entranceMs = null;
     this.outcome = null;
     this.passed = false;
     this.stepper.reset();
@@ -303,7 +330,17 @@ export class App {
 
   private frame(deltaMs: number): void {
     const sim = this.sim;
-    if (this.mode === 'play' && sim) {
+    if (this.mode === 'play' && sim && this.entranceMs !== null) {
+      // The entrance: the scene draws the hop; the sim waits.
+      this.entranceMs += deltaMs;
+      if (this.entranceMs >= ENTRANCE_MS) {
+        this.entranceMs = null;
+        this.stepper.reset();
+      } else {
+        this.scene.drawEntrance(this.entranceMs);
+      }
+    }
+    if (this.mode === 'play' && sim && this.entranceMs === null) {
       this.stepper.update(deltaMs, () => {
         // The pose before each step, for render interpolation (core/interpolateCart.ts).
         this.prevSnap = this.lastSnap ?? sim.snapshot();
