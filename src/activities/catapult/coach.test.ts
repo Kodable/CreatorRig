@@ -45,6 +45,9 @@ function expectTargetOnScreen(c: CatapultCoachContext, s: CatapultCoachStep): vo
   const t = s.target;
   if (t.type === 'part') {
     expect(c.parts.find((p) => p.id === t.partId)?.kind, s.id).toBe('catapult');
+  } else if (t.type === 'widget' && !sel) {
+    // Nothing selected: the BUILD pill over the catapult (spec.ts idleWidgets, 2026-10-15).
+    expect(catapultSpec.idleWidgets!(c.parts, c.level).map((w) => w.id), s.id).toContain(t.id);
   } else if (t.type === 'widget') {
     expect(sel?.kind, s.id).toBe('catapult');
     const widgets = catapultSpec.widgets!(sel!, c.parts, c.level).filter((w) => !w.code || isKnown(known, w.code));
@@ -66,7 +69,7 @@ function expectTargetOnScreen(c: CatapultCoachContext, s: CatapultCoachStep): vo
 
 describe('catapultCoach: level 1 (power) walks every tap', () => {
   it('tap the catapult -> a power option (the next one up from Low) -> FIRE', () => {
-    expect(coach('power')).toEqual({ id: 'tap', text: 'Tap the catapult to see its parts.', target: { type: 'part', partId: 1 } });
+    expect(coach('power')).toEqual({ id: 'tap', text: 'Tap BUILD to see the catapult parts.', target: { type: 'widget', id: 'build' } });
     expect(coach('power', { selected: true })).toEqual({
       id: 'power',
       text: 'More rubber bands means more power. Tap this one.',
@@ -101,7 +104,7 @@ describe('catapultCoach: level 1 (power) walks every tap', () => {
 
 describe('catapultCoach: levels 2-5, one new thing each, then FIRE', () => {
   it('angle: tap the catapult -> drag the lever knob (the angle widget) -> FIRE', () => {
-    expect(coach('angle')).toEqual({ id: 'tap', text: 'Tap the catapult. It has a new lever.', target: { type: 'part', partId: 1 } });
+    expect(coach('angle')).toEqual({ id: 'tap', text: 'Tap BUILD. The catapult has a new lever.', target: { type: 'widget', id: 'build' } });
     expect(coach('angle', { selected: true })).toEqual({ id: 'angle', text: 'Drag the lever knob to aim higher.', target: { type: 'widget', id: ANGLE_WIDGET } });
     expect(coach('angle', { selected: true, changed: ['angle'] })).toEqual({ id: 'fire', text: 'Now tap FIRE.', target: FIRE_TARGET });
     expect(coach('angle', { changed: ['angle'], runs: 1 })).toBeNull();
@@ -111,7 +114,7 @@ describe('catapultCoach: levels 2-5, one new thing each, then FIRE', () => {
   });
 
   it('weight: tap -> a heavier fuzz (Fur after Flower: the Donut is still locked) -> FIRE', () => {
-    expect(coach('weight')?.text).toBe('Tap the catapult to pick a fuzz.');
+    expect(coach('weight')?.text).toBe('Tap BUILD to pick a fuzz.');
     expect(coach('weight', { selected: true })).toEqual({
       id: 'fuzz',
       text: "Let's try a heavier fuzz. Tap this one.",
@@ -122,7 +125,7 @@ describe('catapultCoach: levels 2-5, one new thing each, then FIRE', () => {
   });
 
   it('arm: tap -> the Long arm -> FIRE', () => {
-    expect(coach('arm')?.text).toBe('Tap the catapult to look at its arm.');
+    expect(coach('arm')?.text).toBe('Tap BUILD to look at the arm.');
     expect(coach('arm', { selected: true })).toEqual({
       id: 'arm',
       text: 'A longer arm flings farther. Tap it.',

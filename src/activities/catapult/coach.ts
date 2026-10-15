@@ -25,6 +25,8 @@ export type CatapultCoachStep = CoachStep<PartKind>;
 export const FIRE_TARGET: CoachTarget<PartKind> = { type: 'bar', button: 'play' };
 /** The angle lever's drag handle (spec.ts `catapultWidgets`). */
 export const ANGLE_WIDGET = 'angle';
+/** The BUILD pill over the catapult while nothing is selected (spec.ts `idleWidgets`). */
+export const BUILD_WIDGET = 'build';
 
 /** What each intro level teaches: a drawer row (the hand on one of its options), the angle lever
  * (the hand on its knob), or dragging the catapult. */
@@ -37,20 +39,20 @@ const LESSONS: Record<string, Lesson> = {
   power: {
     kind: 'drawer',
     code: 'power',
-    tap: 'Tap the catapult to see its parts.',
+    tap: 'Tap BUILD to see the catapult parts.',
     pick: 'More rubber bands means more power. Tap this one.',
   },
-  angle: { kind: 'lever', tap: 'Tap the catapult. It has a new lever.', drag: 'Drag the lever knob to aim higher.' },
+  angle: { kind: 'lever', tap: 'Tap BUILD. The catapult has a new lever.', drag: 'Drag the lever knob to aim higher.' },
   weight: {
     kind: 'drawer',
     code: 'fuzz',
-    tap: 'Tap the catapult to pick a fuzz.',
+    tap: 'Tap BUILD to pick a fuzz.',
     pick: "Let's try a heavier fuzz. Tap this one.",
   },
   arm: {
     kind: 'drawer',
     code: 'arm',
-    tap: 'Tap the catapult to look at its arm.',
+    tap: 'Tap BUILD to look at the arm.',
     pick: 'A longer arm flings farther. Tap it.',
   },
   move: { kind: 'move', drag: "Let's roll closer. Drag the catapult toward the wall." },
@@ -97,7 +99,9 @@ export function catapultCoach(ctx: CatapultCoachContext): CatapultCoachStep | nu
 
   if (!changed.includes(action)) {
     if (lesson.kind === 'move') return step('move', lesson.drag, { type: 'part', partId: catapult.id });
-    if (ctx.selectedId !== catapult.id) return step('tap', lesson.tap, { type: 'part', partId: catapult.id });
+    // 2026-10-15: the glove taps the BUILD pill over the catapult (spec.ts idleWidgets), as on the
+    // rover; a tap on the machine itself still opens the drawer and moves the coach on.
+    if (ctx.selectedId !== catapult.id) return step('tap', lesson.tap, { type: 'widget', id: BUILD_WIDGET });
     if (lesson.kind === 'lever') return step('angle', lesson.drag, { type: 'widget', id: ANGLE_WIDGET });
     const value = suggestedOption(ctx.level, catapult, lesson.code);
     return step(lesson.code, lesson.pick, value ? { type: 'drawer', code: lesson.code, value } : { type: 'drawer', code: lesson.code });

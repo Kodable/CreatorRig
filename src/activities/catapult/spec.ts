@@ -29,7 +29,7 @@ import {
 } from './core/build';
 import { createCatapultSim } from './core/sim';
 import { LEVELS } from './core/levels';
-import { catapultCoach } from './coach';
+import { BUILD_WIDGET, catapultCoach } from './coach';
 
 /** Stage px per world meter (`world.ppm`). */
 const PPM = 32;
@@ -215,6 +215,11 @@ function placedAboveLine(parts: PlacedPart<PartKind>[], level: CatapultLevel): n
  * the arm are set from the properties drawer; FIRE is the bottom bar's yellow button since
  * 2026-10-15 (it was an in-scene tap button by the trigger string, `action: 'play'`; the string's
  * snip burst still plays there, core/build.ts `fireSpot`). */
+/** The BUILD pill's centre over the catapult's anchor (m): above the lever's top (~3 m) and a
+ * little right of the A-frame, like the rover's pill over its dome. */
+const BUILD_DX = 0.6;
+const BUILD_Y = 4.4;
+
 function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
   if (part.kind !== 'catapult') return [];
   const { x, y } = part;
@@ -364,6 +369,17 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
       : null,
 
   widgets: catapultWidgets,
+
+  // 2026-10-15 (Gao: "put the build button like on the rover course above the catapult"): while
+  // nothing is selected, a big blue BUILD pill floats over the catapult (the rover's look and
+  // size); a tap selects the machine, which zooms in and opens its parts drawer.
+  idleWidgets: (parts): Widget[] => {
+    const cp = parts.find((p) => p.kind === 'catapult');
+    if (!cp) return [];
+    return [
+      { kind: 'tap', id: BUILD_WIDGET, style: 'big', action: 'select', partId: cp.id, at: { x: cp.x + BUILD_DX, y: cp.y + BUILD_Y }, size: 84, icon: '🔧', label: 'BUILD', color: 0x05aeed },
+    ];
+  },
 
   // Tap tutorials on the five intro levels (coach.ts): tap the catapult, the new control, FIRE.
   coach: catapultCoach,
