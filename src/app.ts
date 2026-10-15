@@ -1,4 +1,4 @@
-import type { CartSnapshot, EditTool, HudState, Level, Metrics, Mode, Outcome, Track, TrackPoint } from './core/types';
+import type { CartSnapshot, CoachStep, EditTool, HudState, Level, Metrics, Mode, Outcome, Track, TrackPoint } from './core/types';
 import { buildTrack } from './core/track';
 import { CartSim } from './core/sim';
 import { RunMeters, staticMetrics } from './core/meters';
@@ -7,6 +7,8 @@ import { LEVELS, findLevel } from './core/levels';
 import { FIXED_DT, FixedStepper } from './core/stepper';
 import { interpolateCart } from './core/interpolateCart';
 import { clonePoints, expandTrackPoints } from './core/trackPoints';
+import { editRules, startTool, toolAllowed } from './core/editRules';
+import { LOOP_HAND_TAPS, TAP_PERIOD_MS, coachSteps, nextCoachStep, pointAdded, stationMoved } from './core/coach';
 import type { Hud } from './ui/hud';
 import type { CoasterScene } from './game/CoasterScene';
 import { isSkinId, loadSkin, saveSkin, type SkinId } from './game/skins';
@@ -41,6 +43,15 @@ export class App {
   private readonly dialogs: BrunoDialogRunner | null;
   /** Bumped per level load, so a replaced lesson intro never plays the old level's goals intro. */
   private lessonGen = 0;
+
+  // ---- the tutorial hand (2026-10-15, src/core/coach.ts) ----
+  /** The level's hand steps the child has done on this level load (a fresh load starts over). */
+  private coachDone = new Set<CoachStep>();
+  /** Bruno's lesson intro and the goals intro are over: the hand may show. */
+  private coachReady = false;
+  /** The step on screen and how long it has shown (ms; the Loop hand leaves after its taps). */
+  private coachStep: CoachStep | null = null;
+  private coachStepMs = 0;
 
   private readonly onVisibilityChange = (): void => {
     // A long background pause would otherwise accumulate a burst of steps.
@@ -81,14 +92,20 @@ export class App {
     this.sim = null;
     this.lastSnap = null;
     this.prevSnap = null;
-    this.tool = 'point';
+    this.tool = startTool(level);
     this.meters.reset();
     this.stepper.reset();
+    this.coachDone = new Set();
+    this.coachReady = false;
+    this.coachStep = null;
+    this.coachStepMs = 0;
+    this.scene.setCoach(null);
 
     this.hud.setLevel(level, LEVELS);
     this.scene.setRideCamera(false);
     this.scene.setEditable(true);
-    this.scene.setTool('point');
+    this.scene.setRules(editRules(level));
+    this.scene.setTool(this.tool);
     this.scene.drawCart(null);
     this.scene.setFinish(level.finish ?? null);
     // Fires onPointsChanged, which rebuilds the track.
@@ -99,14 +116,62 @@ export class App {
     // 2026-10-12: every level load (not Stop/replay) opens with Bruno's lesson intro: the
     // viewport dims, he slides in from the left, the box types his line; the goals intro plays
     // once the child taps it closed.
+    // 2026-10-15: the tutorial hand waits until the goals intro has glided home too.
     const gen = ++this.lessonGen;
+    const goalsThenCoach = (): void => {
+      void Promise.resolve(this.hud.playGoalsIntro?.()).then(() => {
+        if (gen === this.lessonGen) this.coachReady = true;
+      });
+    };
     if (!this.dialogs) {
-      this.hud.playGoalsIntro?.();
+      goalsThenCoach();
       return;
     }
     void this.dialogs.play({ label: level.title, text: level.bruno }).then((done) => {
-      if (done && gen === this.lessonGen) this.hud.playGoalsIntro?.();
+      if (done && gen === this.lessonGen) goalsThenCoach();
     });
+  }
+
+  /** The child did a hand step's action (any time: a step done early never shows). */
+  private markCoach(step: CoachStep): void {
+    this.coachDone.add(step);
+  }
+
+  /** The child opened the fuzz picker's tray (HUD). */
+  skinTrayOpened(): void {
+    this.markCoach('skin');
+  }
+
+  /** This frame's tutorial hand step (null: none, or not now), advancing the timed Loop hand. */
+  private updateCoach(deltaMs: number): CoachStep | null {
+    const level = this.level;
+    // No hand while a finger is on the track; a drag or an added point counts once it is let go,
+    // so the next step's hand never shows up in the middle of the drag.
+    if (this.scene.isGestureActive()) return null;
+    const preset = level.preset ?? [];
+    if (stationMoved(preset, this.points)) this.markCoach('drag-station');
+    if (pointAdded(preset, this.points)) this.markCoach('add-point');
+    // The drop goal met counts as the station dragged (the drag step's purpose).
+    if (this.mode === 'edit' && level.goals.some((g) => g.metric === 'maxDrop')) {
+      const drop = evaluateGoals(level.goals.filter((g) => g.metric === 'maxDrop'), staticMetrics(this.track, level.finish));
+      if (allPass(drop)) this.markCoach('drag-station');
+    }
+    let step = nextCoachStep(coachSteps(level), this.coachDone);
+    if (step !== this.coachStep) {
+      this.coachStep = step;
+      this.coachStepMs = 0;
+    }
+    if (!this.coachReady || this.mode !== 'edit' || this.isDialogOpen()) return null;
+    if (step === 'loop-tool') {
+      this.coachStepMs += deltaMs;
+      if (this.coachStepMs >= LOOP_HAND_TAPS * TAP_PERIOD_MS) {
+        this.markCoach('loop-tool');
+        step = nextCoachStep(coachSteps(level), this.coachDone);
+        this.coachStep = step;
+        this.coachStepMs = 0;
+      }
+    }
+    return step;
   }
 
   /** Bruno's lesson intro is on screen. */
@@ -145,13 +210,15 @@ export class App {
   }
 
   setTool(tool: EditTool): void {
-    if (this.mode !== 'edit') return;
+    if (this.mode !== 'edit' || !toolAllowed(this.level, tool)) return;
+    if (tool === 'loop') this.markCoach('loop-tool');
     this.tool = tool;
     this.scene.setTool(tool);
   }
 
   play(): void {
     if (this.mode !== 'edit' || !this.track) return;
+    this.markCoach('play');
     this.mode = 'play';
     this.outcome = 'running';
     this.passed = false;
@@ -234,7 +301,20 @@ export class App {
       }
     }
 
-    this.hud.update(this.hudState());
+    const step = this.updateCoach(deltaMs);
+    this.scene.setCoach(
+      step === 'drag-station'
+        ? { kind: 'drag-station' }
+        : step === 'add-point' && this.level.coachSpot
+          ? { kind: 'tap', at: this.level.coachSpot }
+          : null,
+    );
+    this.hud.update(this.hudState(step === 'skin' || step === 'play' || step === 'loop-tool' ? step : null));
+  }
+
+  /** The tutorial hand step on screen (dev checks), or null. */
+  coachStepNow(): CoachStep | null {
+    return this.coachReady && this.mode === 'edit' ? this.coachStep : null;
   }
 
   private currentMetrics(): Metrics {
@@ -248,7 +328,7 @@ export class App {
     return metrics;
   }
 
-  private hudState(): HudState {
+  private hudState(coach: CoachStep | null = null): HudState {
     const metrics = this.currentMetrics();
     const snap = this.lastSnap;
     return {
@@ -266,6 +346,7 @@ export class App {
       passed: this.passed,
       canPlay: this.mode === 'edit' && this.track !== null,
       canUndo: this.scene.canUndo(),
+      coach,
     };
   }
 

@@ -265,7 +265,7 @@ describe('LEVELS', () => {
     expect(dropLevel!.goals[0]!.value).toBe(15);
     expect(dropLevel!.preset).toEqual([
       { x: 8, y: 14, kind: 'curve' },
-      { x: 52, y: 4, kind: 'curve' }
+      { x: 52, y: 4, kind: 'curve', locked: true } // 2026-10-15: the end is locked on the flag
     ]);
   });
 

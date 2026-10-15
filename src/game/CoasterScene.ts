@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { COLORS, ORIGIN_X, GROUND_Y, PANEL_TOP_Y, PPM, WORLD_W, WORLD_H, STAGE_W, STAGE_H, RENDER_SCALE, toPx, toWorld } from './view';
 import type { Vec2, Track, CartSnapshot, TrackPoint, PointKind, FinishZone, EditTool } from '../core/types';
 import { insertionIndex, clonePoints, LOOP_RADIUS } from '../core/trackPoints';
+import { OPEN_RULES, canGrab, clearedPoints, dragTarget, samePoints, type EditRules } from '../core/editRules';
+import { DRAG_RISE_PX, dragHandPose, tapHandFrame } from '../core/coach';
 import { BrunoStage } from '../ui/brunoStage';
 import type { FrameState } from '../kit/camera';
 import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
@@ -49,6 +51,26 @@ const DEPTH_FUZZ = 4;
  * handle stays on top and draggable-looking. */
 const DEPTH_STATION_FUZZ = 2.9;
 const DEPTH_CONFETTI = 4.5;
+/** The tutorial hand: over the handles and the fuzz, under the confetti. */
+const DEPTH_COACH = 4.3;
+
+/** The tutorial hand (2026-10-15): the builder kit's 3-frame glove (public/ui/hand_0N.png, 310x360,
+ * white glove, index finger up-left), same size and anchor as the kit's (BuilderScene
+ * COACH_HAND_FRAMES): every frame is placed by its fingertip (108/310, 2/360), so the glove holds
+ * still and only the finger bends. */
+const COACH_HAND_H_PX = 64;
+const COACH_HAND_W_PX = COACH_HAND_H_PX * (310 / 360);
+const COACH_HAND_FX = 108 / 310;
+const COACH_HAND_FY = 2 / 360;
+const COACH_HAND_KEYS = ['ui-hand-1', 'ui-hand-2', 'ui-hand-3'] as const;
+const COACH_IN_MS = 300;
+/** The fingertip sits this far down-right of the target's centre (stage px), so the glove hangs
+ * off the handle's bottom-right and the handle stays visible. */
+const COACH_TIP_OFFSET = { x: 5, y: 5 };
+
+/** What the scene's tutorial hand shows: the drag-up stroke on the station, a tap on a world spot
+ * (m), or nothing. */
+export type SceneCoach = { kind: 'drag-station' } | { kind: 'tap'; at: Vec2 } | null;
 
 // world panel: a single rounded sky/ground panel, x 32..992, y 78..700 (2026-10-07: was 210..700;
 // the top follows WORLD_H, view.ts)
@@ -164,7 +186,16 @@ export class CoasterScene extends Phaser.Scene {
   private undoStack: TrackPoint[][] = [];
   private editable = true;
   private tool: EditTool = 'point';
+  private rules: EditRules = OPEN_RULES;
   private track: Track | null = null;
+
+  // 2026-10-15: the tutorial hand (src/core/coach.ts), see setCoach.
+  private coach: SceneCoach = null;
+  private coachKey = '';
+  private coachStart = 0;
+  private coachHand?: Phaser.GameObjects.Image;
+  private coachHandShadow?: Phaser.GameObjects.Image;
+  private coachArrow?: Phaser.GameObjects.Graphics;
 
   private finish: FinishZone | null = null;
   private finishReached = false;
@@ -231,6 +262,7 @@ export class CoasterScene extends Phaser.Scene {
       this.load.image(`skin-${s.id}`, s.normal);
       this.load.image(`skin-${s.id}-excited`, s.excited);
     }
+    COACH_HAND_KEYS.forEach((key, i) => this.load.image(key, `ui/hand_0${i + 1}.png`));
     this.load.image('cb-sky', `${BG_DIR}sky.jpg`);
     for (const k of ['far', 'mid', 'ground', 'cloud1', 'cloud2', 'cloud3']) {
       this.load.image(`cb-${k}`, `${BG_DIR}${k}.png`);
@@ -306,6 +338,7 @@ export class CoasterScene extends Phaser.Scene {
       this.redrawFinish();
       this.finishDirty = false;
     }
+    this.drawCoach();
   }
 
   /**
@@ -590,6 +623,39 @@ export class CoasterScene extends Phaser.Scene {
     this.tool = tool;
   }
 
+  /** The level's editor rules (src/core/editRules.ts): may a tap add or delete, does the station
+   * only slide up and down, what Clear goes back to. */
+  setRules(rules: EditRules): void {
+    this.rules = rules;
+  }
+
+  /**
+   * The tutorial hand (src/core/coach.ts): the glove drags the station straight up, or taps a world
+   * spot; null hides it. In the world (it follows the station under the edit camera), never
+   * interactive, and hidden while the child drags or taps. The stroke restarts (with a pop-in)
+   * whenever the step changes.
+   */
+  setCoach(coach: SceneCoach): void {
+    const key = coach ? JSON.stringify(coach) : '';
+    this.coach = coach;
+    if (key !== this.coachKey) {
+      this.coachKey = key;
+      this.coachStart = this.nowMs;
+    }
+  }
+
+  /** A finger is down on a point (a drag, or a tap not yet let go). */
+  isGestureActive(): boolean {
+    return this.gesture !== null;
+  }
+
+  /** Where the scene's tutorial hand's fingertip is right now (stage px), or null when it is not
+   * drawn (dev checks). */
+  coachHandAt(): Vec2 | null {
+    const h = this.coachHand;
+    return h && h.visible && h.alpha > 0 ? { x: h.x, y: h.y } : null;
+  }
+
   /** The kind of point the current tool places: 'point' -> 'curve', 'loop' -> 'loop'. */
   private toolKind(): PointKind {
     return this.tool === 'loop' ? 'loop' : 'curve';
@@ -789,11 +855,12 @@ export class CoasterScene extends Phaser.Scene {
     return this.undoStack.length > 0;
   }
 
-  /** Removes only unlocked points, leaving locked (level-placed) points in place. No-op (and no
-   * undo push) when there is nothing unlocked to remove. */
+  /** Removes only unlocked points, leaving locked (level-placed) points in place; on a level where
+   * nothing may be added it resets to the preset instead (clearedPoints). No-op (and no undo push)
+   * when nothing would change. */
   clear(): void {
-    const kept = this.points.filter((p) => p.locked);
-    if (kept.length === this.points.length) return;
+    const kept = clearedPoints(this.rules, this.points);
+    if (samePoints(kept, this.points)) return;
     this.pushUndo(clonePoints(this.points));
     this.points = kept;
     this.pointsDirty = true;
@@ -822,12 +889,15 @@ export class CoasterScene extends Phaser.Scene {
     }
 
     if (bestIdx !== -1 && bestDist <= HIT_RADIUS) {
-      if (this.points[bestIdx]!.locked) return; // locked: no gesture, no delete
+      if (!canGrab(this.points, bestIdx)) return; // locked: no gesture, no delete
       this.activePointerId = pointer.id;
       this.gestureBefore = clonePoints(this.points);
       this.gesture = { index: bestIdx, startPx: { x: sx, y: sy }, moved: false, isNew: false };
       return;
     }
+
+    // A level where nothing may be added (level 1): a tap off the points does nothing.
+    if (!this.rules.canAdd) return;
 
     const w = toWorld({ x: sx, y: sy });
     const wx = clamp(w.x, EDGE, POINT_X_MAX);
@@ -878,7 +948,8 @@ export class CoasterScene extends Phaser.Scene {
     // Dragging a loop point moves the whole loop: the loop shape is expanded from this single
     // point (its bottom) by the app before buildTrack, so moving the point is all that's needed.
     const prevKind = this.points[this.gesture.index]!.kind;
-    const w = toWorld({ x: sx, y: sy });
+    // A vertical-only station (level 1) keeps its x (dragTarget).
+    const w = dragTarget(this.rules, this.points, this.gesture.index, toWorld({ x: sx, y: sy }));
     const wx = clamp(w.x, EDGE, POINT_X_MAX);
     const wy = clamp(w.y, EDGE, prevKind === 'loop' ? LOOP_Y_MAX : POINT_Y_MAX);
     this.points[this.gesture.index] = { x: wx, y: wy, kind: prevKind };
@@ -890,10 +961,12 @@ export class CoasterScene extends Phaser.Scene {
     if (!this.gesture || pointer.id !== this.activePointerId) return;
 
     const g = this.gesture;
-    if (!g.moved && !g.isNew) {
+    if (!g.moved && !g.isNew && this.rules.canDelete) {
       this.points.splice(g.index, 1);
     }
-    this.pushUndo(this.gestureBefore ?? []);
+    // A tap that changed nothing (a no-delete level) leaves no undo step behind.
+    const before = this.gestureBefore ?? [];
+    if (!samePoints(before, this.points)) this.pushUndo(before);
 
     this.gesture = null;
     this.gestureBefore = null;
@@ -912,6 +985,103 @@ export class CoasterScene extends Phaser.Scene {
 
   private emitPointsChanged(): void {
     this.onPointsChanged?.(clonePoints(this.points));
+  }
+
+  // ---------------- the tutorial hand ----------------
+
+  /**
+   * Draws this frame's tutorial hand (setCoach). 'drag-station': the glove presses on the station
+   * handle, slides straight up DRAG_RISE_PX while pressed, lets go and fades (dragHandPose), with
+   * a faint dotted arrow showing the way up. 'tap': the glove taps the spot (tapHandFrame). Hidden
+   * in play mode and while a gesture is in progress.
+   */
+  private drawCoach(): void {
+    const c = this.coach;
+    const station = this.points[0];
+    let tip: Vec2 | null = null;
+    let frame: 0 | 1 | 2 = 0;
+    let alpha = 1;
+    let arrowFrom: Vec2 | null = null;
+    /** The ghost station handle the glove carries up while pressed (-1: none). */
+    let ghostRise = -1;
+    const t = this.nowMs - this.coachStart;
+    const visible = !!c && this.editable && !this.gesture;
+    if (visible && c.kind === 'drag-station' && station) {
+      const p = toPx(station);
+      const pose = dragHandPose(t);
+      tip = { x: p.x + COACH_TIP_OFFSET.x, y: p.y + COACH_TIP_OFFSET.y - pose.rise * DRAG_RISE_PX };
+      frame = pose.frame;
+      alpha = pose.alpha;
+      arrowFrom = p;
+      if (pose.frame === 2 || pose.rise > 0) ghostRise = pose.rise;
+    } else if (visible && c.kind === 'tap') {
+      const p = toPx(c.at);
+      tip = { x: p.x, y: p.y };
+      frame = tapHandFrame(t);
+    }
+
+    if (!tip || alpha <= 0) {
+      this.coachHand?.setVisible(false);
+      this.coachHandShadow?.setVisible(false);
+      this.coachArrow?.setVisible(false);
+      if (!tip) return;
+    }
+    let hand = this.coachHand;
+    let shadow = this.coachHandShadow;
+    let arrow = this.coachArrow;
+    if (!hand || !shadow || !arrow) {
+      // The kit's recipe: a darker, fainter copy of the glove drawn first, 4 px lower.
+      arrow = this.onWorld(this.add.graphics());
+      arrow.setDepth(DEPTH_COACH - 0.02);
+      shadow = this.onWorld(this.add.image(0, 0, COACH_HAND_KEYS[0]));
+      shadow.setTint(0x000000);
+      shadow.setDepth(DEPTH_COACH - 0.01);
+      hand = this.onWorld(this.add.image(0, 0, COACH_HAND_KEYS[0]));
+      hand.setDepth(DEPTH_COACH);
+      this.coachHand = hand;
+      this.coachHandShadow = shadow;
+      this.coachArrow = arrow;
+    }
+
+    // The faint dotted arrow up from the station (drag step only), drawn whenever the step is on,
+    // even in the pause between strokes.
+    arrow.clear();
+    if (arrowFrom) {
+      const x = arrowFrom.x;
+      const y0 = arrowFrom.y - 20;
+      const y1 = arrowFrom.y - DRAG_RISE_PX;
+      arrow.fillStyle(COLORS.white, 0.55);
+      for (let y = y0; y > y1 + 10; y -= 10) arrow.fillCircle(x, y, 2.2);
+      arrow.fillTriangle(x - 8, y1 + 10, x + 8, y1 + 10, x, y1 - 2);
+      if (ghostRise >= 0 && alpha > 0) {
+        const gy = arrowFrom.y - ghostRise * DRAG_RISE_PX;
+        arrow.fillStyle(COLORS.orange, 0.5 * alpha);
+        arrow.fillCircle(x, gy, 13);
+        arrow.lineStyle(2, COLORS.white, 0.7 * alpha);
+        arrow.strokeCircle(x, gy, 13);
+      }
+      arrow.setVisible(true);
+    } else {
+      arrow.setVisible(false);
+    }
+    if (alpha <= 0) return;
+
+    // Pop in when the step starts (the kit's 300 ms grow).
+    const tIn = Math.min(1, Math.max(0, t / COACH_IN_MS));
+    const grow = tIn >= 1 ? 1 : 0.3 + 0.7 * Phaser.Math.Easing.Back.Out(tIn);
+    const key = COACH_HAND_KEYS[frame];
+    for (const img of [shadow, hand]) {
+      img.setTexture(key);
+      img.setDisplaySize(COACH_HAND_W_PX * grow, COACH_HAND_H_PX * grow);
+      img.setOrigin(COACH_HAND_FX, COACH_HAND_FY);
+    }
+    const a = alpha * Math.min(1, tIn * 1.5);
+    shadow.setPosition(tip.x, tip.y + 4);
+    shadow.setAlpha(0.35 * a);
+    shadow.setVisible(true);
+    hand.setPosition(tip.x, tip.y);
+    hand.setAlpha(a);
+    hand.setVisible(true);
   }
 
   // ---------------- rendering ----------------

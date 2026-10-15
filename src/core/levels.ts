@@ -10,10 +10,16 @@ export const LEVELS: Level[] = [
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
       { metric: 'reachedEnd', op: '==', value: 1, label: 'Fuzz reaches the end' }
     ],
-    // Nothing locked: dragging the station up IS the lesson, and a locked end would become the
-    // station after Clear (Clear keeps only locked points). The flag marks where the ride ends.
-    preset: [{ x: 8, y: 14, kind: 'curve' }, { x: 52, y: 4, kind: 'curve' }],
+    // 2026-10-15 (Gao): the end sits locked on the flag and nothing can be added, deleted or
+    // looped: the only thing to do is drag the station, and it only slides up and down. Clear goes
+    // back to this preset (canAdd false), so the locked end never becomes the station. The hand
+    // drags the station up, then taps the fuzz button, then Play (src/core/coach.ts).
+    preset: [{ x: 8, y: 14, kind: 'curve' }, { x: 52, y: 4, kind: 'curve', locked: true }],
     finish: { x: 52, y: 4, r: 2.5 },
+    tools: [],
+    canAdd: false,
+    stationVertical: true,
+    coach: ['drag-station', 'skin', 'play'],
     hints: {
       rolledBack: "The fuzz rolled back! Keep every hill lower than the station.",
       stuck: "The fuzz got stuck. Let it roll straight down to the flag.",
@@ -34,6 +40,11 @@ export const LEVELS: Level[] = [
       { x: 22, y: 12, kind: 'curve', locked: true }
     ],
     finish: { x: 54, y: 3, r: 2.5 },
+    // Loops wait for the loop lesson. The hand taps the sky about two thirds of the way to the
+    // flag, where the recorded solution's first point goes (levels.test.ts).
+    tools: ['point'],
+    coach: ['add-point'],
+    coachSpot: { x: 40, y: 5 },
     hints: {
       rolledBack: "The fuzz rolled back. Keep the track going downhill toward the flag.",
       stuck: "The fuzz got stuck. Make the hills smaller so it can reach the flag.",
@@ -51,6 +62,7 @@ export const LEVELS: Level[] = [
     ],
     preset: [{ x: 2, y: 21, kind: 'curve', locked: true }],
     finish: { x: 56, y: 8, r: 2.5 },
+    tools: ['point'],
     hints: {
       rolledBack: "The fuzz rolled back. Keep every hill lower than the station.",
       stuck: "Out of speed before the flag! Make the climb up to the flag smoother.",
@@ -66,8 +78,13 @@ export const LEVELS: Level[] = [
       { metric: 'atFinish', op: '==', value: 1, label: 'Track reaches the flag' },
       { metric: 'reachedEnd', op: '==', value: 1, label: 'Fuzz reaches the end' }
     ],
-    preset: [{ x: 2, y: 20, kind: 'curve', locked: true }],
+    // 2026-10-15 (Gao: "move the start node up"): 26 m (was 20 m). From 26 m one tall up-and-down
+    // hill already makes 80 m, so the lesson reads as "go up and down to stretch the ride"; from
+    // 20 m it took three hills squeezed under the station. A hill taller than 26 m still strands
+    // the fuzz, and a straight slope (58 m) is still too short (levels.test.ts).
+    preset: [{ x: 2, y: 26, kind: 'curve', locked: true }],
     finish: { x: 56, y: 4, r: 2.5 },
+    tools: ['point'],
     hints: {
       rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",
       stuck: "Not enough speed for that hill. Make each hill lower than the one before.",
@@ -87,6 +104,7 @@ export const LEVELS: Level[] = [
     // time has to come from going over a hump (a straight plunge after it gives at most 0.9 s).
     preset: [{ x: 2, y: 16, kind: 'curve', locked: true }, { x: 10, y: 12, kind: 'curve', locked: true }],
     finish: { x: 56, y: 3, r: 2.5 },
+    tools: ['point'],
     hints: {
       rolledBack: "The fuzz rolled back. Make the hump lower than the station.",
       stuck: "Not enough speed for that hump. Make it a little lower.",
@@ -104,6 +122,9 @@ export const LEVELS: Level[] = [
     ],
     preset: [{ x: 2, y: 24, kind: 'curve', locked: true }],
     finish: { x: 56, y: 3, r: 2.5 },
+    // The Loop tool first shows here, with a NEW badge and a hand tapping it after the intro.
+    newTool: 'loop',
+    coach: ['loop-tool'],
     hints: {
       rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",
       stuck: "Out of speed before the flag. Keep the track after the loop low.",

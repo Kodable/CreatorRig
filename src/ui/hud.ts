@@ -1,7 +1,9 @@
-import type { EditTool, Goal, GoalResult, HudState, Level, Metric } from '../core/types';
+import type { CoachStep, EditTool, Goal, GoalResult, HudState, Level, Metric } from '../core/types';
+import { levelTools } from '../core/editRules';
+import { tapHandFrame } from '../core/coach';
 import { GROUND_Y, PANEL_TOP_Y } from '../game/view';
 import { COASTER_LINES } from '../core/levels';
-import { playGoalsIntro } from './goalsIntro';
+import { playGoalsIntro, prefersReducedMotion } from './goalsIntro';
 import { BrunoDialog, type QuickLine } from './brunoDialog';
 import { FUZZ_SKINS, findSkin, type SkinId } from '../game/skins';
 
@@ -15,6 +17,8 @@ export interface HudCallbacks {
   setTool(tool: EditTool): void;
   /** 2026-10-12: the child picked a fuzz in the skin tray. */
   setSkin(id: string): void;
+  /** 2026-10-15: the child opened the skin tray (the tutorial hand's 'skin' step is done). */
+  skinTrayOpened?(): void;
   exit(): void;
 }
 
@@ -28,6 +32,15 @@ const G_MAX = 6; // g value that maps to a full (100%) intense-o-meter gauge
    done mode only), and the scene grows up into the dash's old room (view.ts PANEL_TOP_Y, 78). The
    bar: Point/Loop on the left, the big Play / Stop / Next level buttons centred (side by side when
    two show), Undo and Clear on the right. */
+
+/** The tutorial hand over a bar button (2026-10-15, src/core/coach.ts): the builder kit's glove
+ * (public/ui/hand_0N.png, `.coach-hand` in style.css, 55x64 like the kit's), placed by the measured
+ * fingertip (108/310, 2/360) so the glove holds still and only the finger bends. */
+const COACH_HAND_W = 55;
+const COACH_HAND_H = 64;
+const COACH_HAND_SRC = ['ui/hand_01.png', 'ui/hand_02.png', 'ui/hand_03.png'] as const;
+const COACH_HAND_FX = 108 / 310;
+const COACH_HAND_FY = 2 / 360;
 
 function fmt1(v: number): string {
   return v.toFixed(1);
@@ -151,6 +164,15 @@ export class Hud {
   private toolGroupEl!: HTMLDivElement;
   private toolPointBtn!: HTMLButtonElement;
   private toolLoopBtn!: HTMLButtonElement;
+  /** 2026-10-15: the NEW badges on the tool buttons (a level's `newTool`), and whether the child
+   * has picked that tool on this level load (the badge then goes). */
+  private toolBadges = new Map<EditTool, HTMLSpanElement>();
+  private newToolPicked = false;
+  /** The tutorial hand over a bar button, the step it shows and when it appeared. */
+  private coachHandEl!: HTMLDivElement;
+  private coachHandImg!: HTMLImageElement;
+  private coachHandStep: CoachStep | null = null;
+  private coachHandStart = 0;
   private playBtn!: HTMLButtonElement;
   private stopBtn!: HTMLButtonElement;
   private undoBtn!: HTMLButtonElement;
@@ -379,6 +401,14 @@ export class Hud {
     toolLoopBtn.textContent = '➰ Loop';
     toolLoopBtn.addEventListener('click', () => this.cb.setTool('loop'));
     toolGroup.append(toolPointBtn, toolLoopBtn);
+    for (const [tool, btn] of [['point', toolPointBtn], ['loop', toolLoopBtn]] as const) {
+      const badge = document.createElement('span');
+      badge.className = 'tool-new-badge';
+      badge.textContent = 'NEW';
+      badge.hidden = true;
+      btn.appendChild(badge);
+      this.toolBadges.set(tool, badge);
+    }
     bottombar.appendChild(toolGroup);
     this.toolGroupEl = toolGroup;
     this.toolPointBtn = toolPointBtn;
@@ -402,8 +432,68 @@ export class Hud {
 
     this.root.appendChild(bottombar);
 
+    // ---- the tutorial hand over the bar buttons (under Bruno's dialog) ----
+    const hand = document.createElement('div');
+    hand.className = 'coach-hand down';
+    hand.hidden = true;
+    const handImg = document.createElement('img');
+    handImg.src = COACH_HAND_SRC[0];
+    handImg.alt = '';
+    handImg.draggable = false;
+    hand.appendChild(handImg);
+    this.root.appendChild(hand);
+    this.coachHandEl = hand;
+    this.coachHandImg = handImg;
+
     // ---- Bruno's dialog box, over everything (src/ui/brunoDialog.ts) ----
     this.brunoDialog = new BrunoDialog(this.root);
+  }
+
+  /** `el`'s box in stage px (the HUD root's layout px), or null when it has no box. */
+  private stageRect(el: HTMLElement): { x: number; y: number; w: number; h: number } | null {
+    if (el.closest('[hidden]')) return null;
+    const rootRect = this.root.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    if (rootRect.width <= 0 || r.width <= 0 || r.height <= 0) return null;
+    const k = STAGE_W / rootRect.width;
+    return { x: (r.left - rootRect.left) * k, y: (r.top - rootRect.top) * k, w: r.width * k, h: r.height * k };
+  }
+
+  /**
+   * The tutorial hand on its bar button (2026-10-15): the kit's glove flipped upside down (finger
+   * pointing down, `.coach-hand.down`), because the bar sits on the stage's bottom edge and the
+   * upright glove, which hangs below its fingertip, was cut off there. The fingertip sits near the
+   * button's top-right (82%/30%; the wide Play button 92%/35%, the rover DRIVE hand's right-end
+   * spot), so the glove hangs above the button's right end and the label stays visible; one tap
+   * per TAP_PERIOD_MS (tapHandFrame), a pop-in when the step changes. Hidden while the skin tray is
+   * open. Never interactive (pointer-events: none).
+   */
+  private syncCoachHand(step: CoachStep | null): void {
+    const el = step === 'skin' ? this.skinBtn : step === 'play' ? this.playBtn : step === 'loop-tool' ? this.toolLoopBtn : null;
+    const rect = el && this.skinTray.hidden ? this.stageRect(el) : null;
+    if (!step || !rect) {
+      this.setHidden(this.coachHandEl, true);
+      this.coachHandStep = null;
+      return;
+    }
+    const now = performance.now();
+    if (step !== this.coachHandStep) {
+      this.coachHandStep = step;
+      this.coachHandStart = now;
+      this.coachHandEl.classList.remove('enter');
+      void this.coachHandEl.offsetWidth; // restart the pop-in
+      this.coachHandEl.classList.add('enter');
+    }
+    const frame = prefersReducedMotion() ? 0 : tapHandFrame(now - this.coachHandStart);
+    const src = COACH_HAND_SRC[frame];
+    if (this.coachHandImg.getAttribute('src') !== src) this.coachHandImg.src = src;
+    const wide = step === 'play';
+    const fx = rect.x + rect.w * (wide ? 0.92 : 0.82);
+    const fy = rect.y + rect.h * (wide ? 0.35 : 0.3);
+    // Flipped vertically: the fingertip is (FX, 1 - FY) of the glove box.
+    this.coachHandEl.style.left = `${(fx - COACH_HAND_FX * COACH_HAND_W).toFixed(1)}px`;
+    this.coachHandEl.style.top = `${(fy - (1 - COACH_HAND_FY) * COACH_HAND_H).toFixed(1)}px`;
+    this.setHidden(this.coachHandEl, false);
   }
 
   /**
@@ -473,6 +563,13 @@ export class Hud {
   }
 
   private toggleSkinTray(open = this.skinTray.hidden): void {
+    if (open) {
+      // The tray's arrow (33 px in) points at the button's centre wherever the button sits: it
+      // moves left on levels that hide the tool buttons (2026-10-15).
+      const btn = this.stageRect(this.skinBtn);
+      if (btn) this.skinTray.style.left = `${Math.round(btn.x + btn.w / 2 - 33)}px`;
+      this.cb.skinTrayOpened?.();
+    }
     this.skinTray.hidden = !open;
     this.skinBackdrop.hidden = !open;
     this.skinBtn.classList.toggle('open', open);
@@ -572,6 +669,15 @@ export class Hud {
       meter.root.classList.add(freePlay ? 'free' : focused.has(meter.id) ? 'focused' : 'dim');
     }
 
+    // ---- tool buttons (2026-10-15, the level's editor rules: src/core/editRules.ts) ----
+    const tools = levelTools(level);
+    this.setHidden(this.toolPointBtn, !tools.includes('point'));
+    this.setHidden(this.toolLoopBtn, !tools.includes('loop'));
+    // A lone button gets both pill ends (style.css `.tool-group.single`).
+    this.toolGroupEl.classList.toggle('single', tools.length === 1);
+    this.newToolPicked = false;
+    for (const [tool, badge] of this.toolBadges) this.setHidden(badge, level.newTool !== tool || !tools.includes(tool));
+
     // ---- level picker ----
     this.setText(this.pickerLabelEl, `Level ${this.levelIndex + 1} of ${all.length}`);
     this.pickerLeft = -1; // the label's width moves the picker: measure again for the quick line
@@ -581,15 +687,20 @@ export class Hud {
 
   /** The level-start goals intro: the panel pops up big in the middle of the scene, then glides
    * home (goalsIntro.ts). 2026-10-12: App calls it once Bruno's lesson intro closes. */
-  playGoalsIntro(): void {
+  /** Resolves once the panel is home (or the run was cancelled, or nothing played): App then lets
+   * the tutorial hand in (2026-10-15). */
+  playGoalsIntro(): Promise<void> {
     this.goalsIntroAnim?.cancel();
     const anim = playGoalsIntro(this.goalsOverlayEl, PANEL_TOP_Y, GROUND_Y);
     this.goalsIntroAnim = anim;
-    if (anim) {
+    if (!anim) return Promise.resolve();
+    return new Promise((resolve) => {
       anim.onfinish = (): void => {
         if (this.goalsIntroAnim === anim) this.goalsIntroAnim = null;
+        resolve();
       };
-    }
+      anim.oncancel = (): void => resolve();
+    });
   }
 
   /** This frame's quick line: the play line, then the outcome (none while the child builds: the
@@ -670,7 +781,12 @@ export class Hud {
     });
 
     // ---- bottom bar buttons ----
-    this.setHidden(this.toolGroupEl, !editMode);
+    this.setHidden(this.toolGroupEl, !editMode || !levelTools(level).length);
+    if (level.newTool && state.tool === level.newTool && !this.newToolPicked) {
+      this.newToolPicked = true;
+      const badge = this.toolBadges.get(level.newTool);
+      if (badge) this.setHidden(badge, true);
+    }
     this.setHidden(this.skinBtn, !editMode);
     if (!editMode && !this.skinTray.hidden) this.toggleSkinTray(false);
     this.toolPointBtn.classList.toggle('active', state.tool === 'point');
@@ -694,5 +810,8 @@ export class Hud {
 
     // ---- park button ----
     this.setDisabled(this.parkBtn, playMode);
+
+    // ---- the tutorial hand over a bar button (after the buttons' visibility is set) ----
+    this.syncCoachHand(editMode ? state.coach : null);
   }
 }

@@ -35,9 +35,26 @@ export interface Metrics {
 export type Metric = keyof Metrics;
 export interface Goal { metric: Metric; op: '>=' | '<=' | '=='; value: number; label: string }
 export interface GoalResult { goal: Goal; current: number; pass: boolean }
+/** A step of a level's tutorial hand (src/core/coach.ts): the glove drags the station up, taps the
+ * fuzz skin button, taps Play, taps an empty sky spot to add a point, or taps the Loop tool. */
+export type CoachStep = 'drag-station' | 'skin' | 'play' | 'add-point' | 'loop-tool';
 export interface Level {
   id: string; title: string; bruno: string; goals: Goal[]; preset?: TrackPoint[]; finish?: FinishZone;
   hints: { rolledBack: string; stuck: string; fell: string };
+  // ---- editor rules (2026-10-15, src/core/editRules.ts); left out = today's open editor ----
+  /** The tool buttons the bar shows, in order. Default ['point', 'loop']; [] hides the group. */
+  tools?: EditTool[];
+  /** false: a tap on the track or the sky adds nothing and a tap on a point deletes nothing (only
+   * dragging the unlocked points is left), and Clear resets to the preset. Default true. */
+  canAdd?: boolean;
+  /** The station (first point) only slides up and down: a drag keeps its x. Default false. */
+  stationVertical?: boolean;
+  /** A tool this level introduces: its button shows a NEW badge until the child picks it. */
+  newTool?: EditTool;
+  /** The tutorial hand's steps, in order, after the lesson intro (src/core/coach.ts). */
+  coach?: CoachStep[];
+  /** Where the 'add-point' hand taps (world m): an empty sky spot toward the flag. */
+  coachSpot?: Vec2;
 }
 
 export type Mode = 'edit' | 'play' | 'done';
@@ -47,4 +64,7 @@ export interface HudState {
   mode: Mode; level: Level; metrics: Metrics; tool: EditTool;
   live: { speed: number; g: number; airborne: boolean };
   goals: GoalResult[]; outcome: Outcome | null; passed: boolean; canPlay: boolean; canUndo: boolean;
+  /** The tutorial hand step the HUD draws over a bar button ('skin', 'play', 'loop-tool'), else null
+   * (the in-scene steps are drawn by CoasterScene). */
+  coach: CoachStep | null;
 }

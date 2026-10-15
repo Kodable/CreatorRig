@@ -39,10 +39,11 @@ const loop = (x: number, y: number): TrackPoint => ({ x, y, kind: 'loop' });
 const SOLUTIONS: { id: string; solution: TrackPoint[]; naive: { why: string; points: TrackPoint[] }[] }[] = [
   {
     id: 'drop',
-    solution: [c(8, 22), c(52, 4)],
+    // The station dragged straight up (the only move the level allows); the end stays locked on the flag.
+    solution: [c(8, 22), lock(52, 4)],
     naive: [
-      { why: 'the starting track only drops 10 m', points: [c(8, 14), c(52, 4)] },
-      { why: 'a tall hill gives a big drop but the fuzz rolls back', points: [c(8, 14), c(30, 26), c(52, 4)] },
+      { why: 'the starting track only drops 10 m', points: [c(8, 14), lock(52, 4)] },
+      { why: 'a tall hill gives a big drop but the fuzz rolls back', points: [c(8, 14), c(30, 26), lock(52, 4)] },
     ],
   },
   {
@@ -58,11 +59,11 @@ const SOLUTIONS: { id: string; solution: TrackPoint[]; naive: { why: string; poi
   },
   {
     id: 'length',
-    // Three hills, each lower than the last.
-    solution: [lock(2, 20), c(11, 2), c(20, 15), c(29, 2), c(38, 13), c(47, 2), c(56, 4)],
+    // Three hills, each lower than the last (2026-10-15: the station moved up from 20 m to 26 m).
+    solution: [lock(2, 26), c(11, 2), c(20, 15), c(29, 2), c(38, 13), c(47, 2), c(56, 4)],
     naive: [
-      { why: 'a straight slope to the flag is too short', points: [lock(2, 20), c(56, 4)] },
-      { why: 'a hill taller than the station strands the fuzz', points: [lock(2, 20), c(12, 3), c(22, 24), c(32, 3), c(42, 10), c(50, 3), c(56, 4)] },
+      { why: 'a straight slope to the flag is too short', points: [lock(2, 26), c(56, 4)] },
+      { why: 'a hill taller than the station strands the fuzz', points: [lock(2, 26), c(12, 3), c(22, 30), c(32, 3), c(42, 10), c(50, 3), c(56, 4)] },
     ],
   },
   {
@@ -181,8 +182,15 @@ describe('levels', () => {
       });
 
       it('recorded solution keeps the locked points and stays inside the editor bounds', () => {
+        // The preset's locked points, in order, unmoved (a locked end sits last, level 1).
         const locked = (level.preset ?? []).filter((p) => p.locked);
-        expect(sol.solution.slice(0, locked.length)).toEqual(locked);
+        expect(sol.solution.filter((p) => p.locked)).toEqual(locked);
+        // Nothing added on a no-add level; a vertical-only station keeps its x.
+        if (level.canAdd === false) expect(sol.solution).toHaveLength(level.preset!.length);
+        if (level.stationVertical) expect(sol.solution[0]!.x).toBe(level.preset![0]!.x);
+        // Only the level's tools: no loop before the loop lesson.
+        const tools = level.tools ?? ['point', 'loop'];
+        if (!tools.includes('loop')) expect(sol.solution.some((p) => p.kind === 'loop')).toBe(false);
         for (const p of sol.solution) {
           expect(p.x).toBeGreaterThanOrEqual(0.5);
           expect(p.x).toBeLessThanOrEqual(WORLD_W - 0.5);
