@@ -1,6 +1,7 @@
 // Pure helpers for `WorldSpec.looks` / `Level.look` (2026-10-09: several rover levels, several
 // planets, one sky each). No Phaser/DOM imports so these are plain-function-testable; BuilderScene
 // calls them to decide what to draw and what to preload.
+import { backgroundUrls } from './parallax';
 import type { WorldSpec } from './types';
 
 /** Resolves what a level drawn with `look` should show: the named look's `sky`/`backgrounds` when
@@ -18,16 +19,17 @@ export function resolveLook(
 }
 
 /** Every picture URL `BuilderScene.preload` must load for `world`: the world's own backgrounds
- * plus every named look's backgrounds, deduplicated (first-seen order) so a picture reused across
- * looks (or reused from the world's own backgrounds) loads once. */
+ * plus every named look's backgrounds (each layer's picture, then its satellites' pictures),
+ * deduplicated (first-seen order) so a picture reused across looks (or reused from the world's
+ * own backgrounds) loads once. */
 export function lookImageUrls(world: WorldSpec): string[] {
   const seen = new Set<string>();
   const urls: string[] = [];
   const addAll = (bgs: WorldSpec['backgrounds']): void => {
-    for (const bg of bgs ?? []) {
-      if (!seen.has(bg.url)) {
-        seen.add(bg.url);
-        urls.push(bg.url);
+    for (const url of backgroundUrls(bgs)) {
+      if (!seen.has(url)) {
+        seen.add(url);
+        urls.push(url);
       }
     }
   };

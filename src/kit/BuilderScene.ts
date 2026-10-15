@@ -5,6 +5,7 @@
 import Phaser from 'phaser';
 import { COLORS, STAGE_W, STAGE_H, RENDER_SCALE, makeView, PANEL_BOTTOM_Y, panelTopY } from './view';
 import { lookImageUrls, resolveLook } from './looks';
+import { isMovingBackground, layoutBackground } from './parallax';
 import {
   FOCUS_MS,
   approachFrame,
@@ -34,6 +35,7 @@ import {
   type WidgetGeom,
 } from './widgetLayout';
 import type {
+  BackgroundLayer,
   Bounds,
   BodyId,
   CameraFrame,
@@ -385,6 +387,13 @@ export class BuilderScene extends Phaser.Scene {
   /** One Image per drawn background layer (see `redrawBackgrounds`); destroyed and replaced
    * whenever `setLook` picks a different look. */
   private bgImages: Phaser.GameObjects.Image[] = [];
+  /** 2026-10-15: the drawn layers that move (`parallax` / `drift` / `spin`), each with its
+   * pictures in `layoutBackground` order (the layer, then its satellites); re-placed every frame
+   * by `updateBackgrounds`. Still layers are placed once and never touched again. */
+  private bgMoving: { bg: BackgroundLayer; imgs: Phaser.GameObjects.Image[] }[] = [];
+  /** Seconds of the backgrounds' cosmetic clock (drift, spin): the frame deltas summed, each
+   * capped at 100 ms so a tab switch does not fling the clouds. */
+  private bgClockS = 0;
   /** Texture-backed items, keyed by the item's index in `items` (NOT by body: one body can carry
    * several items, e.g. a frame polygon plus a textured power pack riding the same body). */
   private roleImages = new Map<number, Phaser.GameObjects.Image>();
@@ -625,6 +634,8 @@ export class BuilderScene extends Phaser.Scene {
     // lags by one frame only while a zoom tween runs, which is invisible.
     this.onUpdate?.(delta);
     this.updateCamera(delta);
+    // After the camera: parallax reads this frame's camera frame, so layers never lag it a frame.
+    this.updateBackgrounds(delta);
     this.brunoStage.sync(); // after the camera moved: the dialog stage stays put in the frame
   }
 
@@ -753,28 +764,81 @@ export class BuilderScene extends Phaser.Scene {
     }
   }
 
-  /** `world.backgrounds`, or a level's look (`setLook`): static picture layers over the sky and
-   * under the ground strip/items (depth 0.2 + i*0.01, between DEPTH_SKY and DEPTH_GROUND). World
-   * objects (drawn via `onWorld`), positioned/sized in world meters, so they pan and zoom with the
-   * world camera — never counter-scaled. A texture that failed to load is skipped with one
-   * warning. Destroys and replaces whatever was drawn before (see `bgImages`). */
+  /** `world.backgrounds`, or a level's look (`setLook`): picture layers over the sky and under the
+   * ground strip/items (depth 0.2 + i*0.01, between DEPTH_SKY and DEPTH_GROUND; a layer's
+   * satellites at + 0.005). World objects (drawn via `onWorld`), positioned/sized in world meters,
+   * so they pan and zoom with the world camera — never counter-scaled. A layer with no motion
+   * fields is placed once, exactly as before 2026-10-15; a moving one (`parallax` / `drift` /
+   * `spin`, see `BackgroundLayer`) is re-placed every frame by `updateBackgrounds`. A texture that
+   * failed to load is skipped with one warning (a missing satellite picture drops that satellite
+   * only). Destroys and replaces whatever was drawn before (see `bgImages`). */
   private redrawBackgrounds(backgrounds: NonNullable<WorldSpec['backgrounds']>): void {
     for (const img of this.bgImages) img.destroy();
     this.bgImages = [];
+    this.bgMoving = [];
+    const cam = this.bgCamCentres();
     for (let i = 0; i < backgrounds.length; i++) {
       const bg = backgrounds[i]!;
-      const key = `bg:${bg.url}`;
-      if (!this.textures.exists(key)) {
+      if (!this.textures.exists(`bg:${bg.url}`)) {
         console.warn(`BuilderScene: background "${bg.url}" failed to load; skipping.`);
         continue;
       }
-      const img = this.onWorld(this.add.image(0, 0, key));
-      const p = this.view.toPx({ x: bg.x, y: bg.y });
-      img.setPosition(p.x, p.y);
-      img.setDisplaySize(bg.w * this.world.ppm, bg.h * this.world.ppm);
-      img.setAlpha(bg.alpha ?? 1);
-      img.setDepth(0.2 + i * 0.01);
-      this.bgImages.push(img);
+      const pieces = layoutBackground(bg, cam.cam, cam.rest, this.bgClockS, this.world.worldW);
+      const imgs: Phaser.GameObjects.Image[] = [];
+      for (let k = 0; k < pieces.length; k++) {
+        const key = `bg:${pieces[k]!.url}`;
+        if (!this.textures.exists(key)) {
+          console.warn(`BuilderScene: background "${pieces[k]!.url}" failed to load; skipping.`);
+          continue;
+        }
+        const img = this.onWorld(this.add.image(0, 0, key));
+        img.setAlpha(bg.alpha ?? 1);
+        img.setDepth(0.2 + i * 0.01 + (k > 0 ? 0.005 : 0));
+        // A turning picture draws through Phaser's single-texture quad batch. In the default
+        // multi-texture batch the fragment shader picks its texture with an exact float compare
+        // on an interpolated varying (phaser/src/renderer/webgl/shaders/src/GetTexture.glsl),
+        // which a rotated quad can miss: headless Chrome drew the wheel's rim with wedges
+        // missing. One extra draw call for the layer.
+        if (k === 0 && bg.spin) img.setRenderNodeRole('BatchHandler', 'BatchHandlerQuadSingle');
+        this.placeBgPiece(img, pieces[k]!);
+        img.setData('bgPiece', k);
+        imgs.push(img);
+        this.bgImages.push(img);
+      }
+      if (isMovingBackground(bg)) this.bgMoving.push({ bg, imgs });
+    }
+  }
+
+  /** Puts one background picture where `layoutBackground` says (world m -> stage px). For a still
+   * layer this is exactly the pre-2026-10-15 placement: centre, display size, no rotation. */
+  private placeBgPiece(img: Phaser.GameObjects.Image, p: ReturnType<typeof layoutBackground>[number]): void {
+    const at = this.view.toPx({ x: p.x, y: p.y });
+    img.setOrigin(p.originX, p.originY);
+    img.setPosition(at.x, at.y);
+    img.setDisplaySize(p.w * this.world.ppm, p.h * this.world.ppm);
+    img.setRotation(p.rotation);
+  }
+
+  /** The current camera frame's centre and the world's full (zoom-1) frame's centre, world m: the
+   * parallax reference (`parallaxShift`). */
+  private bgCamCentres(): { cam: Vec2; rest: Vec2 } {
+    const rest = fullFrame(this.world);
+    return { cam: { x: this.camCur.cx, y: this.camCur.cy }, rest: { x: rest.cx, y: rest.cy } };
+  }
+
+  /** 2026-10-15: re-places the moving background layers (parallax against this frame's camera,
+   * drift, spin, upright satellites). Called from `update` right after `updateCamera`. No moving
+   * layers (every course but the catapult today) = nothing to do. */
+  private updateBackgrounds(dtMs: number): void {
+    this.bgClockS += Math.min(Math.max(dtMs, 0), 100) / 1000;
+    if (this.bgMoving.length === 0) return;
+    const cam = this.bgCamCentres();
+    for (const layer of this.bgMoving) {
+      const pieces = layoutBackground(layer.bg, cam.cam, cam.rest, this.bgClockS, this.world.worldW);
+      for (const img of layer.imgs) {
+        const p = pieces[img.getData('bgPiece') as number];
+        if (p) this.placeBgPiece(img, p);
+      }
     }
   }
 

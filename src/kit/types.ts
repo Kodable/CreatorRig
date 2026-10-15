@@ -461,6 +461,50 @@ export interface CoachContext<K extends string, L> {
 
 // ---- course spec -------------------------------------------------------------------------
 
+/** One `WorldSpec.backgrounds` (or `looks[*].backgrounds`) picture layer: a world-meter rectangle
+ * (centre `x`, `y` + size `w`, `h`), drawn at `alpha` (default 1). Without the optional motion
+ * fields below it is a still picture that pans and zooms with the world camera (every course
+ * before 2026-10-15 looks exactly as it did). 2026-10-15 (Gao: the catapult's theme park "lost
+ * the coaster's life"): layers may lag the camera (`parallax`), creep sideways (`drift`) and turn
+ * (`spin`, with upright `satellites` riding the rim). Cosmetic: driven by the scene's own clock
+ * (frame-rate independent), never by the sim. Pure maths in src/kit/parallax.ts. */
+export interface BackgroundLayer {
+  url: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  alpha?: number;
+  /** Depth factors across (`x`) and up/down (`y`): 1 moves with the world (no parallax), 0 stays
+   * pinned to the camera; in between the layer lags the camera by (1 - factor) of its travel away
+   * from the world's full frame (`fullFrame`, the zoom-1 view: there every layer sits exactly
+   * where `x`/`y` say, so the composed picture is the full view). Layers standing on the ground
+   * use `y: 1` so nothing sinks into the grass. A layer covering the whole world never shows a gap
+   * for any clamped camera frame. Presets: `PARALLAX` in parallax.ts (the coaster's depths). */
+  parallax?: { x: number; y: number };
+  /** Sideways creep in world METERS per second (positive = to the right; the coaster's clouds'
+   * 5 stage px/s at its 16 px/m is 0.3125 m/s). The layer wraps once it is fully past the world's
+   * right edge (plus 1 m) back to just outside its left edge, so it never pops in view. */
+  drift?: number;
+  /** Turn rate in radians per second about the layer's centre, positive = clockwise on screen
+   * (Phaser's rotation sense; the coaster's ferris wheel turns at 0.12). */
+  spin?: number;
+  /** Pictures riding a circle of radius `r` (world m) around the layer's centre, `count` of them
+   * evenly spaced (the first at angle 0, i.e. to the right of the centre), turning with `spin` but
+   * always drawn UPRIGHT (a ferris wheel's cars hang level). `url` may list several pictures,
+   * used in turn (car i gets url[i % length]). `w`/`h` are each picture's size (world m); `pivot`
+   * is the point of the picture (fractions of its width/height, default the centre) placed on
+   * the circle, e.g. a car's hanger top. Drawn just over the layer, at its alpha and parallax. */
+  satellites?: {
+    url: string | string[];
+    count: number;
+    r: number;
+    w: number;
+    h: number;
+    pivot?: { x: number; y: number };
+  };
+}
+
 /** World size in meters. The panel is 960 stage px wide at origin x 32 with its bottom at y 690,
  * so ppm = 960 / worldW (a single-screen world), and `worldH * ppm` px tall: 480 by default
  * (worldH = 480 / ppm, the panel's top at y 210 under the dash). A course without the dash
@@ -494,7 +538,7 @@ export interface WorldSpec {
    * items, grid). Each covers a world-meter rectangle (centre + size, like `Bounds`), so it
    * zooms and pans with the world camera. A scenery backdrop is typically the whole world
    * (x 15, y 7.5, w 30, h 15); a planet hanging in the sky is a small rectangle. */
-  backgrounds?: { url: string; x: number; y: number; w: number; h: number; alpha?: number }[];
+  backgrounds?: BackgroundLayer[];
   /** 2026-10-09: named sky looks a level can pick via `Level.look` (a rover course visiting
    * several planets: 'mars', 'moon', ...). A look's `sky` / `backgrounds` REPLACE the world's own
    * for a level that names it; a field the look omits falls back to the world's. Absent/unknown

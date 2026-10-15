@@ -8,6 +8,9 @@ import {
   PREVIEW_RIM_R,
   PREVIEW_SPACING,
   previewAlpha,
+  distanceFade,
+  PREVIEW_FADE_M,
+  PREVIEW_FULL_M,
   previewOverlay,
 } from './preview';
 import type { Vec2 } from '../../../kit/types';
@@ -101,5 +104,25 @@ describe('the shot preview: the fade', () => {
     expect(items[1]).toMatchObject({ kind: 'dot', p: dots[0], r: PREVIEW_CORE_R, color: 0xffffff, screen: true });
     expect((items[1] as { alpha: number }).alpha).toBeCloseTo(0.95 * 0.5, 9);
     expect(previewOverlay(dots, 0)).toEqual([]);
+  });
+});
+
+describe('the shot preview: fading along the arc (2026-10-15)', () => {
+  it('full for the first PREVIEW_FULL_M metres, then linear to nothing over PREVIEW_FADE_M', () => {
+    expect(distanceFade(0)).toBe(1);
+    expect(distanceFade(PREVIEW_FULL_M)).toBe(1);
+    expect(distanceFade(PREVIEW_FULL_M + PREVIEW_FADE_M / 2)).toBeCloseTo(0.5, 9);
+    expect(distanceFade(PREVIEW_FULL_M + PREVIEW_FADE_M)).toBe(0);
+    expect(distanceFade(50)).toBe(0);
+  });
+
+  it('the overlay dims the dots by their distance along the arc, and keeps the faded tail', () => {
+    const dots = Array.from({ length: 30 }, (_, i) => ({ x: i * PREVIEW_SPACING, y: 1 }));
+    const cores = previewOverlay(dots, 1).filter((o) => o.kind === 'dot' && o.color === 0xffffff) as { alpha: number }[];
+    expect(cores).toHaveLength(30);
+    expect(cores[0]!.alpha).toBeCloseTo(0.95, 9);
+    const at = (m: number) => cores[Math.round(m / PREVIEW_SPACING)]!.alpha;
+    expect(at(PREVIEW_FULL_M + PREVIEW_FADE_M / 2)).toBeLessThan(0.6);
+    expect(cores.at(-1)!.alpha).toBe(0);
   });
 });

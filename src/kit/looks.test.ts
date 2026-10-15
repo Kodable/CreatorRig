@@ -77,6 +77,17 @@ describe('lookImageUrls', () => {
     expect(lookImageUrls(world)).toEqual(['park.png', 'mars.png', 'moon.png']);
   });
 
+  it('2026-10-15: a layer\'s satellite pictures load too, after the layer, de-duplicated', () => {
+    const world: WorldSpec = {
+      ...WORLD,
+      backgrounds: [
+        { url: 'rim.png', x: 0, y: 0, w: 1, h: 1, spin: 1, satellites: { url: ['car1.png', 'car2.png', 'car1.png'], count: 6, r: 1, w: 1, h: 1 } },
+      ],
+      looks: { moon: { backgrounds: [{ url: 'car2.png', x: 0, y: 0, w: 1, h: 1 }, { url: 'sat.png', x: 0, y: 0, w: 1, h: 1, satellites: { url: 'one.png', count: 2, r: 1, w: 1, h: 1 } }] } },
+    };
+    expect(lookImageUrls(world)).toEqual(['rim.png', 'car1.png', 'car2.png', 'sat.png', 'one.png']);
+  });
+
   it('a look with no backgrounds contributes nothing', () => {
     const world: WorldSpec = { ...WORLD, looks: { moon: { sky: { top: 1, bottom: 2 } } } };
     expect(lookImageUrls(world)).toEqual(['park.png']);

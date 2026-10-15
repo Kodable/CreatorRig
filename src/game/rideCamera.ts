@@ -5,6 +5,7 @@
 // coaster's world. CoasterScene owns the state and applies the frame to its world camera.
 import type { Vec2 } from '../core/types';
 import { approachFrame, clampFrame, fullFrame, type FrameState, type WorldDims } from '../kit/camera';
+import { parallaxShift } from '../kit/parallax';
 import { GROUND_Y, PPM, WORLD_H, WORLD_W, toPx } from './view';
 
 /** The panel runs 10 px (0.625 m) below the ground line to its bottom edge at stage y 700. */
@@ -84,7 +85,7 @@ export function frameCentrePx(f: FrameState): Vec2 {
  * camera's travel, and the travel at zoom z is at most (1 - 1/z) of the panel's half size).
  */
 export function parallaxOffset(f: FrameState, fx: number, fy = fx): Vec2 {
-  const c = frameCentrePx(f);
-  const c0 = frameCentrePx(FULL_FRAME);
-  return { x: (c.x - c0.x) * (1 - fx), y: (c.y - c0.y) * (1 - fy) };
+  // 2026-10-15: the rule itself lives in the builder kit (src/kit/parallax.ts), shared with the
+  // kit's moving `WorldSpec.backgrounds`; same arithmetic, so the coaster is unchanged.
+  return parallaxShift(frameCentrePx(f), frameCentrePx(FULL_FRAME), fx, fy);
 }

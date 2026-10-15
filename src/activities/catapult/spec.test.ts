@@ -2,7 +2,11 @@
 // least one on-screen target per property value, and that target has to sit inside the play
 // field, not off in the weeds somewhere. Also covers the one in-scene widget left (the angle
 // lever/dial; FIRE moved to the bottom bar on 2026-10-15).
+import { existsSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { lookImageUrls } from '../../kit/looks';
+import { PARALLAX } from '../../kit/parallax';
 import { catapultSpec } from './spec';
 import { CATALOG, FUZZ, FUZZ_NAMES } from './core/catalog';
 import {
@@ -181,7 +185,7 @@ describe('catapultSpec: no dash, a 612 px scene', () => {
   });
 
   it('the backdrop is the coaster\'s theme park (2026-10-15): sky, three clouds, far hills, the ' +
-    'ferris wheel and the trees, back to front, all from public/bg/coaster/', () => {
+    'ferris wheel (stand + turning rim) and the trees, back to front, all from public/bg/coaster/', () => {
     const bgs = catapultSpec.world.backgrounds!;
     expect(bgs.map((b) => b.url)).toEqual([
       'bg/coaster/sky.jpg',
@@ -189,17 +193,27 @@ describe('catapultSpec: no dash, a 612 px scene', () => {
       'bg/coaster/cloud2.png',
       'bg/coaster/cloud3.png',
       'bg/coaster/catapult-far.png',
-      'bg/coaster/wheel.png',
+      'bg/coaster/wheel-stand.png',
+      'bg/coaster/wheel-rim.png',
       'bg/coaster/catapult-mid.png',
     ]);
     expect(bgs.some((b) => b.url.includes('park.jpg'))).toBe(false);
+    // every picture (satellites too) is on disk, under 1.5 MB
+    for (const url of lookImageUrls(catapultSpec.world)) {
+      const file = resolve(__dirname, '../../../public', url);
+      expect(existsSync(file), url).toBe(true);
+      expect(statSync(file).size, url).toBeLessThan(1.5e6);
+    }
     const at = (name: string) => bgs.find((b) => b.url.endsWith(name))!;
-    // The sky fills the visible sky, ground line to the panel's top edge.
+    // The sky fills the whole 622 px viewport (the 1.5 m of ground and the kit's 10 px earth margin
+    // up to the panel's top edge), the coaster's own panel height, so its vertical parallax never
+    // lifts its bottom edge into view.
     const sky = at('sky.jpg');
     expect(sky.x).toBe(15);
     expect(sky.w).toBe(30);
-    expect(sky.y - sky.h / 2).toBe(0);
-    expect(sky.y + sky.h / 2).toBe(WORLD_H - 1.5);
+    expect(sky.y - sky.h / 2).toBeCloseTo(-1.5 - 10 / 32, 9);
+    expect(sky.y + sky.h / 2).toBeCloseTo(WORLD_H - 1.5, 9);
+    expect(sky.h * 32).toBeCloseTo(622, 9);
     // The full-width bands keep the coaster's stage-px heights (32 px/m) and its ground line 10 px
     // over their bottoms: the hills and trees rise from world y 0.
     for (const [name, px] of [['catapult-far.png', 300], ['catapult-mid.png', 230]] as const) {
@@ -208,22 +222,55 @@ describe('catapultSpec: no dash, a 612 px scene', () => {
       expect(b.h).toBeCloseTo(px / 32, 9);
       expect(b.y - b.h / 2).toBeCloseTo(-10 / 32, 9);
     }
-    // The wheel stands on the ground between the catapult and the near targets: its picture spans 92 px over the hub to 110 px under it, the hub 104 px up as on the
-    // coaster, so the feet (106 px under the hub) end 2 px under y 0.
-    const wheel = at('wheel.png');
-    expect(wheel.h).toBeCloseTo(202 / 32, 9);
-    expect(wheel.y + wheel.h / 2 - 92 / 32).toBeCloseTo(104 / 32, 9);
-    expect(wheel.y - wheel.h / 2 + 4 / 32).toBeCloseTo(-2 / 32, 9);
-    expect(wheel.x).toBe(10);
-    expect(wheel.alpha).toBe(0.7);
-    // The clouds float in the sky, inside the world.
+    // The wheel stands on the ground between the catapult and the near targets, hub 104 px up at
+    // x 10 as on the coaster: the stand spans 6 px over the hub to 110 px under it (the feet, 106 px
+    // under the hub, end 2 px under y 0); the rim is a 180 px square on the hub.
+    const hubY = 104 / 32;
+    const stand = at('wheel-stand.png');
+    expect(stand.x).toBe(10);
+    expect(stand.y + stand.h / 2).toBeCloseTo(hubY + 6 / 32, 9);
+    expect(stand.y - stand.h / 2 + 4 / 32).toBeCloseTo(-2 / 32, 9);
+    const rim = at('wheel-rim.png');
+    expect(rim).toMatchObject({ x: 10, alpha: 0.7, spin: 0.12 });
+    expect(rim.y).toBeCloseTo(hubY, 9);
+    expect(rim.w * 32).toBeCloseTo(180, 9);
+    expect(rim.h).toBe(rim.w);
+    expect(stand.alpha).toBe(0.7);
+    // 10 cars, five colours in turn, hung by their hanger tops from the 84 px rim
+    const cars = rim.satellites!;
+    expect(cars.count).toBe(10);
+    expect(cars.r * 32).toBeCloseTo(84, 9);
+    expect(cars.url).toEqual([1, 2, 3, 4, 5].map((n) => `bg/coaster/wheel-car-${n}.png`));
+    expect(cars.w * 32).toBeCloseTo(22, 9);
+    expect(cars.h * 32).toBeCloseTo(20, 9);
+    expect(cars.pivot).toEqual({ x: 0.5, y: 1 / 20 });
+    // The clouds float in the sky, inside the world, drifting right at the coaster's 5 / 3.5 / 6
+    // stage px a second.
+    const speeds: Record<string, number> = { 'cloud1.png': 5, 'cloud2.png': 3.5, 'cloud3.png': 6 };
     for (const name of ['cloud1.png', 'cloud2.png', 'cloud3.png']) {
       const c = at(name);
       expect(c.y - c.h / 2).toBeGreaterThan(6);
       expect(c.y + c.h / 2).toBeLessThan(WORLD_H - 1.5);
+      expect(c.drift! * 32).toBeCloseTo(speeds[name]!, 9);
     }
     // The kit sky under the picture is sky.jpg's own top/bottom colours.
     expect(catapultSpec.world.sky).toEqual({ top: 0x2869c5, bottom: 0xb8dffa });
+  });
+
+  it('2026-10-15: every backdrop layer lags the camera by the coaster\'s depth factor (the wheel nearly moves with the world here)', () => {
+    const bgs = catapultSpec.world.backgrounds!;
+    const factor = (name: string) => bgs.find((b) => b.url.endsWith(name))!.parallax;
+    expect(factor('sky.jpg')).toEqual(PARALLAX.sky);
+    for (const c of ['cloud1.png', 'cloud2.png', 'cloud3.png']) expect(factor(c)).toEqual(PARALLAX.flyers);
+    expect(factor('catapult-far.png')).toEqual(PARALLAX.far);
+    // Not the coaster's 0.55: at that depth the 3.6x build view slid the wheel behind the machine.
+    expect(factor('wheel-stand.png')).toEqual({ x: 0.9, y: 1 });
+    expect(factor('wheel-rim.png')).toEqual({ x: 0.9, y: 1 });
+    expect(factor('catapult-mid.png')).toEqual(PARALLAX.mid);
+    // back to front, nearer layers move more with the world
+    // (the wheel is left out: it moves nearly with the world here, and it never overlaps the trees)
+    const xs = bgs.filter((b) => !b.url.includes('wheel-')).map((b) => b.parallax!.x);
+    for (let i = 1; i < xs.length; i++) expect(xs[i]!).toBeGreaterThanOrEqual(xs[i - 1]!);
   });
 
   it('the cans are the rover\'s can of beans, drawn 0.8 m tall at its own aspect on the 0.4 x 0.8 m box', () => {

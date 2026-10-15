@@ -27,6 +27,7 @@ import {
   REST_ANGLE,
   WORLD_H,
 } from './core/build';
+import { PARALLAX } from '../../kit/parallax';
 import { createCatapultSim } from './core/sim';
 import { LEVELS } from './core/levels';
 import { BUILD_WIDGET, catapultCoach } from './coach';
@@ -61,37 +62,89 @@ const FOLLOW_DY = 0.5 + riseFor(FOLLOW_ZOOM);
  * coaster's stage-px sizes and its height over the ground line (the coaster's ground is stage y
  * 690, its panel bottom 700; here world y 0). The catapult's copies of the far hills, the trees
  * and the ferris wheel are 4x stage px (the coaster's are 2x) for the 3.6x build view; the trees
- * are re-placed and the wheel is a still picture of the coaster's code-drawn one (a Pillow
- * script, compose_catapult.py, not in the repo). Back to front: */
+ * are re-placed and the wheel is the coaster's code-drawn one as pictures (a Pillow script,
+ * compose_catapult.py, not in the repo). Later the same day (Gao: it "lost the coaster's life")
+ * the layers move again, through the kit's `BackgroundLayer` fields: each lags the camera by the
+ * coaster's depth factor (`PARALLAX`; the composed picture is the full view, and the build
+ * view's 3.6x and the follow camera's 1.6x slide the layers apart), the clouds drift and the
+ * wheel turns with its cars hanging level. Every layer that lags covers the whole panel (or
+ * stands on the ground and only shifts sideways), so no frame shows a gap. Back to front: */
 const BG = 'bg/coaster/';
 /** px (stage) -> m. */
 const M = (px: number): number => px / PPM;
 /** The top of the visible sky (world y): the panel's top edge, 1.5 m of ground below y 0. */
 const SKY_TOP_Y = WORLD_H - 1.5;
+/** The bottom of the world camera's viewport (world y): the 1.5 m of ground plus the kit's 10 px
+ * earth margin. The sky picture reaches down to it so its vertical parallax never lifts its
+ * bottom edge into view (the ground band covers it anyway). */
+const VIEW_BOTTOM_Y = -1.5 - M(10);
+/** The ferris wheel's hub: x 10 m, 104 px (3.25 m) up as on the coaster; rim radius 84 px. */
+const WHEEL_HUB = { x: 10, y: M(104) };
+/** The coaster's calm turn (CoasterScene WHEEL_SPEED), rad/s clockwise. */
+const WHEEL_SPIN = 0.12;
+/** The wheel moves nearly with the world here (the coaster's wheel depth is { x: 0.55, y: 1 }):
+ * the catapult's 3.6x build view sits near x 6 m, and at the coaster's depth the wheel slid ~4 m
+ * left and filled the space behind the machine (2026-10-15). At 0.9 it shifts ~0.6 m. */
+const CATAPULT_WHEEL_PARALLAX = { x: 0.9, y: 1 };
+
 const COASTER_BACKDROP: NonNullable<WorldSpec['backgrounds']> = [
-  // The sky gradient + cloud puffs (1920 x 1244, the coaster's whole 622 px panel), over the
-  // visible sky y 0 .. 17.625 (a 9 % squash of a soft gradient: nothing to see).
-  { url: `${BG}sky.jpg`, x: 15, y: SKY_TOP_Y / 2, w: 30, h: SKY_TOP_Y },
-  // The coaster's three clouds at their start positions (stage x 300 / 720 / 860 and y 300 / 175
-  // / 420, i.e. 390 / 515 / 270 px over the ground line), half their 2x size; still (the kit has
-  // no drifting layers).
-  { url: `${BG}cloud1.png`, x: M(300 - 32), y: M(690 - 300), w: M(170), h: M(35.5) },
-  { url: `${BG}cloud2.png`, x: M(720 - 32), y: M(690 - 175), w: M(170), h: M(49) },
-  { url: `${BG}cloud3.png`, x: M(860 - 32), y: M(690 - 420), w: M(130), h: M(29.5) },
+  // The sky gradient + cloud puffs (1920 x 1244, the coaster's whole 622 px panel) over the whole
+  // 622 px viewport, y -1.8125 .. 17.625 (unsquashed), at the coaster's sky depth.
+  {
+    url: `${BG}sky.jpg`,
+    x: 15,
+    y: (SKY_TOP_Y + VIEW_BOTTOM_Y) / 2,
+    w: 30,
+    h: SKY_TOP_Y - VIEW_BOTTOM_Y,
+    parallax: PARALLAX.sky,
+  },
+  // The coaster's three clouds from its start positions (stage x 300 / 720 / 860 and y 300 / 175
+  // / 420, i.e. 390 / 515 / 270 px over the ground line), half their 2x size, creeping right at
+  // the coaster's 5 / 3.5 / 6 stage px a second and wrapping out of view.
+  { url: `${BG}cloud1.png`, x: M(300 - 32), y: M(690 - 300), w: M(170), h: M(35.5), parallax: PARALLAX.flyers, drift: M(5) },
+  { url: `${BG}cloud2.png`, x: M(720 - 32), y: M(690 - 175), w: M(170), h: M(49), parallax: PARALLAX.flyers, drift: M(3.5) },
+  { url: `${BG}cloud3.png`, x: M(860 - 32), y: M(690 - 420), w: M(130), h: M(29.5), parallax: PARALLAX.flyers, drift: M(6) },
   // Hazy hills + a tree line: the coaster's 300 px band, its ground line 10 px over its bottom.
-  { url: `${BG}catapult-far.png`, x: 15, y: M(300 / 2 - 10), w: 30, h: M(300) },
+  { url: `${BG}catapult-far.png`, x: 15, y: M(300 / 2 - 10), w: 30, h: M(300), parallax: PARALLAX.far },
   // The ferris wheel, standing on the ground in the open sky between the catapult (x 3.5 .. 6) and
-  // the near targets: hub 104 px (3.25 m) up as on the coaster, rim radius 84 px; the picture spans
-  // stage px -100 .. 100 across and -92 .. 110 down from the hub (the feet 2 px under the ground
-  // line). At x 10 its cars clear the 3.6x build view (which shows up to ~2.7 m right of the
-  // catapult) but for the left rim. 70 % opaque on top of the coaster's colour haze: the 1.6x
-  // follow camera makes it big right where every shot starts, and the fuzz must stay the boldest
-  // thing there.
-  { url: `${BG}wheel.png`, x: 10, y: M(104 - 9), w: M(200), h: M(202), alpha: 0.7 },
+  // the near targets in the full view. Two layers at the coaster's wheel depth: the still A-frame
+  // legs (stage px -50 .. 50 across, -6 .. 110 down from the hub, the feet 2 px under the ground
+  // line), then the rim, spokes and hub (a 180 px square on the hub) turning at the coaster's
+  // speed, with its 10 cars (22 x 20 px, five colours in turn) hung from the rim by their hanger
+  // tops and kept upright. 70 % opaque on top of the coaster's colour haze: the 1.6x follow camera
+  // makes it big right where every shot starts, and the fuzz must stay the boldest thing there.
+  {
+    url: `${BG}wheel-stand.png`,
+    x: WHEEL_HUB.x,
+    y: WHEEL_HUB.y - M(52),
+    w: M(100),
+    h: M(116),
+    alpha: 0.7,
+    parallax: CATAPULT_WHEEL_PARALLAX,
+  },
+  {
+    url: `${BG}wheel-rim.png`,
+    x: WHEEL_HUB.x,
+    y: WHEEL_HUB.y,
+    w: M(180),
+    h: M(180),
+    alpha: 0.7,
+    parallax: CATAPULT_WHEEL_PARALLAX,
+    spin: WHEEL_SPIN,
+    satellites: {
+      url: [1, 2, 3, 4, 5].map((n) => `${BG}wheel-car-${n}.png`),
+      count: 10,
+      r: M(84),
+      w: M(22),
+      h: M(20),
+      pivot: { x: 0.5, y: 1 / 20 },
+    },
+  },
   // The trees (the coaster's 230 px band, ground line 10 px over its bottom), re-placed at x 1,
-  // 23.6 and 29.3 m: none behind the catapult, the wheel or the near targets (only the bullseye
-  // poles at 23.5 and 28.5 cross a trunk; their discs, 4 .. 5 m up, clear the treetops).
-  { url: `${BG}catapult-mid.png`, x: 15, y: M(230 / 2 - 10), w: 30, h: M(230) },
+  // 23.6 and 29.3 m: none behind the catapult, the wheel or the near targets in the full view
+  // (only the bullseye poles at 23.5 and 28.5 cross a trunk; their discs, 4 .. 5 m up, clear the
+  // treetops). At the coaster's near-tree depth.
+  { url: `${BG}catapult-mid.png`, x: 15, y: M(230 / 2 - 10), w: 30, h: M(230), parallax: PARALLAX.mid },
 ];
 /** sky.jpg's own top and bottom rows (40, 105, 197) / (184, 223, 250), for the kit sky under it. */
 const COASTER_SKY = { top: 0x2869c5, bottom: 0xb8dffa };
@@ -215,10 +268,13 @@ function placedAboveLine(parts: PlacedPart<PartKind>[], level: CatapultLevel): n
  * the arm are set from the properties drawer; FIRE is the bottom bar's yellow button since
  * 2026-10-15 (it was an in-scene tap button by the trigger string, `action: 'play'`; the string's
  * snip burst still plays there, core/build.ts `fireSpot`). */
-/** The BUILD pill's centre over the catapult's anchor (m): above the lever's top (~3 m) and a
- * little right of the A-frame, like the rover's pill over its dome. */
-const BUILD_DX = 0.6;
-const BUILD_Y = 4.4;
+/** The BUILD pill's centre over the catapult's anchor (m): above the lever's top (~3 m), on the
+ * upper LEFT of the machine (2026-10-15): the shot preview leaves the cup up and to the right, and
+ * a pill over the A-frame hid the arc's strong first metres. */
+const BUILD_DX = -1.4;
+const BUILD_Y = 4.6;
+/** The pill's centre never goes left of this (m): it is ~4.4 m wide at zoom 1. */
+const BUILD_MIN_X = 2.6;
 
 function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
   if (part.kind !== 'catapult') return [];
@@ -377,7 +433,7 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
     const cp = parts.find((p) => p.kind === 'catapult');
     if (!cp) return [];
     return [
-      { kind: 'tap', id: BUILD_WIDGET, style: 'big', action: 'select', partId: cp.id, at: { x: cp.x + BUILD_DX, y: cp.y + BUILD_Y }, size: 84, icon: '🔧', label: 'BUILD', color: 0x05aeed },
+      { kind: 'tap', id: BUILD_WIDGET, style: 'big', action: 'select', partId: cp.id, at: { x: Math.max(BUILD_MIN_X, cp.x + BUILD_DX), y: cp.y + BUILD_Y }, size: 84, icon: '🔧', label: 'BUILD', color: 0x05aeed },
     ];
   },
 

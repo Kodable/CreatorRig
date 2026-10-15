@@ -464,8 +464,8 @@ describe('CatapultSim: overlay', () => {
   });
 
   it('the shot preview (2026-10-15): no dots when the sim is built (the kit shows it after Bruno\'s ' +
-    'intro), the dotted arc on showPreview() and on every change (updatePart), at full strength until ' +
-    'FIRE (no fade since 2026-10-15)', async () => {
+    'intro), the dotted arc on showPreview() and on every change (updatePart), shown until FIRE ' +
+    '(no fade over time since 2026-10-15; it fades along its length)', async () => {
     let now = 100;
     const cp = catapult();
     const level = makeLevel([cp], 3);
@@ -475,7 +475,9 @@ describe('CatapultSim: overlay', () => {
     sim.showPreview();
     const shown = cores();
     expect(shown.length).toBeGreaterThan(5);
-    expect(shown.every((d) => d.alpha === 0.95)).toBe(true);
+    // Full strength near the cup; the far end fades out along the arc (distanceFade).
+    expect(shown[0]!.alpha).toBe(0.95);
+    expect(shown.at(-1)!.alpha).toBeLessThan(0.95);
     // It starts at the release point the shot itself uses.
     const { tip } = catapultRelease(cp);
     expect(shown[0]!.p.x).toBeCloseTo(tip.x, 9);

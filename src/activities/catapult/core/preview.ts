@@ -78,14 +78,29 @@ export function previewAlpha(age: number): number {
   return age >= 0 && Number.isFinite(age) ? 1 : 0;
 }
 
-/** The dots as overlay items at strength `alpha` (per dot its dark rim, then its white core);
- * nothing at 0. */
+/** The arc fades out along its length (2026-10-15, Gao: "make the dotted line fade out over some
+ * distance"): full strength for the first PREVIEW_FULL_M metres from the cup, then linear to nothing
+ * over the next PREVIEW_FADE_M, so it shows which way the shot leaves, not exactly where it lands. */
+export const PREVIEW_FULL_M = 4;
+export const PREVIEW_FADE_M = 5;
+
+/** A dot's strength `d` metres along the arc (0..1). */
+export function distanceFade(d: number): number {
+  if (d <= PREVIEW_FULL_M) return 1;
+  return Math.max(0, 1 - (d - PREVIEW_FULL_M) / PREVIEW_FADE_M);
+}
+
+/** The dots as overlay items at strength `alpha` times each dot's `distanceFade` (the dots are
+ * PREVIEW_SPACING apart, so dot i sits i * PREVIEW_SPACING along the arc); per dot its dark rim,
+ * then its white core. Every dot of the arc stays in the list (the faded tail at alpha 0), so the
+ * last one still marks the first contact; nothing at all once `alpha` is 0. */
 export function previewOverlay(dots: Vec2[], alpha: number): OverlayItem[] {
   if (alpha <= 0) return [];
   const out: OverlayItem[] = [];
-  for (const p of dots) {
-    out.push({ kind: 'dot', p, r: PREVIEW_RIM_R, color: RIM_COLOR, alpha: RIM_ALPHA * alpha, screen: true });
-    out.push({ kind: 'dot', p, r: PREVIEW_CORE_R, color: 0xffffff, alpha: CORE_ALPHA * alpha, screen: true });
-  }
+  dots.forEach((p, i) => {
+    const a = alpha * distanceFade(i * PREVIEW_SPACING);
+    out.push({ kind: 'dot', p, r: PREVIEW_RIM_R, color: RIM_COLOR, alpha: RIM_ALPHA * a, screen: true });
+    out.push({ kind: 'dot', p, r: PREVIEW_CORE_R, color: 0xffffff, alpha: CORE_ALPHA * a, screen: true });
+  });
   return out;
 }

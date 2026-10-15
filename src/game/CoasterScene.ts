@@ -9,6 +9,7 @@ import { BrunoStage } from '../ui/brunoStage';
 import type { FrameState } from '../kit/camera';
 import { DEFAULT_SKIN, FUZZ_SKINS, SKIN_CANVAS_K, excitedPose, type SkinId } from './skins';
 import { FULL_FRAME, RIDE_ZOOM, frameCentrePx, parallaxOffset, rideTarget, stepCamera } from './rideCamera';
+import { PARALLAX } from '../kit/parallax';
 
 interface Gesture {
   index: number;
@@ -123,12 +124,14 @@ const PANEL_RADIUS = 12;
    across, so nothing sinks into the grass. Static pictures, no tweens: the clouds and the wheel
    are moved by hand once a frame (a handful of setPosition calls). */
 const BG_DIR = 'bg/coaster/';
-/** Parallax depth factors, across (x) and up/down (y): 1 moves with the track, 0 stays put. */
-const PX_SKY = { x: 0.15, y: 0.15 };
-const PX_FLYERS = { x: 0.3, y: 0.3 };
-const PX_FAR = { x: 0.35, y: 1 };
-const PX_WHEEL = { x: 0.55, y: 1 };
-const PX_MID = { x: 0.75, y: 1 };
+/** Parallax depth factors, across (x) and up/down (y): 1 moves with the track, 0 stays put.
+ * 2026-10-15: the values live in the builder kit (PARALLAX, src/kit/parallax.ts), shared with the
+ * catapult's theme park. */
+const PX_SKY = PARALLAX.sky;
+const PX_FLYERS = PARALLAX.flyers;
+const PX_FAR = PARALLAX.far;
+const PX_WHEEL = PARALLAX.wheel;
+const PX_MID = PARALLAX.mid;
 /** Band heights (stage px) of the bottom-anchored layers; each ends at the panel's bottom. */
 const FAR_H = 300;
 const MID_H = 230;

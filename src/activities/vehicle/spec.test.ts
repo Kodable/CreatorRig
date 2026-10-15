@@ -23,6 +23,7 @@ import {
 } from './spec';
 import { PLANETS, PLANET_IDS } from './core/planets';
 import { resolveLook } from '../../kit/looks';
+import { isMovingBackground, layoutBackground } from '../../kit/parallax';
 import { roverCoach } from './coach';
 import { PICS, ROVER_R, groundPictures } from './core/art';
 import { GROUND_DEPTH, GROUND_FILL_DEPTH, WORLD_H } from './core/build';
@@ -208,6 +209,20 @@ describe('vehicleSpec: wiring', () => {
       expect(Math.max(...far.map((b) => b.x + b.w / 2))).toBeGreaterThanOrEqual(WORLD_W);
       // Below the panel edge and its earth margin: a see-through gap shows the strip to the bottom.
       for (const b of far) expect(b.y - b.h / 2).toBeCloseTo(-GROUND_FILL_DEPTH, 9);
+    }
+  });
+
+  it('2026-10-15: the planet looks stay still pictures (no parallax, drift or spin), so the kit draws them exactly as before', () => {
+    for (const id of PLANET_IDS) {
+      for (const bg of PLANET_LOOKS[id].backgrounds) {
+        expect(isMovingBackground(bg), bg.url).toBe(false);
+        expect(bg.satellites, bg.url).toBeUndefined();
+        for (const cam of [{ x: 15, y: 8 }, { x: 60, y: 3 }]) {
+          expect(layoutBackground(bg, cam, { x: 15, y: 8 }, 12.5, vehicleSpec.world.worldW)).toEqual([
+            { url: bg.url, x: bg.x, y: bg.y, w: bg.w, h: bg.h, rotation: 0, originX: 0.5, originY: 0.5 },
+          ]);
+        }
+      }
     }
   });
 
