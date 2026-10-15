@@ -188,6 +188,76 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 .goals-overlay .goal-top .value { font-size: 13px; }
 .goals-overlay .goal-bar { height: 5px; }
 
+/* ---- The coaster's goal cards (2026-10-15, Jon: "We need to do a much better job of communicating
+   the goals ... big font for the number. And then like icons for like speed, gravity"): the
+   coaster's goals overlay (`.goals-overlay.goal-cards`, src/ui/hud.ts) drops the navy panel for a
+   row of white cards over the sky's top-left, one per goal (104 px wide, 12 px apart;
+   src/core/goalCards.ts): a 38 px target number and its small unit over the metric's picture
+   (public/ui/goals/*.svg, 72x36; 62 px on a yes/no card), a tiny caption and
+   a progress bar along the bottom. A yes/no goal (flag, end) is a bigger picture and no bar. A
+   "stay under" goal wears a navy "under" tab on its top edge. States: idle (calm, empty bar),
+   progress (orange bar filling; a "stay under" bar is blue, orange from 75% of the limit), met
+   (green rim and tint, green check pops in the corner), broken (pink rim, number and bar, a pink
+   "!" pops). The kit's goals overlay (BuilderHud) keeps the rows above. ---- */
+.goals-overlay.goal-cards {
+  min-width: 0; max-width: none; padding: 0; border-radius: 0; gap: 0;
+  background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.goal-cards #goalList { flex-direction: row; align-items: stretch; gap: 12px; }
+.goal-cards .goals-empty {
+  padding: 10px 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.95); color: #1a2142;
+  font-size: 16px; font-weight: 800; box-shadow: 0 3px 10px rgba(11, 16, 48, 0.28);
+}
+.gcard {
+  position: relative; width: 104px; box-sizing: border-box; padding: 7px 8px 9px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px;
+  border: 3px solid #fff; border-radius: 18px; background: rgba(255, 255, 255, 0.96); color: #1a2142;
+  box-shadow: 0 4px 12px rgba(11, 16, 48, 0.3);
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+.gcard-target { display: flex; align-items: baseline; justify-content: center; gap: 2px; line-height: 0.9; }
+.gcard-num { font-size: 38px; font-weight: 900; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.gcard-unit { font-size: 15px; font-weight: 800; color: #4a5275; }
+.gcard-icon { display: block; width: 72px; height: 36px; pointer-events: none; }
+.gcard-check .gcard-icon { width: 62px; height: 62px; margin: 1px 0; }
+.gcard-caption {
+  font-size: 11px; font-weight: 800; line-height: 1.1; color: #5b6385; white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.gcard-bar { align-self: stretch; height: 7px; margin-top: 2px; border-radius: 4px; background: #e2e5ef; overflow: hidden; }
+.gcard-fill { width: 0; height: 100%; border-radius: 4px; background: #ffb40f; transition: width 120ms linear, background-color 200ms ease; }
+.gcard.under .gcard-fill { background: #05aeed; }
+.gcard.under.warn .gcard-fill { background: #ffb40f; }
+.gcard-badge {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  padding: 2px 8px 3px; border-radius: 9px; background: #1a2142; color: #fff;
+  font-size: 11px; font-weight: 900; line-height: 1; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+}
+.gcard-tick {
+  position: absolute; top: -11px; right: -11px; width: 30px; height: 30px; box-sizing: border-box;
+  display: none; align-items: center; justify-content: center;
+  border: 3px solid #fff; border-radius: 50%; background: #61bb46; color: #fff;
+  font-size: 17px; font-weight: 900; line-height: 1; box-shadow: 0 2px 6px rgba(11, 16, 48, 0.35);
+}
+.gcard.met { border-color: #61bb46; background: rgba(239, 250, 233, 0.97); }
+.gcard.met .gcard-fill { background: #61bb46; }
+.gcard.met .gcard-tick { display: flex; }
+.gcard.met .gcard-tick::after { content: '\2713'; }
+.gcard.broken { border-color: #c32f96; background: rgba(253, 233, 246, 0.97); }
+.gcard.broken .gcard-num, .gcard.broken .gcard-unit { color: #c32f96; }
+.gcard.broken .gcard-fill { background: #c32f96; }
+.gcard.broken .gcard-tick { display: flex; background: #c32f96; }
+.gcard.broken .gcard-tick::after { content: '!'; }
+/* The pop: the card bounces and the corner badge springs in each time a goal turns met or broken. */
+.gcard.met, .gcard.broken { animation: gcard-pop 420ms ease-out both; }
+.gcard.met .gcard-tick, .gcard.broken .gcard-tick { animation: gcard-tick-pop 420ms cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+@keyframes gcard-pop { 0% { transform: none; } 35% { transform: scale(1.12); } 100% { transform: none; } }
+@keyframes gcard-tick-pop { from { transform: scale(0) rotate(-30deg); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .gcard.met, .gcard.broken, .gcard.met .gcard-tick, .gcard.broken .gcard-tick { animation: none; }
+  .gcard, .gcard-fill { transition: none; }
+}
+
 /* ================= Bottom bar: y 706..768, x 32..992 ================= */
 
 #bottombar {

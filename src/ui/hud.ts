@@ -1,4 +1,5 @@
 import type { CoachStep, EditTool, Goal, GoalResult, HudState, Level, Metric } from '../core/types';
+import { goalCardLive, goalCardSpec, type GoalCardState } from '../core/goalCards';
 import { levelTools } from '../core/editRules';
 import { tapHandFrame } from '../core/coach';
 import { GROUND_Y, PANEL_TOP_Y } from '../game/view';
@@ -26,9 +27,9 @@ const STAGE_W = 1024;
 const G_MAX = 6; // g value that maps to a full (100%) intense-o-meter gauge
 
 /* 2026-10-07 (Gao: "put the same treatment of the goal, the stats, and the bottom for the coaster"):
-   the rover's layout. No dash any more: the goals sit in a translucent panel over the world panel's
-   top-left corner (`.goals-overlay`, which pops up big in the middle at every level start:
-   goalsIntro.ts), the meters in its twin over the top-right corner (`.meters-col.overlay`, play and
+   the rover's layout. No dash any more: the goals sit over the world panel's top-left corner
+   (`.goals-overlay`, which pops up big in the middle at every level start: goalsIntro.ts; since
+   2026-10-15 a row of goal cards, src/core/goalCards.ts), the meters in its twin over the top-right corner (`.meters-col.overlay`, play and
    done mode only), and the scene grows up into the dash's old room (view.ts PANEL_TOP_Y, 78). The
    bar: Point/Loop on the left, the big Play / Stop / Next level buttons centred (side by side when
    two show), Undo and Clear on the right. */
@@ -48,21 +49,6 @@ function fmt1(v: number): string {
 function fmt2(v: number): string {
   return v.toFixed(2);
 }
-// Whole-number goal targets ("15", "18") print without a decimal; anything else keeps one.
-function fmtTarget(v: number): string {
-  return Number.isInteger(v) ? String(v) : fmt1(v);
-}
-
-const GOAL_UNIT: Partial<Record<Metric, string>> = {
-  maxDrop: 'm',
-  maxSpeed: 'm/s',
-  length: 'm',
-  hangTime: 's',
-  loops: 'loops',
-  loopsCompleted: 'loops',
-  maxG: 'g',
-};
-
 // Which meter a goal's metric "belongs" to, for focus/dim styling.
 // reachedEnd has no meter of its own.
 const METER_FOR_METRIC: Partial<Record<Metric, string>> = {
@@ -75,41 +61,13 @@ const METER_FOR_METRIC: Partial<Record<Metric, string>> = {
   maxG: 'meter-intense',
 };
 
-function goalValueText(goal: Goal, current: number): string {
-  if (goal.metric === 'reachedEnd' || goal.metric === 'atFinish') return current >= 1 ? 'yes' : 'not yet';
-  const unit = GOAL_UNIT[goal.metric] ?? '';
-  if (goal.metric === 'loops' || goal.metric === 'loopsCompleted') {
-    return `${Math.round(current)} of ${Math.round(goal.value)} ${unit}`;
-  }
-  return `${fmt1(current)} of ${fmtTarget(goal.value)} ${unit}`;
-}
-
-interface GoalBar {
-  pct: number;
-  color: 'green' | 'orange' | 'pink';
-}
-
-function goalBar(goal: Goal, current: number, pass: boolean): GoalBar | null {
-  if (goal.metric === 'reachedEnd' || goal.metric === 'atFinish') return null;
-  if (goal.op === '==') {
-    return { pct: pass ? 100 : 0, color: pass ? 'green' : 'orange' };
-  }
-  const ratio = goal.value !== 0 ? current / goal.value : pass ? 1 : 0;
-  const pct = Math.max(0, Math.min(100, ratio * 100));
-  if (goal.op === '>=') {
-    return { pct, color: pass ? 'green' : 'orange' };
-  }
-  // '<=' : under the limit is green, over is pink.
-  return { pct, color: pass ? 'green' : 'pink' };
-}
-
+/** A goal card (2026-10-15, src/core/goalCards.ts; `.gcard` in style.css): the card, its bar's
+ * fill and the look it last drew (a state change re-pops the card through its CSS class). */
 interface GoalItem {
-  row: HTMLLIElement;
-  mark: HTMLSpanElement;
-  label: HTMLSpanElement;
-  value: HTMLSpanElement;
-  barWrap: HTMLDivElement;
-  fill: HTMLDivElement;
+  card: HTMLLIElement;
+  fill: HTMLDivElement | null;
+  state: GoalCardState | null;
+  fillPct: number;
 }
 
 interface MeterEntry {
@@ -275,8 +233,10 @@ export class Hud {
 
     // ---- goals overlay (over the world panel's top-left corner, every mode) ----
     // The outcome of a run needs no result card here: Bruno's quick line says it (update()).
+    // 2026-10-15 (Jon: "much better job of communicating the goals"): a row of goal cards, a big
+    // target number over a picture of the metric (`goal-cards`, style.css `.gcard`).
     const goalsOverlay = document.createElement('div');
-    goalsOverlay.className = 'goals-overlay';
+    goalsOverlay.className = 'goals-overlay goal-cards';
     const goalsCol = document.createElement('div');
     goalsCol.className = 'goals-col';
     const goalList = document.createElement('ul');
@@ -626,31 +586,7 @@ export class Hud {
       this.goalListEl.appendChild(li);
     } else {
       this.goalsColEl.classList.remove('empty');
-      this.goalItems = level.goals.map((goal: Goal) => {
-        const row = document.createElement('li');
-        row.className = 'goal';
-        const top = document.createElement('div');
-        top.className = 'goal-top';
-        const mark = document.createElement('span');
-        mark.className = 'mark';
-        const dot = document.createElement('span');
-        dot.className = 'dot';
-        mark.appendChild(dot);
-        const label = document.createElement('span');
-        label.className = 'label';
-        label.textContent = goal.label;
-        const value = document.createElement('span');
-        value.className = 'value';
-        top.append(mark, label, value);
-        const barWrap = document.createElement('div');
-        barWrap.className = 'goal-bar';
-        const fill = document.createElement('div');
-        fill.className = 'fill';
-        barWrap.appendChild(fill);
-        row.append(top, barWrap);
-        this.goalListEl.appendChild(row);
-        return { row, mark, label, value, barWrap, fill };
-      });
+      this.goalItems = level.goals.map((goal: Goal) => this.makeGoalCard(goal));
     }
 
     // The goals intro waits for Bruno's lesson intro: App calls `playGoalsIntro` once the dialog
@@ -684,6 +620,61 @@ export class Hud {
     this.pickerLeft = -1; // the label's width moves the picker: measure again for the quick line
     this.setDisabled(this.pickerPrevBtn, this.levelIndex <= 0);
     this.setDisabled(this.pickerNextBtn, this.levelIndex >= all.length - 1);
+  }
+
+  /** One goal card: the big target number and its unit over the metric's picture
+   * (public/ui/goals/<icon>.svg), an UNDER badge on a "stay under" goal, a tiny caption and a
+   * progress bar; a yes/no goal (the flag, the end) shows a bigger picture and no bar. The check
+   * (or the pink "!") in the corner is CSS, shown by the card's state class (`update`). */
+  private makeGoalCard(goal: Goal): GoalItem {
+    const spec = goalCardSpec(goal);
+    const card = document.createElement('li');
+    card.className = `gcard gcard-${spec.kind} gcard-${spec.icon}`;
+    card.classList.toggle('under', spec.under);
+    card.setAttribute('aria-label', goal.label);
+    card.title = goal.label;
+    if (spec.under) {
+      const badge = document.createElement('span');
+      badge.className = 'gcard-badge';
+      badge.textContent = 'under';
+      card.appendChild(badge);
+    }
+    if (spec.kind === 'number') {
+      const target = document.createElement('div');
+      target.className = 'gcard-target';
+      const num = document.createElement('span');
+      num.className = 'gcard-num';
+      num.textContent = spec.number;
+      const unit = document.createElement('span');
+      unit.className = 'gcard-unit';
+      unit.textContent = spec.unit;
+      target.append(num, unit);
+      card.appendChild(target);
+    }
+    const icon = document.createElement('img');
+    icon.className = 'gcard-icon';
+    icon.src = `ui/goals/${spec.icon}.svg`;
+    icon.alt = '';
+    icon.draggable = false;
+    const caption = document.createElement('span');
+    caption.className = 'gcard-caption';
+    caption.textContent = spec.caption;
+    card.append(icon, caption);
+    let fill: HTMLDivElement | null = null;
+    if (spec.kind === 'number') {
+      const bar = document.createElement('div');
+      bar.className = 'gcard-bar';
+      fill = document.createElement('div');
+      fill.className = 'gcard-fill';
+      bar.appendChild(fill);
+      card.appendChild(bar);
+    }
+    const tick = document.createElement('span');
+    tick.className = 'gcard-tick';
+    tick.setAttribute('aria-hidden', 'true');
+    card.appendChild(tick);
+    this.goalListEl.appendChild(card);
+    return { card, fill, state: null, fillPct: -1 };
   }
 
   /** The level-start goals intro: the panel pops up big in the middle of the scene, then glides
@@ -763,21 +754,22 @@ export class Hud {
     this.gaugeFillEl.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
     this.gaugeNeedleEl.style.left = `${pct}%`;
 
-    // ---- goals ----
+    // ---- goal cards: fill toward the target, green with a check once met, pink once a "stay
+    // under" limit breaks (src/core/goalCards.ts goalCardLive) ----
     state.goals.forEach((gr: GoalResult, i: number) => {
       const item = this.goalItems[i];
       if (!item) return;
-      item.mark.classList.toggle('met', gr.pass);
-      this.setText(item.value, goalValueText(gr.goal, gr.current));
-      const bar = goalBar(gr.goal, gr.current, gr.pass);
-      if (bar === null) {
-        this.setHidden(item.barWrap, true);
-      } else {
-        this.setHidden(item.barWrap, false);
-        item.fill.style.width = `${bar.pct}%`;
-        item.fill.classList.toggle('fill-green', bar.color === 'green');
-        item.fill.classList.toggle('fill-orange', bar.color === 'orange');
-        item.fill.classList.toggle('fill-pink', bar.color === 'pink');
+      const live = goalCardLive(gr, state.mode);
+      if (item.state !== live.state) {
+        if (item.state) item.card.classList.remove(item.state);
+        item.card.classList.add(live.state);
+        item.state = live.state;
+      }
+      item.card.classList.toggle('warn', live.warn);
+      const pct = Math.round(live.fill * 1000) / 10;
+      if (item.fill && item.fillPct !== pct) {
+        item.fill.style.width = `${pct}%`;
+        item.fillPct = pct;
       }
     });
 
