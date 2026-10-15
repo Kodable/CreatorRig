@@ -280,13 +280,19 @@ function placedAboveLine(parts: PlacedPart<PartKind>[], level: CatapultLevel): n
  * the arm are set from the properties drawer; FIRE is the bottom bar's yellow button since
  * 2026-10-15 (it was an in-scene tap button by the trigger string, `action: 'play'`; the string's
  * snip burst still plays there, core/build.ts `fireSpot`). */
-/** The BUILD pill's centre over the catapult's anchor (m): above the lever's top (~3 m), on the
- * upper LEFT of the machine (2026-10-15): the shot preview leaves the cup up and to the right, and
- * a pill over the A-frame hid the arc's strong first metres. */
-const BUILD_DX = -1.4;
-const BUILD_Y = 4.6;
+/** The BUILD pill's centre relative to the catapult's anchor (m): UNDER the machine, in the brown
+ * ground band (2026-10-15, Gao: "the build button is kind of in the way of the preview, maybe put
+ * it under or to the right"). Nothing else ever sits there, so it never covers the arc, a wall or
+ * a target; to the right it ran into level 2's wall. */
+const BUILD_DX = 0.6;
+/** 36 px tall at bigScale 0.75: centred in the 48 px ground band with room above and below. */
+const BUILD_Y = -0.75;
+/** A little smaller than the rover's pill (Gao: "put it under, and make it a little smaller"). */
+const BUILD_SCALE = 0.75;
 /** The pill's centre never goes left of this (m): it is ~4.4 m wide at zoom 1. */
 const BUILD_MIN_X = 2.6;
+/** How far past the lever's tip the angle knob rides (m): clear of the lever's blue pad. */
+const KNOB_OUT_M = 0.55;
 
 function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
   if (part.kind !== 'catapult') return [];
@@ -301,11 +307,11 @@ function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
       code: 'angle',
       pivot,
       radiusPx: 150,
-      // World-meter radius overrides radiusPx: the handle rides the lever stick itself (its own
-      // length, LEVER_LENGTH) at any camera zoom, and option i lands exactly on the lever's tip
-      // for that angle (armAngleFor(deg) is the same stop-direction formula the lever's own
-      // geometry uses).
-      radiusM: LEVER_LENGTH,
+      // World-meter radius overrides radiusPx: the handle rides the lever's line at any camera
+      // zoom, KNOB_OUT_M past its tip (2026-10-15, Gao: "move the angle drag handle out so that
+      // it doesnt overlap with the object"), and option i lands on that line for that angle
+      // (armAngleFor(deg) is the same stop-direction formula the lever's own geometry uses).
+      radiusM: LEVER_LENGTH + KNOB_OUT_M,
       arcFrom: armAngleFor(15),
       arcTo: armAngleFor(75),
       options: angleOptions,
@@ -443,7 +449,7 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
     const cp = parts.find((p) => p.kind === 'catapult');
     if (!cp) return [];
     return [
-      { kind: 'tap', id: BUILD_WIDGET, style: 'big', action: 'select', partId: cp.id, at: { x: Math.max(BUILD_MIN_X, cp.x + BUILD_DX), y: cp.y + BUILD_Y }, size: 84, icon: '🔧', label: 'BUILD', color: 0x05aeed },
+      { kind: 'tap', id: BUILD_WIDGET, style: 'big', action: 'select', partId: cp.id, at: { x: Math.max(BUILD_MIN_X, cp.x + BUILD_DX), y: cp.y + BUILD_Y }, size: 84, icon: '🔧', label: 'BUILD', color: 0x05aeed, bigScale: BUILD_SCALE },
     ];
   },
 

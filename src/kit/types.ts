@@ -146,6 +146,9 @@ export interface TapWidget extends WidgetBase {
    * pill with the label INSIDE in 24 px bold next to the icon, a soft pulse, and a wider hit area
    * (the one obvious start button, e.g. "▶ DRIVE"; or "🔧 BUILD"). */
   style?: 'card' | 'big';
+  /** 'big' only: scales the whole pill (height, font, padding, minimum width, hit pad); default 1.
+   * 2026-10-15: the catapult's BUILD pill under the machine is 0.75. */
+  bigScale?: number;
   /** With `action: 'select'`: the part to select when tapped. */
   partId?: number;
 }

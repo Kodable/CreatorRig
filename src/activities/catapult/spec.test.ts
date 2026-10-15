@@ -124,7 +124,7 @@ describe('catapultSpec.widgets', () => {
     expect(catapultSpec.hud.lines.shotDone).toContain('FIRE');
   });
 
-  it('angle: a dial widget with code angle, radiusM = LEVER_LENGTH, arc from armAngleFor(15) to ' +
+  it('angle: a dial widget with code angle, radiusM just past LEVER_LENGTH (clear of the pad), arc from armAngleFor(15) to ' +
     'armAngleFor(75), live, readout knob, options in the catalog\'s 15..75 order', () => {
     const part = catapultPart(15, 0);
     const angle = catapultSpec.widgets!(part, [], {} as never).find((w) => w.id === 'angle')!;
@@ -132,7 +132,8 @@ describe('catapultSpec.widgets', () => {
     if (angle.kind !== 'dial') return;
     expect(angle.code).toBe('angle');
     expect(angle.pivot).toEqual({ x: part.x + PIVOT_DX, y: part.y + PIVOT_DY });
-    expect(angle.radiusM).toBe(LEVER_LENGTH);
+    // 2026-10-15: the knob rides 0.55 m past the lever's tip, clear of its blue pad.
+    expect(angle.radiusM).toBeCloseTo(LEVER_LENGTH + 0.55, 9);
     expect(angle.arcFrom).toBeCloseTo(armAngleFor(15), 10);
     expect(angle.arcTo).toBeCloseTo(armAngleFor(75), 10);
     expect(angle.options.map((o) => o.value)).toEqual(['15', '30', '45', '60', '75']);

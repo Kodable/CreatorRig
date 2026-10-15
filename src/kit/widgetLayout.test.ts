@@ -331,8 +331,16 @@ describe("tap widget style 'big' (the one obvious start button)", () => {
     expect(g!.style).toBe('big');
     expect(g!.center).toEqual(toPx({ x: 5, y: 5 }));
     // icon 10 + gap + label 160, padded on both sides.
-    expect(g!.pill).toEqual({ w: 10 + BIG_GAP + 160 + 2 * BIG_PAD_X, h: BIG_PILL_H, iconW: 10, labelW: 160, gap: BIG_GAP, contentW: 180 });
+    expect(g!.pill).toEqual({ w: 10 + BIG_GAP + 160 + 2 * BIG_PAD_X, h: BIG_PILL_H, iconW: 10, labelW: 160, gap: BIG_GAP, contentW: 180, scale: 1 });
     expect(g!.size).toBe(BIG_PILL_H);
+  });
+
+  it('bigScale scales every pill dimension (2026-10-15: the catapult BUILD under the machine)', () => {
+    const [g] = layoutWidgets([{ ...big, label: 'LAUNCH THE ROVER', bigScale: 0.75 }], toPx, 1, measure) as TapGeom[];
+    expect(g!.pill!.h).toBeCloseTo(BIG_PILL_H * 0.75, 9);
+    expect(g!.pill!.contentW).toBeCloseTo(180 * 0.75, 9);
+    expect(g!.pill!.w).toBeCloseTo(180 * 0.75 + 2 * BIG_PAD_X * 0.75, 9);
+    expect(g!.pill!.scale).toBe(0.75);
   });
 
   it('never gets narrower than BIG_MIN_W', () => {

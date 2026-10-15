@@ -60,6 +60,8 @@ export interface BigPill {
   gap: number;
   /** Width of the icon + gap + label run (what the scene centres in the pill). */
   contentW: number;
+  /** `TapWidget.bigScale` (1 by default): the scene draws the text at BIG_FONT_PX times this. */
+  scale: number;
 }
 
 /** 'big' tap widgets: the pill's height (screen-constant stage px), its label font size, the
@@ -267,18 +269,20 @@ function layoutTap(w: TapWidget, toPx: (v: Vec2) => Vec2, pxScale: number, measu
   if (w.style === 'big') {
     // The pill: width from the label (BIG_FONT_PX bold) and the icon, a fixed BIG_PILL_H height
     // (`size` is not used), and a hit area BIG_HIT_PAD px wider than the pill on every side.
-    const iconW = w.icon ? measure(w.icon) : 0;
-    const labelW = w.label ? measure(w.label) : 0;
-    const gap = iconW > 0 && labelW > 0 ? BIG_GAP : 0;
+    // `bigScale` scales every pill dimension (the text is measured at BIG_FONT_PX, then scaled).
+    const k = w.bigScale ?? 1;
+    const iconW = (w.icon ? measure(w.icon) : 0) * k;
+    const labelW = (w.label ? measure(w.label) : 0) * k;
+    const gap = iconW > 0 && labelW > 0 ? BIG_GAP * k : 0;
     const contentW = iconW + gap + labelW;
-    const pw = Math.max(BIG_MIN_W, contentW + 2 * BIG_PAD_X) * pxScale;
-    const ph = BIG_PILL_H * pxScale;
+    const pw = Math.max(BIG_MIN_W * k, contentW + 2 * BIG_PAD_X * k) * pxScale;
+    const ph = BIG_PILL_H * k * pxScale;
     const pad = BIG_HIT_PAD * pxScale;
     return {
       ...base,
       size: ph,
       style: 'big',
-      pill: { w: pw, h: ph, iconW: iconW * pxScale, labelW: labelW * pxScale, gap: gap * pxScale, contentW: contentW * pxScale },
+      pill: { w: pw, h: ph, iconW: iconW * pxScale, labelW: labelW * pxScale, gap: gap * pxScale, contentW: contentW * pxScale, scale: k },
       hits: [{ shape: { kind: 'rect', x: center.x, y: center.y, w: pw + 2 * pad, h: ph + 2 * pad }, index: 0 }],
     };
   }

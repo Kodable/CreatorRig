@@ -1404,10 +1404,23 @@ export class BuilderScene extends Phaser.Scene {
       : COACH_HAND_FRAMES[COACH_FRAME_SEQUENCE[Math.floor(this.nowMs / COACH_FRAME_MS) % COACH_FRAME_SEQUENCE.length]!]!;
     const h = COACH_HAND_H_PX * s * grow;
     const w = h * COACH_HAND_ASPECT;
+    // 2026-10-15: a glove that would hang below the panel's bottom edge (the catapult's BUILD pill
+    // in the ground band) lies on its side instead, finger pointing left at the target's right end,
+    // turned about the fingertip like the bar buttons' sideways glove (src/style.css .coach-hand.side).
+    let side = false;
+    if (!drag && target?.type === 'widget') {
+      const geom = this.widgetGeoms.find((gm) => gm.id === target.id);
+      const bottom = this.worldCam.worldView.bottom;
+      if (geom?.kind === 'tap' && geom.pill && p.y + h * (1 - frame.fy) > bottom) {
+        side = true;
+        p = { x: geom.center.x + geom.pill.w * 0.42, y: geom.center.y };
+      }
+    }
     for (const img of [shadow, hand]) {
       img.setTexture(frame.key);
       img.setDisplaySize(w, h);
       img.setOrigin(frame.fx, frame.fy);
+      img.setRotation(side ? -Math.PI / 2 : 0);
     }
     shadow.setPosition(p.x, p.y + 4 * s);
     shadow.setAlpha(0.35 * alpha);
@@ -2049,7 +2062,11 @@ export class BuilderScene extends Phaser.Scene {
       const key = `tap:${geom.id}:bigbody`;
       seenNineSlice.add(key);
       ns.setPosition(geom.center.x, geom.center.y);
-      ns.setSize(Math.max(64, w), Math.max(64, h));
+      // A scaled pill (`bigScale`) scales the NineSlice itself, so its 32 px corners shrink with it
+      // instead of the 64 px minimum making a small pill taller than drawn.
+      const ps = pill.scale;
+      ns.setSize(Math.max(64, w / ps), Math.max(64, h / ps));
+      ns.setScale(ps);
       // MULTIPLY (the default tint mode) against the texture's plain WHITE pixels reproduces the
       // tint colour exactly (white * c = c) while keeping box_curved_2's alpha-feathered shape.
       ns.setTint(fill);
@@ -2066,7 +2083,7 @@ export class BuilderScene extends Phaser.Scene {
       seenText.add(key);
       const t = this.widgetText(key, geom.icon, BIG_FONT_PX, '#ffffff', true, true, BIG_FONT_FAMILY);
       t.setAlpha(alpha);
-      t.setScale(s * k);
+      t.setScale(s * k * pill.scale);
       t.setPosition(x + (pill.iconW * k) / 2, geom.center.y);
       x += (pill.iconW + pill.gap) * k;
     }
@@ -2075,7 +2092,7 @@ export class BuilderScene extends Phaser.Scene {
       seenText.add(key);
       const t = this.widgetText(key, geom.label, BIG_FONT_PX, '#ffffff', true, true, BIG_FONT_FAMILY);
       t.setAlpha(alpha);
-      t.setScale(s * k);
+      t.setScale(s * k * pill.scale);
       t.setPosition(x + (pill.labelW * k) / 2, geom.center.y);
     }
   }
