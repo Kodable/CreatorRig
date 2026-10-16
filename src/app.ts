@@ -94,7 +94,6 @@ export class App {
     this.scene.onPointsChanged = (pts: TrackPoint[]): void => this.onPoints(pts);
     this.scene.onUpdate = (dt: number): void => this.frame(dt);
     this.scene.onEntranceSkip = (): void => this.skipEntrance();
-    this.scene.onPlayTap = (): void => this.play();
 
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     this.dialogs = makeDialogRunner(this.scene, this.hud.brunoDialog);

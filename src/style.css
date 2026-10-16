@@ -1,3 +1,11 @@
+/* Kodable's own typeface (the art team's Resources/Fonts/Kodable.ttf): the coaster's goal cards. */
+@font-face {
+  font-family: "Kodable";
+  src: url("/fonts/Kodable.ttf") format("truetype");
+  font-weight: 400 900;
+  font-display: swap;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: #192661; overflow: hidden; }
 #stage { position: fixed; inset: 0; }
@@ -197,8 +205,10 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
    a progress bar along the bottom. A yes/no goal (flag, end) is a bigger picture and no bar. A
    "stay under" goal wears a navy "under" tab on its top edge. States: idle (calm, empty bar),
    progress (orange bar filling; a "stay under" bar is blue, orange from 75% of the limit), met
-   (green rim and tint, green check pops in the corner), broken (pink rim, number and bar, a pink
-   "!" pops). The kit's goals overlay (BuilderHud) keeps the rows above. ---- */
+   (green rim and tint, green check pops in the corner), broken (red rim, number, caption and bar,
+   a red "!" pops: a "stay under" limit broke, or the ride ended with the goal missed). Type: the
+   Kodable font (public/fonts/Kodable.ttf), captions in Title Case. The kit's goals overlay
+   (BuilderHud) keeps the rows above. ---- */
 .goals-overlay.goal-cards {
   min-width: 0; max-width: none; padding: 0; border-radius: 0; gap: 0;
   background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
@@ -209,6 +219,7 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
   font-size: 16px; font-weight: 800; box-shadow: 0 3px 10px rgba(11, 16, 48, 0.28);
 }
 .gcard {
+  font-family: "Kodable", "Nunito", "Arial Rounded MT Bold", ui-rounded, sans-serif;
   position: relative; width: 104px; box-sizing: border-box; padding: 7px 8px 9px;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px;
   border: 3px solid #fff; border-radius: 18px; background: rgba(255, 255, 255, 0.96); color: #1a2142;
@@ -218,6 +229,8 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 .gcard-target { display: flex; align-items: baseline; justify-content: center; gap: 2px; line-height: 0.9; }
 .gcard-num { font-size: 38px; font-weight: 900; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .gcard-unit { font-size: 15px; font-weight: 800; color: #4a5275; }
+/* The Kodable font's "×" glyph is empty: the loops card's unit uses the rounded fallback. */
+.gcard-loop .gcard-unit { font-family: "Arial Rounded MT Bold", "Nunito", ui-rounded, sans-serif; }
 .gcard-icon { display: block; width: 72px; height: 36px; pointer-events: none; }
 .gcard-check .gcard-icon { width: 62px; height: 62px; margin: 1px 0; }
 .gcard-caption {
@@ -243,10 +256,10 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 .gcard.met .gcard-fill { background: #61bb46; }
 .gcard.met .gcard-tick { display: flex; }
 .gcard.met .gcard-tick::after { content: '\2713'; }
-.gcard.broken { border-color: #c32f96; background: rgba(253, 233, 246, 0.97); }
-.gcard.broken .gcard-num, .gcard.broken .gcard-unit { color: #c32f96; }
-.gcard.broken .gcard-fill { background: #c32f96; }
-.gcard.broken .gcard-tick { display: flex; background: #c32f96; }
+.gcard.broken { border-color: #e53935; background: rgba(255, 233, 231, 0.97); }
+.gcard.broken .gcard-num, .gcard.broken .gcard-unit, .gcard.broken .gcard-caption { color: #e53935; }
+.gcard.broken .gcard-fill { background: #e53935; }
+.gcard.broken .gcard-tick { display: flex; background: #e53935; }
 .gcard.broken .gcard-tick::after { content: '!'; }
 /* The pop: the card bounces and the corner badge springs in each time a goal turns met or broken. */
 .gcard.met, .gcard.broken { animation: gcard-pop 420ms ease-out both; }

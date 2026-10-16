@@ -159,12 +159,12 @@ const SOLUTIONS: { id: string; solution: TrackPoint[]; naive: { why: string; poi
   },
   {
     id: 'tour',
-    // Down to a loop near the ground, a long floaty hill, a smaller one, then up to the high flag.
-    solution: [lock(2, 34), c(14, 4), loop(26, 2), c(40, 3), c(60, 8), c(80, 18), c(96, 10), c(110, 12), c(130, 16), c(146, 18)],
+    // Down to a loop near the ground, a tall floaty hill, a dip, then small hills up to the high flag.
+    solution: [lock(2, 28), c(14, 4), loop(26, 2), c(40, 3), c(60, 18), c(80, 6), c(96, 10), c(110, 12), c(130, 16), c(146, 18)],
     naive: [
-      { why: 'a straight rail to the flag has no loop and no air', points: [lock(2, 34), c(146, 18)] },
-      { why: 'a loop high on the first slope is too slow and the fuzz falls', points: [lock(2, 34), c(10, 30), loop(20, 26), c(40, 22), c(146, 18)] },
-      { why: 'a hill taller than the station strands the fuzz', points: [lock(2, 34), c(14, 4), loop(26, 2), c(40, 3), c(70, 36), c(100, 8), c(146, 18)] },
+      { why: 'a straight rail to the flag has no loop and no air', points: [lock(2, 28), c(146, 18)] },
+      { why: 'a loop high on the first slope is too slow and the fuzz falls', points: [lock(2, 28), c(10, 30), loop(20, 26), c(40, 22), c(146, 18)] },
+      { why: 'a hill taller than the station strands the fuzz', points: [lock(2, 28), c(14, 4), loop(26, 2), c(40, 3), c(70, 36), c(100, 8), c(146, 18)] },
     ],
   },
   {
@@ -179,11 +179,11 @@ const SOLUTIONS: { id: string; solution: TrackPoint[]; naive: { why: string; poi
   {
     id: 'marathon',
     // Six hills, each lower than the one before, then up to the flag.
-    solution: [lock(2, 30), c(14, 4), c(28, 24), c(42, 4), c(56, 22), c(70, 4), c(84, 20), c(98, 4), c(112, 18), c(126, 4), c(140, 16), c(154, 6), c(166, 12)],
+    solution: [lock(2, 28), c(14, 4), c(28, 24), c(42, 4), c(56, 22), c(70, 4), c(84, 20), c(98, 4), c(112, 18), c(126, 4), c(140, 16), c(154, 6), c(166, 12)],
     naive: [
-      { why: 'a straight rail to the flag is only about 165 m', points: [lock(2, 30), c(166, 12)] },
-      { why: 'one big hill is still too short', points: [lock(2, 30), c(30, 3), c(80, 24), c(130, 3), c(166, 12)] },
-      { why: 'a hill taller than the station strands the fuzz', points: [lock(2, 30), c(14, 4), c(40, 34), c(70, 4), c(166, 12)] },
+      { why: 'a straight rail to the flag is only about 165 m', points: [lock(2, 28), c(166, 12)] },
+      { why: 'one big hill is still too short', points: [lock(2, 28), c(30, 3), c(80, 24), c(130, 3), c(166, 12)] },
+      { why: 'a hill taller than the station strands the fuzz', points: [lock(2, 28), c(14, 4), c(40, 34), c(70, 4), c(166, 12)] },
     ],
   },
 ];
@@ -421,7 +421,7 @@ describe('levels', () => {
     it('a fall far out on a wide world is still a fall (the loop test does not depend on x)', () => {
       const level = findLevel('tour')!;
       // A loop 130 m out, only a little below the station: too slow at its top.
-      const r = ride(level, [lock(2, 34), c(20, 22), c(110, 21), loop(130, 21), c(146, 18)]);
+      const r = ride(level, [lock(2, 28), c(20, 16), c(110, 15), loop(130, 15), c(146, 18)]);
       expect(r.outcome).toBe('fell');
       expect(r.passed).toBe(false);
     });

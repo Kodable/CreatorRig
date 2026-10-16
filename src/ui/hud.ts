@@ -749,7 +749,7 @@ export class Hud {
   /** One goal card: the big target number and its unit over the metric's picture
    * (public/ui/goals/<icon>.svg), an UNDER badge on a "stay under" goal, a tiny caption and a
    * progress bar; a yes/no goal (the flag, the end) shows a bigger picture and no bar. The check
-   * (or the pink "!") in the corner is CSS, shown by the card's state class (`update`). */
+   * (or the red "!") in the corner is CSS, shown by the card's state class (`update`). */
   private makeGoalCard(goal: Goal): GoalItem {
     const spec = goalCardSpec(goal);
     const card = document.createElement('li');
@@ -878,12 +878,13 @@ export class Hud {
     this.gaugeFillEl.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
     this.gaugeNeedleEl.style.left = `${pct}%`;
 
-    // ---- goal cards: fill toward the target, green with a check once met, pink once a "stay
-    // under" limit breaks (src/core/goalCards.ts goalCardLive) ----
+    // ---- goal cards: fill toward the target, green with a check once met, red once a "stay
+    // under" limit breaks or the ride ends with the goal missed (src/core/goalCards.ts goalCardLive) ----
+    const reachedEnd = !state.level.finish || state.outcome === 'reachedEnd';
     state.goals.forEach((gr: GoalResult, i: number) => {
       const item = this.goalItems[i];
       if (!item) return;
-      const live = goalCardLive(gr, state.mode);
+      const live = goalCardLive(gr, state.mode, reachedEnd);
       if (item.state !== live.state) {
         if (item.state) item.card.classList.remove(item.state);
         item.card.classList.add(live.state);

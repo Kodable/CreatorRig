@@ -286,7 +286,7 @@ export const LEVELS: Level[] = [
     // The flag stands 18 m up at the far end of a 150 m park: a loop and the floaty hills on the
     // way have to leave the fuzz enough speed for the last climb.
     worldW: 150,
-    preset: [{ x: 2, y: 34, kind: 'curve', locked: true }],
+    preset: [{ x: 2, y: 28, kind: 'curve', locked: true }],
     finish: { x: 146, y: 18, r: 2.5 },
     hints: {
       rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",
@@ -336,7 +336,7 @@ export const LEVELS: Level[] = [
     // A straight run to the flag is 165 m: the extra length has to come from hills, each lower
     // than the station (and than the hill before, to keep the speed).
     worldW: 170,
-    preset: [{ x: 2, y: 30, kind: 'curve', locked: true }],
+    preset: [{ x: 2, y: 28, kind: 'curve', locked: true }],
     finish: { x: 166, y: 12, r: 2.5 },
     hints: {
       rolledBack: "The fuzz rolled back. Every hill has to be lower than the station.",

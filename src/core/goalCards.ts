@@ -18,12 +18,14 @@ export interface GoalCardSpec {
   unit: string;
   /** A "stay under" goal (op '<='): the card wears an UNDER badge. */
   under: boolean;
-  /** The tiny caption under the card ("speed", "track to flag"). */
+  /** The tiny caption under the card, in Title Case (2026-10-15, Gao: "capitalize things"):
+   * "Speed", "Track to Flag". The units stay lower case: "m" is metres, "M" is not. */
   caption: string;
 }
 
 /** How a card looks this frame: 'idle' (nothing to show yet), 'progress' (filling toward the
- * target), 'met' (green, with a check), 'broken' (a "stay under" limit went over: pink). */
+ * target), 'met' (green, with a check), 'broken' (red, with a "!": a "stay under" limit went over,
+ * or the ride is over and the goal was missed, so the child has to reset and try again). */
 export type GoalCardState = 'idle' | 'progress' | 'met' | 'broken';
 
 export interface GoalCardLive {
@@ -60,15 +62,15 @@ const UNIT: Record<Metric, string> = {
 };
 
 const CAPTION: Record<Metric, string> = {
-  maxDrop: 'drop',
-  maxSpeed: 'speed',
-  length: 'track length',
-  hangTime: 'air time',
-  loops: 'loops',
-  loopsCompleted: 'loops',
-  maxG: 'g-force',
-  atFinish: 'track to flag',
-  reachedEnd: 'fuzz to the end',
+  maxDrop: 'Drop',
+  maxSpeed: 'Speed',
+  length: 'Track Length',
+  hangTime: 'Air Time',
+  loops: 'Loops',
+  loopsCompleted: 'Loops',
+  maxG: 'G-Force',
+  atFinish: 'Track to Flag',
+  reachedEnd: 'Fuzz to the End',
 };
 
 /** Yes/no metrics (0 or 1): a check card. */
@@ -108,12 +110,18 @@ function clamp01(v: number): number {
 
 /**
  * A card's look this frame. While editing only the metrics the track already has (drop, length,
- * loops placed, the flag) fill; the ride metrics stay idle and calm. During the ride and after,
- * every card fills toward its target and turns green the moment it is met; a "stay under" goal is
- * never green while editing (nothing has pushed on it yet) and turns pink once its limit breaks.
+ * loops placed, the flag) fill; the ride metrics stay idle and calm. During the ride every card
+ * fills toward its target and turns green the moment it is met; a "stay under" goal is never green
+ * while editing (nothing has pushed on it yet) and turns red once its limit breaks.
+ *
+ * When the ride is over (2026-10-15, Gao: "show goal as red when they need to reset and failed
+ * something"), every missed goal turns red and keeps its bar, so the child sees how close it was.
+ * `reachedEnd` is false when the fuzz fell, rolled back or got stuck: then the flag and end cards
+ * are red too, even when the track itself reaches the flag.
  */
-export function goalCardLive(result: GoalResult, mode: Mode): GoalCardLive {
+export function goalCardLive(result: GoalResult, mode: Mode, reachedEnd = true): GoalCardLive {
   const { goal, current, pass } = result;
+  if (mode === 'done' && !reachedEnd && BOOL_METRICS.has(goal.metric)) return { state: 'broken', fill: 1, warn: false };
   const live = mode !== 'edit' || STATIC_METRICS.has(goal.metric);
 
   if (goal.op === '<=') {
@@ -126,7 +134,9 @@ export function goalCardLive(result: GoalResult, mode: Mode): GoalCardLive {
 
   if (!live) return { state: 'idle', fill: 0, warn: false };
   if (pass) return { state: 'met', fill: 1, warn: false };
-  if (goal.op === '==' || BOOL_METRICS.has(goal.metric)) return { state: 'idle', fill: 0, warn: false };
-  const fill = goal.value > 0 ? clamp01(current / goal.value) : 0;
+  const exact = goal.op === '==' || BOOL_METRICS.has(goal.metric);
+  const fill = exact ? 0 : goal.value > 0 ? clamp01(current / goal.value) : 0;
+  if (mode === 'done') return { state: 'broken', fill: exact ? 1 : fill, warn: false };
+  if (exact) return { state: 'idle', fill: 0, warn: false };
   return { state: fill > 0 ? 'progress' : 'idle', fill, warn: false };
 }

@@ -225,13 +225,6 @@ interface TrackGhost {
 /** The rail's lower rail sits this far under the main rail (stage px). */
 const RAIL_GAP = 8;
 
-/** The "▶" bubble: radius, and its centre's height over the station deck (stage px). */
-const PLAY_BUBBLE_R = 13;
-const PLAY_BUBBLE_RISE = 58;
-/** The goals panel covers the scene's top-left down to about stage y 215: a bubble whose top would
- * be above this hangs under the station deck instead. */
-const PLAY_BUBBLE_MIN_Y = 228;
-
 /* 2026-10-15 (Jon: "finish line hard to see"): a tall pole with a big waving checkered flag and a
    glowing ring on the ground zone. */
 const FINISH_POLE_H = 92;
@@ -260,8 +253,6 @@ export class CoasterScene extends Phaser.Scene {
   onUpdate?: (deltaMs: number) => void;
   /** A tap while the fuzz hops onto the rail (the App starts the ride at once). */
   onEntranceSkip?: () => void;
-  /** A tap on the "▶" bubble over the waiting fuzz (the App's Play). */
-  onPlayTap?: () => void;
 
   private points: TrackPoint[] = [];
   private undoStack: TrackPoint[][] = [];
@@ -332,10 +323,6 @@ export class CoasterScene extends Phaser.Scene {
   private prevG = 1;
   private prevAirborne = false;
   private happyAt = -Infinity;
-  /** The "▶" bubble over the waiting fuzz (Jon: "put the play button where the fuzz is"). */
-  private playBubble!: Phaser.GameObjects.Container;
-  private playBubbleAt: Vec2 = { x: 0, y: 0 };
-  private playBubbleBelow = false;
   private finishTime = 0;
 
   private trackDirty = false;
@@ -481,7 +468,6 @@ export class CoasterScene extends Phaser.Scene {
     }));
     this.dust.setDepth(DEPTH_SUPPORT + 0.05);
 
-    this.createPlayBubble();
 
     this.createFuzz();
     // 2026-10-12: Bruno left the top bar; he slides in over a dimmed stage when he talks.
@@ -512,7 +498,6 @@ export class CoasterScene extends Phaser.Scene {
     this.updateBackdrop(delta);
     this.updateStationPulse(time);
     this.updateBuildAnims(time);
-    this.updatePlayBubble(time);
     this.finishTime = time;
     if (this.finish) this.finishDirty = true; // the flag waves and the ring glows
     if (this.trackDirty) {
@@ -1719,12 +1704,6 @@ export class CoasterScene extends Phaser.Scene {
     if (sx < WORLD_X0 || sx > ORIGIN_X + this.worldW * PPM || sy < WORLD_Y0 || sy > WORLD_Y1) return;
     this.dragScreen = screen;
 
-    // The "▶" bubble over the waiting fuzz starts the ride, like the bar's Play.
-    if (this.playBubble.visible && Math.hypot(sx - this.playBubbleAt.x, sy - this.playBubbleAt.y) <= PLAY_BUBBLE_R + 6) {
-      this.onPlayTap?.();
-      return;
-    }
-
     let bestIdx = -1;
     let bestDist = Infinity;
     for (let i = 0; i < this.points.length; i++) {
@@ -2175,55 +2154,6 @@ export class CoasterScene extends Phaser.Scene {
     this.stationFuzz.setPosition(at.x, at.y);
     this.stationFuzz.setDepth(this.points[0]?.locked ? DEPTH_POINTS + 0.1 : DEPTH_STATION_FUZZ);
     this.stationFuzz.setVisible(true);
-    // The "▶" bubble floats over the canopy, above the waiting fuzz; for a station high in the sky
-    // (where the goals panel sits over the scene's top-left) it hangs under the deck instead,
-    // pointing up at the fuzz.
-    const x = Math.max(PANEL_X0 + PLAY_BUBBLE_R + 3, at.x);
-    const over = at.y + FUZZ_R_PX - PLAY_BUBBLE_RISE;
-    this.playBubbleBelow = over - PLAY_BUBBLE_R < PLAY_BUBBLE_MIN_Y;
-    this.playBubbleAt = { x, y: this.playBubbleBelow ? p.y + 10 + 34 : over };
-  }
-
-  /**
-   * The "▶" bubble over the waiting fuzz (2026-10-15, Jon: "put the play button where the fuzz is"):
-   * a small green speech bubble with a white play triangle, pointing down at the fuzz. A tap starts
-   * the ride like the bar's Play (which stays). Shown in edit mode once the track has built in, and
-   * not while a finger is on the track or the tutorial hand is out.
-   */
-  private createPlayBubble(): void {
-    const g = this.add.graphics();
-    const r = PLAY_BUBBLE_R;
-    g.fillStyle(0x000000, 0.22);
-    g.fillCircle(0, 2.5, r + 1.5);
-    g.fillStyle(COLORS.white, 1);
-    g.fillCircle(0, 0, r + 2);
-    g.fillTriangle(-5, r - 1, 5, r - 1, 0, r + 7);
-    g.fillStyle(0x3f9e2c, 1);
-    g.fillCircle(0, 0, r);
-    g.fillTriangle(-3.5, r - 2, 3.5, r - 2, 0, r + 4.5);
-    g.fillStyle(COLORS.white, 1);
-    g.fillTriangle(-3.5, -6.5, -3.5, 6.5, 7.5, 0);
-    this.playBubble = this.onWorld(this.add.container(0, 0, [g]));
-    this.playBubble.setDepth(DEPTH_POINTS + 0.15);
-    this.playBubble.setVisible(false);
-  }
-
-  private updatePlayBubble(time: number): void {
-    const show = this.editable && !!this.track && this.points.length > 0 && this.buildAnims.length === 0 &&
-      !this.gesture && this.coach === null;
-    this.playBubble.setVisible(show);
-    if (!show) return;
-    // A gentle bob and breathe, so it reads as something to tap.
-    const ph = (time / 900) * Math.PI * 2;
-    this.playBubble.setPosition(this.playBubbleAt.x, this.playBubbleAt.y + Math.sin(ph) * 2);
-    const k = 1 + 0.05 * Math.sin(ph + Math.PI / 2);
-    // Upside down under the deck: the tail points up at the fuzz (the ▶ is symmetric top to bottom).
-    this.playBubble.setScale(k, this.playBubbleBelow ? -k : k);
-  }
-
-  /** Where the "▶" bubble is (stage px), or null when hidden (dev checks). */
-  playBubbleShown(): Vec2 | null {
-    return this.playBubble.visible ? { ...this.playBubbleAt } : null;
   }
 
   /**
