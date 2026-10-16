@@ -233,6 +233,8 @@ li.goal { display: flex; flex-direction: column; gap: 3px; }
 .gcard-loop .gcard-unit { font-family: "Arial Rounded MT Bold", "Nunito", ui-rounded, sans-serif; }
 .gcard-icon { display: block; width: 72px; height: 36px; pointer-events: none; }
 .gcard-check .gcard-icon { width: 62px; height: 62px; margin: 1px 0; }
+/* A yes/no caption is an action ("Build Coaster to Flag"): it may wrap to two lines. */
+.gcard-check .gcard-caption { white-space: normal; text-align: center; }
 .gcard-caption {
   font-size: 11px; font-weight: 800; line-height: 1.1; color: #5b6385; white-space: nowrap;
   letter-spacing: 0.01em;

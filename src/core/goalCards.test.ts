@@ -28,8 +28,8 @@ describe('goalCardSpec', () => {
   });
 
   it('shows a yes/no goal as a check card with no number', () => {
-    expect(goalCardSpec(goal('atFinish', '==', 1))).toEqual({ icon: 'flag', kind: 'check', number: '', unit: '', under: false, caption: 'Track to Flag' });
-    expect(goalCardSpec(goal('reachedEnd', '==', 1))).toEqual({ icon: 'end', kind: 'check', number: '', unit: '', under: false, caption: 'Fuzz to the End' });
+    expect(goalCardSpec(goal('atFinish', '==', 1))).toEqual({ icon: 'flag', kind: 'check', number: '', unit: '', under: false, caption: 'Build Coaster to Flag' });
+    expect(goalCardSpec(goal('reachedEnd', '==', 1))).toEqual({ icon: 'end', kind: 'check', number: '', unit: '', under: false, caption: 'Ride the Coaster!' });
   });
 
   it('marks a "stay under" goal', () => {

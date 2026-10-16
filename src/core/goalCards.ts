@@ -19,7 +19,7 @@ export interface GoalCardSpec {
   /** A "stay under" goal (op '<='): the card wears an UNDER badge. */
   under: boolean;
   /** The tiny caption under the card, in Title Case (2026-10-15, Gao: "capitalize things"):
-   * "Speed", "Track to Flag". The units stay lower case: "m" is metres, "M" is not. */
+   * "Speed", "Build Coaster to Flag". The units stay lower case: "m" is metres, "M" is not. */
   caption: string;
 }
 
@@ -69,8 +69,8 @@ const CAPTION: Record<Metric, string> = {
   loops: 'Loops',
   loopsCompleted: 'Loops',
   maxG: 'G-Force',
-  atFinish: 'Track to Flag',
-  reachedEnd: 'Fuzz to the End',
+  atFinish: 'Build Coaster to Flag',
+  reachedEnd: 'Ride the Coaster!',
 };
 
 /** Yes/no metrics (0 or 1): a check card. */
