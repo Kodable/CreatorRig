@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DIAL_DRAG_HAND, DIAL_DRAG_PERIOD_MS, dialDragPose, dialOptionAngle } from './coachGesture';
+import { DIAL_DRAG_HAND, DIAL_DRAG_PERIOD_MS, DROP_ARC_PX, dialDragPose, dialOptionAngle, dropPose, slideDragPose } from './coachGesture';
 import { dragHandPose } from '../core/coach';
-import type { DialWidget, Vec2 } from './types';
-import { layoutWidgets, type DialGeom } from './widgetLayout';
+import type { DialWidget, SlideWidget, Vec2 } from './types';
+import { layoutWidgets, slideValuePoint, type DialGeom, type SlideGeom } from './widgetLayout';
 
 // A five-notch dial like the catapult's angle lever: 15..75 over a quarter turn, handle at 30.
 const toPx = (v: Vec2): Vec2 => ({ x: v.x * 10, y: 500 - v.y * 10 });
@@ -95,5 +95,74 @@ describe('coachGesture: the drag demonstration on a dial', () => {
     const top = { ...geom, value: '75', handleAngle: dialOptionAngle(geom, '75')! };
     const p = dialDragPose(top, '45', doneMoving + 1)!;
     expect(p.angle).toBeCloseTo(dialOptionAngle(geom, '45')!, 12);
+  });
+});
+
+// 2026-10-16: the same stroke on a SLIDE widget (the catapult's arm length) and the 'drop' gesture
+// on a SUPPLY BIN tile.
+describe('coachGesture: the drag demonstration on a slide', () => {
+  const slide: SlideWidget = {
+    id: 'arm',
+    kind: 'slide',
+    from: { x: 10, y: 10 },
+    to: { x: 0, y: 10 },
+    options: ['1.5', '2', '2.5', '3', '3.5', '4'].map((v) => ({ value: v, label: v })),
+    value: '2',
+  };
+  const [sg] = layoutWidgets([slide], toPx, 1) as [SlideGeom];
+
+  it('null (the plain tap) for an unknown option or the current one', () => {
+    expect(slideDragPose(sg, '9', 500)).toBeNull();
+    expect(slideDragPose(sg, '2', 500)).toBeNull();
+  });
+
+  it('presses the knob, slides it along the straight track to the target, holds, lets go, repeats', () => {
+    const to = slideValuePoint(sg, '3.5')!;
+    const pose = (t: number) => slideDragPose(sg, '3.5', t)!;
+    expect(pose(0)).toMatchObject({ frame: 0, along: 0, alpha: 0, ghost: null, tip: sg.knob });
+    const mid = pose(pressedAt + D.move / 2);
+    expect(mid.frame).toBe(2);
+    expect(mid.tip.x).toBeCloseTo((sg.knob.x + to.x) / 2, 9);
+    expect(mid.tip.y).toBeCloseTo(sg.knob.y, 9);
+    expect(mid.ghost).toEqual(mid.tip);
+    expect(pose(doneMoving + D.hold / 2).tip.x).toBeCloseTo(to.x, 9);
+    expect(pose(DIAL_DRAG_PERIOD_MS - 1)).toMatchObject({ alpha: 0, ghost: null });
+    expect(pose(DIAL_DRAG_PERIOD_MS + 700)).toEqual(pose(700));
+    for (let t = 0; t < DIAL_DRAG_PERIOD_MS; t += 53) {
+      const c = dragHandPose(t);
+      expect(pose(t).frame).toBe(c.frame);
+      expect(pose(t).along).toBeCloseTo(c.rise, 12);
+    }
+  });
+});
+
+describe("coachGesture: the 'drop' demonstration (bin tile -> drop zone)", () => {
+  const from = { x: 800, y: 300 };
+  const to = { x: 300, y: 500 };
+  it('starts on the tile, carries the ghost along an arc over the line, ends on the drop zone', () => {
+    expect(dropPose(from, to, 0)).toMatchObject({ frame: 0, alpha: 0, ghost: null, tip: from });
+    const pressed = dropPose(from, to, pressedAt - 1);
+    expect(pressed.frame).toBe(2);
+    expect(pressed.tip).toEqual(from);
+    expect(pressed.ghost).toEqual(from);
+    const mid = dropPose(from, to, pressedAt + D.move / 2);
+    expect(mid.along).toBeCloseTo(0.5, 9);
+    expect(mid.tip.x).toBeCloseTo(550, 9);
+    expect(mid.tip.y).toBeCloseTo(400 - DROP_ARC_PX, 9); // lifted over the straight line
+    expect(mid.ghost).toEqual(mid.tip);
+    const held = dropPose(from, to, doneMoving + D.hold / 2);
+    expect(held.tip.x).toBeCloseTo(to.x, 9);
+    expect(held.tip.y).toBeCloseTo(to.y, 9);
+    expect(held.ghost).toEqual(held.tip);
+    expect(dropPose(from, to, DIAL_DRAG_PERIOD_MS - 1)).toMatchObject({ alpha: 0, ghost: null });
+    expect(dropPose(from, to, DIAL_DRAG_PERIOD_MS + 900)).toEqual(dropPose(from, to, 900));
+  });
+  it("uses the drag hand's frames and fades", () => {
+    for (let t = 0; t < DIAL_DRAG_PERIOD_MS; t += 41) {
+      const c = dragHandPose(t);
+      const p = dropPose(from, to, t);
+      expect(p.frame).toBe(c.frame);
+      expect(p.alpha).toBeCloseTo(c.alpha, 12);
+    }
   });
 });

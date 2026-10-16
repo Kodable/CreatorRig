@@ -1,23 +1,38 @@
-// Covers `catapultSpec.partTargets`: the drawer's "part flies to the machine" animation needs at
-// least one on-screen target per property value, and that target has to sit inside the play
-// field, not off in the weeds somewhere. Also covers the one in-scene widget left (the angle
-// lever/dial; FIRE moved to the bottom bar on 2026-10-15).
+// Covers the catapult course spec's wiring: `partTargets` (the bin tap's "part flies to the machine"
+// animation), the in-scene widgets (the angle lever, the arm's slide knob, the "−" band badge), the
+// SUPPLY BIN (2026-10-16), the goal cards (2026-10-16), the backyard backdrop (2026-10-16), the
+// build view's frame and the result card.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { visibleBinItems } from '../../kit/bin';
+import { gatedOptions, isKnown, knownConcepts } from '../../kit/concepts';
 import { lookImageUrls } from '../../kit/looks';
 import { PARALLAX } from '../../kit/parallax';
 import { estimateBigTextWidth, layoutWidgets, MIN_TOUCH_PX } from '../../kit/widgetLayout';
-import { catapultSpec } from './spec';
-import { CATALOG, FUZZ, FUZZ_NAMES } from './core/catalog';
+import type { Goal, Widget } from '../../kit/types';
+import {
+  armSlideTrack,
+  BAND_DROP_R,
+  bandOffAt,
+  catapultBin,
+  catapultGoalCard,
+  catapultSpec,
+  CUP_DROP_R,
+  FOCUS_ZOOM,
+  SLIDE_UNDER_M,
+} from './spec';
+import { CATAPULT_BACKDROP, CATAPULT_EARTH, CATAPULT_GRASS, CATAPULT_SKY } from './backdrop';
+import { ARM_LENGTHS, CATALOG, FUZZ, FUZZ_NAMES } from './core/catalog';
 import {
   armAngleFor,
   armArtBox,
+  armSlide,
   BAND_ASPECTS,
   BASE_ART,
-  bandSegments,
+  bandBundleAt,
   CAN_TEXTURE,
-  catapultPocketAtRest,
+  cupAtRest,
   crossbarPoseFor,
   cupCoverBox,
   fireSpot,
@@ -29,90 +44,131 @@ import {
   WORLD_H,
   WORLD_W,
 } from './core/build';
-import { findLevel } from './core/levels';
-import type { PlacedPart } from './core/types';
+import { findLevel, LEVELS } from './core/levels';
+import type { Metrics, PlacedPart } from './core/types';
 
-function catapultPart(x = 15, y = 0, arm = 'Short'): PlacedPart {
-  return { id: 1, kind: 'catapult', x, y, props: { power: 'Medium', angle: '45', fuzz: 'Fur', arm } };
+function catapultPart(x = 15, y = 0, armLen = '2'): PlacedPart {
+  return { id: 1, kind: 'catapult', x, y, props: { bands: '2', angle: '45', fuzz: 'Fur', armLen } };
 }
 
-describe('catapultSpec.partTargets', () => {
+describe('catapultSpec.partTargets (a bin tile tapped flies to the machine)', () => {
   it('returns [] for a non-catapult part', () => {
     const shelf: PlacedPart = { id: 2, kind: 'shelf', x: 5, y: 0, props: { length: '2' } };
-    expect(catapultSpec.partTargets!(shelf, 'power', 'Medium', {} as never)).toEqual([]);
+    expect(catapultSpec.partTargets!(shelf, 'bands', '2', {} as never)).toEqual([]);
   });
 
-  it('returns [] for an unknown property code', () => {
+  it('returns [] for a code no bin tile sets (the angle and the arm are dragged on the machine)', () => {
     const part = catapultPart();
-    expect(catapultSpec.partTargets!(part, 'nonsense', 'x', {} as never)).toEqual([]);
+    for (const code of ['nonsense', 'angle', 'armLen']) expect(catapultSpec.partTargets!(part, code, '3', {} as never)).toEqual([]);
   });
 
-  it('every catapult prop value yields >= 1 part target, inside the world bounds', () => {
+  it('bands: one target on the band bundle for the NEW band count, inside the world', () => {
     const part = catapultPart(15, 0);
-    const descriptors = CATALOG.catapult.descriptors;
-    expect(descriptors.length).toBeGreaterThan(0);
-
-    for (const descriptor of descriptors) {
-      for (const option of descriptor.options) {
-        const targets = catapultSpec.partTargets!(part, descriptor.code, option.value, {} as never);
-        expect(targets.length).toBeGreaterThanOrEqual(1);
-        for (const t of targets) {
-          expect(t.size).toBeGreaterThan(0);
-          expect(t.at.x).toBeGreaterThanOrEqual(0);
-          expect(t.at.x).toBeLessThanOrEqual(WORLD_W);
-          expect(t.at.y).toBeGreaterThanOrEqual(0);
-          expect(t.at.y).toBeLessThanOrEqual(WORLD_H);
-        }
-      }
+    for (const n of ['1', '2', '6', '30', '60']) {
+      const preview: PlacedPart = { ...part, props: { ...part.props, bands: n } };
+      const targets = catapultSpec.partTargets!(part, 'bands', n, {} as never);
+      expect(targets).toEqual([{ at: bandBundleAt(preview), size: 0.6 }]);
+      expect(targets[0]!.at.x).toBeGreaterThan(0);
+      expect(targets[0]!.at.x).toBeLessThan(WORLD_W);
+      expect(targets[0]!.at.y).toBeGreaterThan(0);
+      expect(targets[0]!.at.y).toBeLessThan(WORLD_H);
     }
   });
 
-  it('power: the target sits at band 0\'s span midpoint at rest, for the NEW power', () => {
-    const part = catapultPart(15, 0);
-    const preview: PlacedPart = { ...part, props: { ...part.props, power: 'High' } };
-    const [first] = bandSegments(preview, REST_ANGLE);
-    const expected = { at: { x: (first!.a.x + first!.b.x) / 2, y: (first!.a.y + first!.b.y) / 2 }, size: 0.6 };
-    expect(catapultSpec.partTargets!(part, 'power', 'High', {} as never)).toEqual([expected]);
-  });
-
-  it('fuzz: the new fuzz flies to the rest pocket, sized to the NEW fuzz\'s diameter x 1.5', () => {
+  it('fuzz: the new fuzz flies into the cup, sized to the NEW fuzz\'s diameter x 1.5', () => {
     const part = catapultPart(15, 0);
     for (const name of FUZZ_NAMES) {
       const targets = catapultSpec.partTargets!(part, 'fuzz', name, {} as never);
       expect(targets).toHaveLength(1);
-      expect(targets[0]!.at).toEqual(catapultPocketAtRest(part));
+      expect(targets[0]!.at).toEqual(cupAtRest(part));
       expect(targets[0]!.size).toBeCloseTo(2 * FUZZ[name]!.r * 1.5, 6);
     }
   });
+});
 
-  it('arm: the target sits at the arm midpoint at rest for the NEW arm length, sized to that length', () => {
-    const part = catapultPart(15, 0);
-    const targets = catapultSpec.partTargets!(part, 'arm', 'Long', {} as never);
-    expect(targets).toHaveLength(1);
-    expect(targets[0]!.size).toBe(3); // ARM.Long.length
+// 2026-10-16 (Jon's huddle 2026-10-15: "a classroom supply bin / toolbox you pull parts from instead
+// of menu rows", "rubber bands unlimited like rover wheels"): the catapult's drawer is a supply bin.
+describe('catapultSpec.bin: the supply bin', () => {
+  /** The tiles the kit shows on a level: gated by `introduces`, stamped locked / NEW. */
+  function shown(levelId: string): string[] {
+    const level = findLevel(levelId)!;
+    const part = level.parts.find((p) => p.kind === 'catapult')!;
+    const items = visibleBinItems(catapultSpec.bin!(part, level.parts, level) ?? [], part, knownConcepts(LEVELS, level.id), gatedOptions(LEVELS), level.introduces ?? []);
+    return items.map((it) => `${it.id}${it.locked ? '#' : ''}${it.active ? '*' : ''}`);
+  }
+
+  it('only the catapult has a bin: the targets and free-play parts keep their drawer rows (null)', () => {
+    for (const kind of ['can', 'block', 'shelf', 'wall', 'bullseye'] as const) {
+      expect(catapultSpec.bin!({ id: 2, kind, x: 5, y: 0, props: {} }, [], {} as never)).toBeNull();
+    }
+    expect(catapultSpec.bin).toBe(catapultBin);
   });
 
-  it('angle: the target follows crossbarPoseFor at the NEW angle, not the part\'s current angle', () => {
-    const part = catapultPart(15, 0);
-    const at45 = catapultSpec.partTargets!(part, 'angle', '45', {} as never)[0]!.at;
-    const at75 = catapultSpec.partTargets!(part, 'angle', '75', {} as never)[0]!.at;
-    expect(at45).not.toEqual(at75);
+  it('a "Rubber bands" pile (one tile, +1 band, endless) and a "Fuzzes" group of the five, in that order', () => {
+    const part = catapultPart(5.5, 0);
+    const bin = catapultBin(part)!;
+    expect(bin.map((it) => it.id)).toEqual(['band', ...FUZZ_NAMES.map((n) => `fuzz-${n}`)]);
+    expect(bin[0]).toMatchObject({ image: 'ui/bin/band.svg', label: 'Rubber band', group: 'Rubber bands', code: 'bands', step: 1, badge: '∞' });
+    expect(bin[0]!.value).toBeUndefined();
+    expect(existsSync(resolve('public', bin[0]!.image))).toBe(true);
+    for (const [i, name] of FUZZ_NAMES.entries()) {
+      expect(bin[i + 1]).toMatchObject({ image: FUZZ[name]!.image, label: FUZZ[name]!.label, group: 'Fuzzes', code: 'fuzz', value: name });
+    }
+  });
+
+  it('the loaded fuzz is the active tile ("in use"), exactly one', () => {
+    for (const fuzz of FUZZ_NAMES) {
+      const bin = catapultBin({ ...catapultPart(), props: { ...catapultPart().props, fuzz } })!;
+      expect(bin.filter((it) => it.active).map((it) => it.id)).toEqual([`fuzz-${fuzz}`]);
+    }
+  });
+
+  it('drop zones: a band on the band bundle, a fuzz in the cup, each finger-sized at the build zoom ' +
+    '(>= 48 px across the radius) and apart from each other', () => {
+    for (const armLen of ARM_LENGTHS) {
+      const part = catapultPart(5.5, 0, armLen);
+      const bin = catapultBin(part)!;
+      expect(bin[0]!.drop).toEqual({ at: bandBundleAt(part), r: BAND_DROP_R });
+      for (const it of bin.slice(1)) expect(it.drop).toEqual({ at: cupAtRest(part), r: CUP_DROP_R });
+      for (const r of [BAND_DROP_R, CUP_DROP_R]) expect(r * 32 * FOCUS_ZOOM).toBeGreaterThanOrEqual(48);
+      // The two zones' centres are farther apart than the bigger radius: a drop on one never lands
+      // in the other's middle.
+      const d = Math.hypot(bin[0]!.drop!.at.x - bin[1]!.drop!.at.x, bin[0]!.drop!.at.y - bin[1]!.drop!.at.y);
+      expect(d, armLen).toBeGreaterThan(Math.max(BAND_DROP_R, CUP_DROP_R));
+    }
+  });
+
+  it('each intro level shows what its lesson needs and nothing more (introduces + lockedProps)', () => {
+    // Fling it: the band pile alone (no fuzzes before the weight level).
+    expect(shown('power')).toEqual(['band']);
+    // Over the wall: bands locked at 3 (the lesson is the lever), still no fuzzes.
+    expect(shown('angle')).toEqual(['band#']);
+    // Heavy or light: the four fuzzes (the Donut waits for its own level), bands locked.
+    expect(shown('weight')).toEqual(['band#', 'fuzz-Flower', 'fuzz-Fur*', 'fuzz-Helmet', 'fuzz-Metal']);
+    // Long arm: bands and fuzz locked (the lesson is the slide knob).
+    expect(shown('arm')).toEqual(['band#', 'fuzz-Flower#', 'fuzz-Fur#*', 'fuzz-Helmet#', 'fuzz-Metal#']);
+    // Three at once: the Donut joins, locked in.
+    expect(shown('donut')).toContain('fuzz-Donut#*');
+    // Free play: everything, nothing locked.
+    expect(shown('free')).toEqual(['band', 'fuzz-Flower', 'fuzz-Donut', 'fuzz-Fur*', 'fuzz-Helmet', 'fuzz-Metal']);
   });
 });
 
 // Product direction 2026-09-22: the PULL ring is gone. 2026-10-15 (Gao): the in-scene FIRE tap
-// button is gone too - FIRE is the bottom bar's yellow button - so the angle lever's drag handle is
-// the only in-scene widget; everything else tunes from the drawer.
+// button is gone too - FIRE is the bottom bar's yellow button. 2026-10-16: the arm's slide knob and
+// the "−" band badge join the angle lever.
 describe('catapultSpec.widgets', () => {
+  const ids = (ws: Widget[]) => ws.map((w) => w.id);
+
   it('returns [] for a non-catapult part', () => {
     const shelf: PlacedPart = { id: 2, kind: 'shelf', x: 5, y: 0, props: { length: '2' } };
     expect(catapultSpec.widgets!(shelf, [], {} as never)).toEqual([]);
   });
 
-  it('returns exactly one widget, the angle dial: no in-scene FIRE (no play action), no pull widget', () => {
-    for (const arm of ['Short', 'Long']) {
+  it('the angle dial, the arm slide and the "−" badge: no in-scene FIRE (no play action), no pull widget', () => {
+    for (const arm of ARM_LENGTHS) {
       const widgets = catapultSpec.widgets!(catapultPart(15, 0, arm), [], {} as never);
-      expect(widgets.map((w) => w.id)).toEqual(['angle']);
+      expect(ids(widgets)).toEqual(['angle', 'armLen', 'band-off']);
       expect(widgets.some((w) => w.kind === 'pull' || w.action === 'play' || w.id === 'fire')).toBe(false);
     }
   });
@@ -171,14 +227,152 @@ describe('catapultSpec.widgets', () => {
     const angle = catapultSpec.widgets!(part, [], {} as never).find((w) => w.id === 'angle')!;
     if (angle.kind !== 'dial') throw new Error('expected a dial widget');
     for (const opt of angle.options) {
-      const deg = Number(opt.value);
-      // The dial's own angle-for-index formula (arcFrom + (arcTo-arcFrom)*i/(n-1)) is the kit's
-      // to compute; here we only check that armAngleFor(deg) - the lever's own stop direction for
-      // that option - falls within [arcFrom, arcTo], i.e. on the swept arc at all.
-      const dir = armAngleFor(deg);
+      const dir = armAngleFor(Number(opt.value));
       expect(dir).toBeGreaterThanOrEqual(angle.arcFrom - 1e-9);
       expect(dir).toBeLessThanOrEqual(angle.arcTo + 1e-9);
     }
+  });
+
+  it('arm (2026-10-16, Jon: "arm length fully customizable"): a live slide with code armLen over the ' +
+    'catalog\'s 1.5 .. 4 m options, reading the length in its knob, its value the arm\'s length', () => {
+    for (const arm of ARM_LENGTHS) {
+      const slide = catapultSpec.widgets!(catapultPart(15, 0, arm), [], {} as never).find((w) => w.id === 'armLen')!;
+      if (slide.kind !== 'slide') throw new Error('expected a slide widget');
+      expect(slide.code).toBe('armLen');
+      expect(slide.options).toEqual(CATALOG.catapult.descriptors.find((d) => d.code === 'armLen')!.options);
+      expect(slide.options.map((o) => o.value)).toEqual([...ARM_LENGTHS]);
+      expect(slide.value).toBe(arm);
+      expect(slide.live).toBe(true);
+      expect(slide.readout).toBe('knob');
+    }
+    // A legacy part (arm: 'Long', no armLen) reads 3 m.
+    const legacy = catapultSpec.widgets!({ id: 1, kind: 'catapult', x: 5, y: 0, props: { arm: 'Long' } }, [], {} as never);
+    expect(legacy.find((w) => w.id === 'armLen')).toMatchObject({ value: '3' });
+  });
+
+  it('arm: the slide\'s track is armSlide (the cup at 1.5 m and 4 m) moved SLIDE_UNDER_M square to the ' +
+    'arm, downward: every option sits just under its own cup, the track parallel to the arm', () => {
+    const part = catapultPart(5.5, 0);
+    const track = armSlideTrack(part);
+    const cups = armSlide(part);
+    const slide = catapultSpec.widgets!(part, [], {} as never).find((w) => w.id === 'armLen')!;
+    if (slide.kind !== 'slide') throw new Error('expected a slide widget');
+    expect(slide.from).toEqual(track.from);
+    expect(slide.to).toEqual(track.to);
+    for (const [end, cup] of [[track.from, cups.from], [track.to, cups.to]] as const) {
+      expect(Math.hypot(end.x - cup.x, end.y - cup.y)).toBeCloseTo(SLIDE_UNDER_M, 9);
+      expect(end.y).toBeLessThan(cup.y); // under the cup
+      // square to the arm at rest
+      expect((end.x - cup.x) * Math.cos(REST_ANGLE) + (end.y - cup.y) * Math.sin(REST_ANGLE)).toBeCloseTo(0, 9);
+    }
+    // option i under ARM_LENGTHS[i]'s cup
+    const n = ARM_LENGTHS.length;
+    ARM_LENGTHS.forEach((len, i) => {
+      const at = { x: track.from.x + ((track.to.x - track.from.x) * i) / (n - 1), y: track.from.y + ((track.to.y - track.from.y) * i) / (n - 1) };
+      const cup = cupAtRest({ ...part, props: { ...part.props, armLen: len } });
+      expect(Math.hypot(at.x - cup.x, at.y - cup.y), len).toBeCloseTo(SLIDE_UNDER_M, 6);
+    });
+    // The knob (56 px at the build zoom) clears the ground band's bottom edge even at 4 m.
+    expect(track.to.y - 28 / (32 * FOCUS_ZOOM)).toBeGreaterThan(-1.5);
+  });
+
+  it('the slide knob never sits on the angle knob, at any angle and arm length (drawn knobs apart)', () => {
+    const knobR = 28 / (32 * FOCUS_ZOOM);
+    for (const angle of ['15', '30', '45', '60', '75']) {
+      for (const [i, len] of ARM_LENGTHS.entries()) {
+        const part = { ...catapultPart(5.5, 0, len), props: { ...catapultPart().props, armLen: len, angle } };
+        const t = armSlideTrack(part);
+        const k = i / (ARM_LENGTHS.length - 1);
+        const slideAt = { x: t.from.x + (t.to.x - t.from.x) * k, y: t.from.y + (t.to.y - t.from.y) * k };
+        const dir = armAngleFor(Number(angle));
+        const r = LEVER_LENGTH + 0.55;
+        const angleAt = { x: part.x + PIVOT_DX + r * Math.cos(dir), y: part.y + PIVOT_DY + r * Math.sin(dir) };
+        expect(Math.hypot(slideAt.x - angleAt.x, slideAt.y - angleAt.y), `${angle} ${len}`).toBeGreaterThan(2 * knobR);
+      }
+    }
+  });
+
+  it('"−" badge (2026-10-16): a mini tap under the band bundle that sets one band fewer through the ' +
+    'normal prop path; hidden at 1 band and while the bands are locked', () => {
+    const at = (bands: string, lockedProps?: string[]) => {
+      const part: PlacedPart = { ...catapultPart(5.5, 0), props: { ...catapultPart().props, bands }, ...(lockedProps ? { lockedProps } : {}) };
+      return { part, minus: catapultSpec.widgets!(part, [], {} as never).find((w) => w.id === 'band-off') };
+    };
+    for (const n of [2, 3, 12, 60]) {
+      const { part, minus } = at(String(n));
+      if (minus?.kind !== 'tap') throw new Error('expected a tap widget');
+      expect(minus).toMatchObject({ code: 'bands', style: 'mini', icon: '−', values: [String(n - 1)] });
+      expect(minus.action).toBeUndefined(); // 'setProp' (undo, locks, CoachContext.changed)
+      expect(minus.at).toEqual(bandOffAt(part));
+      // under the bundle, off the bands: below every band's lower end
+      expect(minus.at.y).toBeLessThan(bandBundleAt(part).y - 0.6);
+    }
+    expect(at('1').minus).toBeUndefined();
+    expect(at('4', ['bands']).minus).toBeUndefined();
+    expect(at('4', ['angle']).minus).toBeDefined();
+  });
+
+  it('the kit drops every widget whose code is not introduced yet: Fling it shows none, the angle level ' +
+    'only the lever, the arm level the lever and the slide', () => {
+    const shownOn = (levelId: string) => {
+      const level = findLevel(levelId)!;
+      const part = level.parts.find((p) => p.kind === 'catapult')!;
+      const known = knownConcepts(LEVELS, level.id);
+      // The same filter BuilderApp.updateWidgets applies.
+      return ids(catapultSpec.widgets!(part, level.parts, level).filter((w) => !w.code || isKnown(known, w.code)));
+    };
+    expect(shownOn('power')).toEqual([]); // 1 band: no "−" either
+    expect(shownOn('angle')).toEqual(['angle']); // bands locked: no "−"
+    expect(shownOn('weight')).toEqual(['angle']);
+    expect(shownOn('arm')).toEqual(['angle', 'armLen']);
+    expect(shownOn('free')).toEqual(['angle', 'armLen', 'band-off']);
+    // Every widget carries a code, so none slips past the gate.
+    for (const w of catapultSpec.widgets!(catapultPart(), [], {} as never)) expect(w.code).toBeDefined();
+  });
+});
+
+// 2026-10-16 (Gao: "change to use goal cards like in roller coaster").
+describe('catapultSpec.hud.goalCards', () => {
+  const goal = (metric: string, op: Goal<Metrics>['op'], value: number, label = ''): Goal<Metrics> => ({ metric, op, value, label });
+
+  it('the goals overlay is the row of cards; no card fills while building', () => {
+    expect(catapultSpec.hud.goalsOverlay).toBe(true);
+    expect(catapultSpec.hud.goalCards).toBe(catapultGoalCard);
+    expect(catapultSpec.hud.goalCardEditMetrics).toEqual([]);
+  });
+
+  it('maps every goal metric to its picture, target number, unit and a short Title Case caption', () => {
+    expect(catapultGoalCard(goal('knockedDown', '>=', 2))).toEqual({ icon: 'ui/goals/catapult-knocked.svg', number: '2', unit: '', caption: 'Knock Down', under: false });
+    expect(catapultGoalCard(goal('hits', '>=', 1))).toEqual({ icon: 'ui/goals/catapult-hits.svg', number: '1', unit: '', caption: 'Bullseye', under: false });
+    expect(catapultGoalCard(goal('hits', '>=', 2)).caption).toBe('Bullseyes');
+    expect(catapultGoalCard(goal('smashed', '>=', 1))).toEqual({ icon: 'ui/goals/catapult-smash.svg', number: '1', unit: '', caption: 'Smash Crate', under: false });
+    expect(catapultGoalCard(goal('smashed', '>=', 2)).caption).toBe('Smash Crates');
+    expect(catapultGoalCard(goal('maxRange', '>=', 12.5))).toEqual({ icon: 'ui/goals/catapult-range.svg', number: '12.5', unit: 'm', caption: 'Distance', under: false });
+    expect(catapultGoalCard(goal('maxRange', '>=', 20)).number).toBe('20');
+    // "Use at most N shots": an under card.
+    expect(catapultGoalCard(goal('shotsUsed', '<=', 2))).toEqual({ icon: 'ui/goals/catapult-shots.svg', number: '2', unit: '', caption: 'Shots', under: true });
+    // "Nothing left above the line": a yes/no card, the picture alone.
+    expect(catapultGoalCard(goal('aboveLine', '==', 0))).toEqual({ icon: 'ui/goals/catapult-line.svg', number: '', unit: '', caption: 'Clear the Line', check: true });
+    expect(catapultGoalCard(goal('aboveLine', '<=', 1))).toMatchObject({ number: '1', under: true, caption: 'Above the Line' });
+  });
+
+  it('every real level goal has a card: its icon on disk, a Title Case caption short enough for the ' +
+    '104 px card (<= 14 letters), no "×" unit (the Kodable font has no glyph for it)', () => {
+    let n = 0;
+    for (const level of LEVELS) {
+      for (const g of level.goals) {
+        const card = catapultGoalCard(g);
+        n++;
+        expect(existsSync(resolve('public', card.icon)), card.icon).toBe(true);
+        expect(card.caption.length, card.caption).toBeLessThanOrEqual(14);
+        for (const word of card.caption.split(' ')) if (!['the', 'a', 'and'].includes(word)) expect(word[0], card.caption).toBe(word[0]!.toUpperCase());
+        expect(card.unit).not.toContain('×');
+        if (!card.check) expect(card.number).toBe(String(g.value));
+      }
+    }
+    expect(n).toBeGreaterThanOrEqual(14);
+    expect(catapultGoalCard(findLevel('weight')!.goals[0]!)).toMatchObject({ number: '2', caption: 'Knock Down' });
+    expect(catapultGoalCard(findLevel('line')!.goals[0]!)).toMatchObject({ check: true, caption: 'Clear the Line' });
   });
 });
 
@@ -208,92 +402,30 @@ describe('catapultSpec: no dash, a 612 px scene', () => {
     expect(690 - catapultSpec.world.worldH * catapultSpec.world.ppm).toBe(78);
   });
 
-  it('the backdrop is the coaster\'s theme park (2026-10-15): sky, three clouds, far hills, the ' +
-    'ferris wheel (stand + turning rim) and the trees, back to front, all from public/bg/coaster/', () => {
-    const bgs = catapultSpec.world.backgrounds!;
-    expect(bgs.map((b) => b.url)).toEqual([
-      'bg/coaster/sky.jpg',
-      'bg/coaster/cloud1.png',
-      'bg/coaster/cloud2.png',
-      'bg/coaster/cloud3.png',
-      'bg/coaster/catapult-far.png',
-      'bg/coaster/wheel-stand.png',
-      'bg/coaster/wheel-rim.png',
-      'bg/coaster/catapult-mid.png',
-    ]);
-    expect(bgs.some((b) => b.url.includes('park.jpg'))).toBe(false);
-    // every picture (satellites too) is on disk, under 1.5 MB
-    for (const url of lookImageUrls(catapultSpec.world)) {
+  it('2026-10-16 (Jon\'s huddle 2026-10-15: "each game needs its own environment"): the backdrop is the ' +
+    'catapult\'s own backyard (backdrop.ts), sky to fence, no coaster theme park and no ferris wheel', () => {
+    const world = catapultSpec.world;
+    expect(world.backgrounds).toBe(CATAPULT_BACKDROP);
+    expect(world.sky).toEqual(CATAPULT_SKY);
+    expect(world.groundStrip).toEqual({ top: CATAPULT_GRASS, bottom: CATAPULT_EARTH });
+    const urls = world.backgrounds!.map((b) => b.url);
+    expect(urls.every((u) => u.startsWith('bg/catapult/'))).toBe(true);
+    expect(urls.some((u) => u.includes('coaster') || u.includes('wheel') || u.includes('park.jpg'))).toBe(false);
+    expect(world.backgrounds!.some((b) => b.spin !== undefined || b.satellites !== undefined)).toBe(false);
+    // every picture is on disk, under 1.5 MB
+    for (const url of lookImageUrls(world)) {
       const file = resolve(__dirname, '../../../public', url);
       expect(existsSync(file), url).toBe(true);
       expect(statSync(file).size, url).toBeLessThan(1.5e6);
     }
-    const at = (name: string) => bgs.find((b) => b.url.endsWith(name))!;
-    // The sky fills the whole 622 px viewport (the 1.5 m of ground and the kit's 10 px earth margin
-    // up to the panel's top edge), the coaster's own panel height, so its vertical parallax never
-    // lifts its bottom edge into view.
-    const sky = at('sky.jpg');
-    expect(sky.x).toBe(15);
-    expect(sky.w).toBe(30);
+    // The sky fills the whole 622 px viewport, so its vertical parallax never lifts its bottom edge
+    // into view; back to front, nearer layers move more with the world.
+    const sky = world.backgrounds![0]!;
+    expect(sky.url).toBe('bg/catapult/sky.jpg');
     expect(sky.y - sky.h / 2).toBeCloseTo(-1.5 - 10 / 32, 9);
     expect(sky.y + sky.h / 2).toBeCloseTo(WORLD_H - 1.5, 9);
-    expect(sky.h * 32).toBeCloseTo(622, 9);
-    // The full-width bands keep the coaster's stage-px heights (32 px/m) and its ground line 10 px
-    // over their bottoms: the hills and trees rise from world y 0.
-    for (const [name, px] of [['catapult-far.png', 300], ['catapult-mid.png', 230]] as const) {
-      const b = at(name);
-      expect(b.w).toBe(30);
-      expect(b.h).toBeCloseTo(px / 32, 9);
-      expect(b.y - b.h / 2).toBeCloseTo(-10 / 32, 9);
-    }
-    // The wheel stands on the ground between the catapult and the near targets, hub 104 px up at
-    // x 10 as on the coaster: the stand spans 6 px over the hub to 110 px under it (the feet, 106 px
-    // under the hub, end 2 px under y 0); the rim is a 180 px square on the hub.
-    const hubY = 104 / 32;
-    const stand = at('wheel-stand.png');
-    expect(stand.x).toBe(10);
-    expect(stand.y + stand.h / 2).toBeCloseTo(hubY + 6 / 32, 9);
-    expect(stand.y - stand.h / 2 + 4 / 32).toBeCloseTo(-2 / 32, 9);
-    const rim = at('wheel-rim.png');
-    expect(rim).toMatchObject({ x: 10, alpha: 0.7, spin: 0.12 });
-    expect(rim.y).toBeCloseTo(hubY, 9);
-    expect(rim.w * 32).toBeCloseTo(180, 9);
-    expect(rim.h).toBe(rim.w);
-    expect(stand.alpha).toBe(0.7);
-    // 10 cars, five colours in turn, hung by their hanger tops from the 84 px rim
-    const cars = rim.satellites!;
-    expect(cars.count).toBe(10);
-    expect(cars.r * 32).toBeCloseTo(84, 9);
-    expect(cars.url).toEqual([1, 2, 3, 4, 5].map((n) => `bg/coaster/wheel-car-${n}.png`));
-    expect(cars.w * 32).toBeCloseTo(22, 9);
-    expect(cars.h * 32).toBeCloseTo(20, 9);
-    expect(cars.pivot).toEqual({ x: 0.5, y: 1 / 20 });
-    // The clouds float in the sky, inside the world, drifting right at the coaster's 5 / 3.5 / 6
-    // stage px a second.
-    const speeds: Record<string, number> = { 'cloud1.png': 5, 'cloud2.png': 3.5, 'cloud3.png': 6 };
-    for (const name of ['cloud1.png', 'cloud2.png', 'cloud3.png']) {
-      const c = at(name);
-      expect(c.y - c.h / 2).toBeGreaterThan(6);
-      expect(c.y + c.h / 2).toBeLessThan(WORLD_H - 1.5);
-      expect(c.drift! * 32).toBeCloseTo(speeds[name]!, 9);
-    }
-    // The kit sky under the picture is sky.jpg's own top/bottom colours.
-    expect(catapultSpec.world.sky).toEqual({ top: 0x2869c5, bottom: 0xb8dffa });
-  });
-
-  it('2026-10-15: every backdrop layer lags the camera by the coaster\'s depth factor (the wheel nearly moves with the world here)', () => {
-    const bgs = catapultSpec.world.backgrounds!;
-    const factor = (name: string) => bgs.find((b) => b.url.endsWith(name))!.parallax;
-    expect(factor('sky.jpg')).toEqual(PARALLAX.sky);
-    for (const c of ['cloud1.png', 'cloud2.png', 'cloud3.png']) expect(factor(c)).toEqual(PARALLAX.flyers);
-    expect(factor('catapult-far.png')).toEqual(PARALLAX.far);
-    // Not the coaster's 0.55: at that depth the 3.6x build view slid the wheel behind the machine.
-    expect(factor('wheel-stand.png')).toEqual({ x: 0.9, y: 1 });
-    expect(factor('wheel-rim.png')).toEqual({ x: 0.9, y: 1 });
-    expect(factor('catapult-mid.png')).toEqual(PARALLAX.mid);
-    // back to front, nearer layers move more with the world
-    // (the wheel is left out: it moves nearly with the world here, and it never overlaps the trees)
-    const xs = bgs.filter((b) => !b.url.includes('wheel-')).map((b) => b.parallax!.x);
+    expect(sky.parallax).toEqual(PARALLAX.sky);
+    const xs = world.backgrounds!.map((b) => b.parallax?.x ?? 1);
     for (let i = 1; i < xs.length; i++) expect(xs[i]!).toBeGreaterThanOrEqual(xs[i - 1]!);
   });
 
@@ -322,99 +454,90 @@ function boxCorners(pos: { x: number; y: number }, angle: number, b: { w: number
 }
 
 describe('catapultSpec.focusFrame: the machine framed left of the drawer', () => {
+  const zoom = FOCUS_ZOOM;
+  const viewW = 960 / 32 / zoom;
+  // The 612 px panel (WORLD_H * 32) plus the kit's 10 px earth margin.
+  const viewH = (WORLD_H * 32 + 10) / 32 / zoom;
+  // The open drawer covers the right 340 of the 960 px.
+  const uncoveredW = viewW * (620 / 960);
+
   it('returns null for a non-catapult part', () => {
     const shelf: PlacedPart = { id: 2, kind: 'shelf', x: 5, y: 0, props: { length: '2' } };
     expect(catapultSpec.focusFrame!(shelf, {} as never)).toBeNull();
   });
 
-  it('zoom 2.8 (2026-10-15, Gao: "dont zoom into the catapult as much"; was 3.6), centred at ' +
-    '(x + 1.75, y + 2.665): the old 1.5 m rescaled to the new zoom plus half the 132 px the viewport ' +
-    'grew (2026-10-07)', () => {
+  it('zoom 2.5 (2026-10-16: 3.6 until 2026-10-15, then 2.8; arms up to 4 m), the view\'s left edge 4.6 m ' +
+    'left of the anchor', () => {
     const part = catapultPart(15, 0);
     const frame = catapultSpec.focusFrame!(part, {} as never)!;
-    expect(frame.zoom).toBe(2.8);
-    expect(frame.cx).toBeCloseTo(part.x + 1.75, 9);
-    expect(frame.cy).toBeCloseTo(part.y + (1.5 * 3.6) / 2.8 + 66 / (32 * 2.8), 9);
-    expect(frame.cy - part.y).toBeCloseTo(2.665, 3);
+    expect(frame.zoom).toBe(2.5);
+    expect(frame.cx - viewW / 2).toBeCloseTo(part.x - 4.6, 9);
   });
 
-  it('the ground line stays where it sat on screen: the anchor lands on the same stage y (627.8) at ' +
-    'zoom 2.8 in the 622 px viewport (top 78) as at 3.6 in the 490 px one (top 210)', () => {
+  it('the ground line stays where it sat on screen: the anchor lands on stage y 627.8 (as at 3.6 in the ' +
+    '490 px viewport and at 2.8), inside the kit\'s vertical clamp', () => {
     const part = catapultPart(15, 0);
     const frame = catapultSpec.focusFrame!(part, {} as never)!;
-    // The world camera centres the frame in its viewport (BuilderScene: panel top .. 690 + 10).
-    const stageY = (viewTop: number, cy: number, zoom: number) => (viewTop + 700) / 2 + (cy - part.y) * 32 * zoom;
+    const stageY = (viewTop: number, cy: number, z: number) => (viewTop + 700) / 2 + (cy - part.y) * 32 * z;
     expect(stageY(78, frame.cy, frame.zoom)).toBeCloseTo(stageY(210, part.y + 1.5, 3.6), 6);
     expect(stageY(78, frame.cy, frame.zoom)).toBeCloseTo(627.8, 6);
-    // Inside the kit's clamp (clampFrame: cy >= -groundDepth + worldH / zoom / 2), so it holds.
     expect(frame.cy).toBeGreaterThan(-1.5 + WORLD_H / frame.zoom / 2);
   });
 
-  it('the uncovered view (the 960 x 622 px viewport at 32 px/m, minus the open drawer\'s 340 px on the ' +
-    'right) holds the whole machine - the arm, cup and base pictures with >= 0.1 m to spare (whole ' +
-    'boxes, transparent corners included) - and the loaded Metal fuzz\'s body, the lever knob at ' +
-    'every angle and the snip spot (where FIRE was) with >= 0.3 m, the lever\'s pad with >= 0.1 m, for both arms', () => {
-      const zoom = 2.8;
-      const viewW = 960 / 32 / zoom;
-      // The 612 px panel (WORLD_H * 32) plus the kit's 10 px earth margin (490 before 2026-10-07).
-      const viewH = (WORLD_H * 32 + 10) / 32 / zoom;
-      const uncoveredW = viewW * (620 / 960);
-
-      for (const arm of ['Short', 'Long']) {
-        const part = catapultPart(15, 0, arm);
+  it('every catapult x a level uses, every arm length: the uncovered view (minus the open drawer) holds ' +
+    'the whole machine (arm, cup and base pictures, whole boxes), the loaded Metal fuzz, the slide knob ' +
+    'at every notch, the band drop zone, the "−" badge, the lever knob and pad at every angle and the ' +
+    'snip spot; the view never leaves the world (the kit\'s clamp)', () => {
+    const xs = [...new Set(LEVELS.map((l) => l.parts.find((p) => p.kind === 'catapult')!.x))];
+    expect(xs).toContain(4.5);
+    const knobR = 28 / (32 * zoom);
+    const miniR = 17 / (32 * zoom);
+    for (const x of xs) {
+      for (const arm of ARM_LENGTHS) {
+        const part = catapultPart(x, 0, arm);
         const frame = catapultSpec.focusFrame!(part, {} as never)!;
+        const left = frame.cx - viewW / 2;
+        expect(left, `${x}`).toBeGreaterThanOrEqual(-1e-9); // the kit's left clamp never moves it
         const inside = (p: { x: number; y: number }, what: string, margin: number) => {
-          expect(p.x, `${arm} ${what} x`).toBeGreaterThan(frame.cx - viewW / 2 + margin);
-          expect(p.x, `${arm} ${what} x`).toBeLessThan(frame.cx - viewW / 2 + uncoveredW - margin);
-          expect(p.y, `${arm} ${what} y`).toBeGreaterThan(frame.cy - viewH / 2 + margin);
-          expect(p.y, `${arm} ${what} y`).toBeLessThan(frame.cy + viewH / 2 - margin);
+          const tag = `${x} ${arm} ${what}`;
+          expect(p.x, `${tag} x`).toBeGreaterThan(left + margin);
+          expect(p.x, `${tag} x`).toBeLessThan(left + uncoveredW - margin);
+          expect(p.y, `${tag} y`).toBeGreaterThan(frame.cy - viewH / 2 + margin);
+          expect(p.y, `${tag} y`).toBeLessThan(frame.cy + viewH / 2 - margin);
         };
         const pivot = { x: part.x + PIVOT_DX, y: part.y + PIVOT_DY };
-
-        // The arm picture and the cup cover at rest.
-        const L = arm === 'Short' ? 2 : 3;
-        for (const p of boxCorners(pivot, REST_ANGLE, armArtBox(arm))) inside(p, 'arm', 0.1);
-        for (const p of boxCorners(pivot, REST_ANGLE, cupCoverBox(L))) inside(p, 'cup', 0.1);
-        // The base picture (plank, A-frame, hub).
+        const L = Number(arm);
+        for (const p of boxCorners(pivot, REST_ANGLE, armArtBox(L))) inside(p, 'arm', 0);
+        for (const p of boxCorners(pivot, REST_ANGLE, cupCoverBox(L))) inside(p, 'cup', 0);
         for (const p of boxCorners({ x: part.x, y: part.y + 0.3 }, 0, BASE_ART)) inside(p, 'base', 0.1);
-        // The loaded Metal fuzz's body (the heaviest, biggest collider).
-        const pocket = catapultPocketAtRest({ ...part, props: { ...part.props, fuzz: 'Metal' } });
-        for (const [dx, dy] of [[-0.4, 0], [0.4, 0], [0, -0.4], [0, 0.4]] as const) {
-          inside({ x: pocket.x + dx, y: pocket.y + dy }, 'fuzz', 0.3);
-        }
-
+        const pocket = cupAtRest({ ...part, props: { ...part.props, fuzz: 'Metal' } });
+        for (const [dx, dy] of [[-0.4, 0], [0.4, 0], [0, -0.4], [0, 0.4]] as const) inside({ x: pocket.x + dx, y: pocket.y + dy }, 'fuzz', 0.1);
+        // The slide knob at this length (and so at every notch: the track is straight).
+        const track = armSlideTrack(part);
+        for (const end of [track.from, track.to]) inside(end, 'slide', knobR);
+        inside(bandBundleAt(part), 'band zone', 0.3);
+        inside(bandOffAt(part), 'minus', miniR);
         for (const deg of [15, 30, 45, 60, 75]) {
-          // The knob (pivot + LEVER_LENGTH along armAngleFor(deg)).
           const dir = armAngleFor(deg);
-          inside({ x: pivot.x + LEVER_LENGTH * Math.cos(dir), y: pivot.y + LEVER_LENGTH * Math.sin(dir) }, `knob ${deg}`, 0.3);
-          // The lever picture's pad reaches a little past the knob.
-          const preview = { ...part, props: { ...part.props, angle: String(deg) } };
-          const { pos, angle } = crossbarPoseFor(preview);
+          const r = LEVER_LENGTH + 0.55;
+          inside({ x: pivot.x + r * Math.cos(dir), y: pivot.y + r * Math.sin(dir) }, `knob ${deg}`, knobR);
+          const { pos, angle } = crossbarPoseFor({ ...part, props: { ...part.props, angle: String(deg) } });
           for (const p of boxCorners(pos, angle, LEVER_ART)) inside(p, `lever ${deg}`, 0.1);
         }
-
-        // The snip burst's spot (the old in-scene FIRE button's, 2026-10-15: FIRE is on the bar);
-        // the old caption line, about y - 0.34, still over 0.25 m above the view's bottom edge.
         inside(fireSpot(part), 'snip', 0.3);
-        expect(part.y - 0.34).toBeGreaterThan(frame.cy - viewH / 2 + 0.25);
-
-        // The room 2.8 frees goes to the shot preview: >= 1.5 m of open view right of the base
-        // picture before the drawer (none at 3.6), >= 2.5 m over the lever's pad.
-        expect(frame.cx - viewW / 2 + uncoveredW - (part.x + BASE_ART.cx + BASE_ART.w / 2)).toBeGreaterThan(1.5);
-        expect(frame.cy + viewH / 2 - (part.y + 3.38)).toBeGreaterThan(2.5);
+        // The shot preview keeps its room: >= 1.4 m of open view right of the base before the
+        // drawer, >= 3 m over the lever's pad.
+        expect(left + uncoveredW - (part.x + BASE_ART.cx + BASE_ART.w / 2)).toBeGreaterThan(1.4);
+        expect(frame.cy + viewH / 2 - (part.y + 3.38)).toBeGreaterThan(3);
       }
+    }
   });
 
-  it('at a catapult as far left as x = 3.5, cx asks for the kit\'s left clamp itself ' +
-    '(worldW / zoom / 2 = 5.357), and the Short arm\'s cup is in view', () => {
-    const part = catapultPart(3.5, 0);
-    const frame = catapultSpec.focusFrame!(part, {} as never)!;
-    expect(frame.cx).toBeCloseTo(30 / 2.8 / 2, 9);
-    expect(frame.cx).toBeGreaterThanOrEqual(30 / frame.zoom / 2);
-    const pivot = { x: part.x + PIVOT_DX, y: part.y + PIVOT_DY };
-    for (const p of boxCorners(pivot, REST_ANGLE, cupCoverBox(2))) expect(p.x).toBeGreaterThan(frame.cx - 15 / frame.zoom + 0.5);
-    // A catapult further right gets a frame that follows its x.
-    expect(catapultSpec.focusFrame!(catapultPart(6, 0), {} as never)!.cx).toBeCloseTo(7.75, 9);
+  it('the frame asks for the kit\'s left clamp itself (worldW / zoom / 2 = 6) for a catapult near the ' +
+    'left wall, and follows the catapult\'s x elsewhere', () => {
+    const near = catapultSpec.focusFrame!(catapultPart(3.5, 0), {} as never)!;
+    expect(near.cx).toBeCloseTo(30 / 2.5 / 2, 9);
+    expect(catapultSpec.focusFrame!(catapultPart(8, 0), {} as never)!.cx).toBeCloseTo(8 - 4.6 + 6, 9);
   });
 });
 
@@ -440,11 +563,18 @@ describe('catapultSpec: the fuzzes, the real art, the collapse payoff and the li
     expect(tex['fx-crash']).toEqual({ url: 'fx/crash.svg' });
   });
 
-  it('textures: the machine\'s real-art pictures and every band length bandSprite can pick', () => {
+  it('textures: the machine\'s real-art pictures, an arm per length and every band length bandSprite can pick', () => {
     const tex = catapultSpec.textures!;
-    for (const key of ['real-base', 'real-arm-Short', 'real-arm-Long', 'real-gear', 'real-cup', 'real-lever', 'real-hook']) {
+    for (const key of ['real-base', 'real-gear', 'real-cup', 'real-lever', 'real-hook']) {
       expect(tex[key]).toEqual({ url: `parts/catapult/${key}.png` });
     }
+    // 2026-10-16: one arm picture per arm length; the old Short/Long arms (SVG and real) are gone.
+    for (const len of ARM_LENGTHS) {
+      expect(tex[`real-arm-${len}`]).toEqual({ url: `parts/catapult/real-arm-${len}.png` });
+      expect(existsSync(resolve('public', tex[`real-arm-${len}`]!.url))).toBe(true);
+    }
+    for (const key of ['arm-Short', 'arm-Long', 'real-arm-Short', 'real-arm-Long']) expect(tex[key], key).toBeUndefined();
+    expect(Object.keys(tex).some((k) => k.startsWith('power-'))).toBe(false);
     for (const n of BAND_ASPECTS) expect(tex[`real-band-${n}`]).toEqual({ url: `parts/catapult/real-band-${n}.png` });
   });
 
@@ -493,9 +623,25 @@ describe('catapultSpec: the fuzzes, the real art, the collapse payoff and the li
     const m = catapultSpec.editMetrics(donut.parts, donut, null);
     const card = (parts: PlacedPart[]) => catapultSpec.resultCard!(parts, donut, m, 'shot', false)!;
     expect(card(donut.parts).rows).toContainEqual({ label: 'Fuzz', value: 'Donut' });
-    expect(card(donut.parts).rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
+    expect(card(donut.parts).rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm length']);
     const metal = donut.parts.map((p) => (p.kind === 'catapult' ? { ...p, props: { ...p.props, fuzz: 'Metal' } } : p));
     expect(card(metal).rows).toContainEqual({ label: 'Fuzz', value: 'Metal' });
+  });
+
+  it('result card (2026-10-16): the band count and the arm length as set ("Rubber bands 14", "Arm length 2.5 m"), ' +
+    'and a space shot says so in the fail tone', () => {
+    const free = findLevel('free')!;
+    const parts = free.parts.map((p) => (p.kind === 'catapult' ? { ...p, props: { ...p.props, bands: '14', armLen: '2.5', angle: '60', fuzz: 'Helmet' } } : p));
+    const m = catapultSpec.editMetrics(parts, free, null);
+    const card = catapultSpec.resultCard!(parts, free, m, 'space', false)!;
+    expect(card.rows).toEqual([
+      { label: 'Rubber bands', value: '14' },
+      { label: 'Angle', value: '60°' },
+      { label: 'Fuzz', value: 'Helmet' },
+      { label: 'Arm length', value: '2.5 m' },
+    ]);
+    expect(card.outcome).toBe('Into space! Too many bands.');
+    expect(card.tone).toBe('fail');
   });
 
   // Stakeholder direction 2026-09-22: "if a concept hasn't been introduced yet, it should be
@@ -511,11 +657,11 @@ describe('catapultSpec: the fuzzes, the real art, the collapse payoff and the li
     expect(cardFor('power').rows.map((r) => r.label)).toEqual(['Rubber bands']);
     expect(cardFor('angle').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle']);
     expect(cardFor('weight').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz']);
-    expect(cardFor('arm').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
-    expect(cardFor('donut').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
+    expect(cardFor('arm').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm length']);
+    expect(cardFor('donut').rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm length']);
     // Every challenge level comes after all four mechanics are known, so all four rows show.
     for (const id of ['smash', 'tower', 'line', 'chain', 'free']) {
-      expect(cardFor(id).rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm']);
+      expect(cardFor(id).rows.map((r) => r.label)).toEqual(['Rubber bands', 'Angle', 'Fuzz', 'Arm length']);
     }
   });
 

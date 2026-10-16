@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BuilderApp } from './BuilderApp';
 import type { BuilderScene } from './BuilderScene';
 import type { BuilderHud } from './BuilderHud';
-import type { CameraFrame, CoachContext, CourseSim, CourseSpec, HudState, Level, TapWidget, Vec2, Widget, WorldSpec } from './types';
+import type { CameraFrame, CoachContext, CourseSim, CourseSpec, HudState, Level, PartHandle, TapWidget, Vec2, Widget, WorldSpec } from './types';
 import type { FrameState } from './camera';
 
 type K = 'box';
@@ -46,7 +46,7 @@ class FakeSim implements CourseSim<M, O> {
   renderItems() {
     return [];
   }
-  handles() {
+  handles(): PartHandle[] {
     return [];
   }
   destroy(): void {}
@@ -140,8 +140,13 @@ class FakeScene {
   cameraFrame(): FrameState {
     return { ...this.cam };
   }
-  worldToStage() {
-    return { x: 0, y: 0 };
+  worldToStage(p?: Vec2) {
+    return p ? { x: p.x * 10, y: 700 - p.y * 10 } : { x: 0, y: 0 };
+  }
+  /** The SUPPLY BIN's drop ring (`setDropZone`), last call. */
+  dropZone: { zone: { at: Vec2; r: number } | null; hot: boolean } | null = null;
+  setDropZone(zone: { at: Vec2; r: number } | null, hot = false): void {
+    this.dropZone = { zone, hot };
   }
   stagePerMeter(): number {
     return 32;
@@ -866,5 +871,178 @@ describe('BuilderApp: hints play in the same dialog', () => {
     expect(frame(scene, hud).hintIndex).toBe(0);
     app.hint();
     expect(frame(scene, hud).hintIndex).toBe(1);
+  });
+});
+
+// 2026-10-16: the SUPPLY BIN (`CourseSpec.bin`): the controller gates and stamps the tiles, hides
+// the rows they drive, and applies a tile through the ordinary setProp path.
+describe('BuilderApp: the SUPPLY BIN', () => {
+  const BANDS = { code: 'bands', label: 'Rubber bands', options: Array.from({ length: 60 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })), default: '2' };
+  const FUZZ = { code: 'fuzz', label: 'Fuzz', options: ['Flower', 'Donut', 'Fur'].map((v) => ({ value: v, label: v })), default: 'Flower' };
+  const ANGLE = { code: 'angle', label: 'Angle', options: ['30', '45'].map((v) => ({ value: v, label: v })) };
+  const binLevel = (o: Partial<L> = {}): L => ({
+    ...LEVEL,
+    id: 'bin',
+    parts: [{ id: 1, kind: 'box', x: 3, y: 1, props: { bands: '2', fuzz: 'Flower', angle: '30' }, locked: true }],
+    ...o,
+  });
+  class BoundsSim extends FakeSim {
+    override handles(): PartHandle[] {
+      return [{ partId: 1, kind: 'box', bodies: [], joints: [], visuals: [], bounds: { x: 3, y: 1, w: 2, h: 1 } }];
+    }
+  }
+  const binSpec = (levels: L[], extra: Partial<CourseSpec<K, M, O, L>> = {}): CourseSpec<K, M, O, L> =>
+    makeSpec(SINGLE, {
+      levels,
+      drawer: true,
+      createSim: async () => new BoundsSim(),
+      catalog: { box: { label: 'Box', icon: '■', descriptors: [BANDS, FUZZ, ANGLE] } },
+      bin: (part) => [
+        { id: 'band', image: 'ui/bin/band.svg', label: 'Rubber band', group: 'Rubber bands', code: 'bands', step: 1, badge: '∞', drop: { at: { x: 2, y: 2 }, r: 0.5 } },
+        ...['Flower', 'Donut', 'Fur'].map((v) => ({ id: v, image: `${v}.png`, label: v, group: 'Fuzzes', code: 'fuzz', value: v, active: part.props.fuzz === v })),
+      ],
+      ...extra,
+    });
+  const select = (app: BuilderApp<K, M, O, L>, scene: FakeScene): void => {
+    scene.onPartTapped?.(1);
+    expect(app.selectedId).toBe(1);
+  };
+
+  it('sends the bin for the selected part and hides the rows its items drive (others stay)', async () => {
+    const { app, scene, hud } = boot(binSpec([binLevel()]));
+    await flush();
+    expect(frame(scene, hud).bin).toBeNull(); // nothing selected
+    select(app, scene);
+    const st = frame(scene, hud);
+    expect(st.bin!.map((it) => it.id)).toEqual(['band', 'Flower', 'Donut', 'Fur']);
+    expect(st.bin!.find((it) => it.id === 'Flower')!.active).toBe(true);
+    expect(st.selected!.descriptors.map((d) => d.code)).toEqual(['angle']);
+  });
+
+  it('no bin without the drawer: the rows stay as they were', async () => {
+    const { app, scene, hud } = boot(binSpec([binLevel()], { drawer: false }));
+    await flush();
+    select(app, scene);
+    const st = frame(scene, hud);
+    expect(st.bin).toBeNull();
+    expect(st.selected!.descriptors.map((d) => d.code)).toEqual(['bands', 'fuzz', 'angle']);
+  });
+
+  it('gates tiles by Level.introduces and stamps NEW and locked', async () => {
+    const first = binLevel({ id: 'a', introduces: ['bands'] });
+    const second = binLevel({ id: 'b', introduces: ['fuzz', 'fuzz:Donut'] });
+    const spec = binSpec([first, second, binLevel({ id: 'c', introduces: ['fuzz:Fur'] })]);
+    const { app, scene, hud } = boot(spec);
+    await flush();
+    select(app, scene);
+    let st = frame(scene, hud);
+    expect(st.bin!.map((it) => [it.id, it.isNew])).toEqual([['band', true]]);
+    // The fuzz row is hidden too (not known yet): a bin-driven code never comes back as a row.
+    expect(st.selected!.descriptors.map((d) => d.code)).toEqual([]);
+    app.selectLevel('b');
+    await flush();
+    app.loadLevel({ ...second, parts: [{ ...second.parts[0]!, lockedProps: ['bands'] }] });
+    await flush();
+    select(app, scene);
+    st = frame(scene, hud);
+    expect(st.bin!.map((it) => [it.id, !!it.isNew, !!it.locked])).toEqual([
+      ['band', false, true],
+      ['Flower', true, false],
+      ['Donut', true, false],
+    ]);
+  });
+
+  it('applyBin goes through setProp: a step adds to the prop, one undo entry, CoachContext.changed', async () => {
+    const seen: CoachContext<K, L>[] = [];
+    const { app, scene, hud } = boot(binSpec([binLevel()], { coach: (c) => (seen.push(c), null) }));
+    await flush();
+    select(app, scene);
+    expect(app.binValue('band')).toEqual({ code: 'bands', value: '3' });
+    app.applyBin('band');
+    expect(app.parts[0]!.props.bands).toBe('3');
+    expect(app.undoStack).toHaveLength(1);
+    app.applyBin('band');
+    expect(app.parts[0]!.props.bands).toBe('4');
+    app.applyBin('Donut');
+    expect(app.parts[0]!.props.fuzz).toBe('Donut');
+    frame(scene, hud);
+    expect(seen.at(-1)!.changed).toEqual(['bands', 'fuzz']);
+    app.undo();
+    expect(app.parts[0]!.props.fuzz).toBe('Flower');
+  });
+
+  it('the active tile and a step past the row do nothing; a locked tile refuses and flashes the locked line', async () => {
+    const lv = binLevel();
+    const { app, scene, hud } = boot(binSpec([{ ...lv, parts: [{ ...lv.parts[0]!, props: { ...lv.parts[0]!.props, bands: '60' } }] }]));
+    await flush();
+    select(app, scene);
+    app.applyBin('Flower');
+    app.applyBin('band');
+    expect(app.parts[0]!.props).toMatchObject({ bands: '60', fuzz: 'Flower' });
+    expect(app.undoStack).toHaveLength(0);
+    expect(app.binValue('band')).toBeNull();
+
+    const locked = boot(binSpec([{ ...lv, parts: [{ ...lv.parts[0]!, lockedProps: ['fuzz'] }] }]));
+    await flush();
+    select(locked.app, locked.scene);
+    locked.app.applyBin('Donut');
+    expect(locked.app.parts[0]!.props.fuzz).toBe('Flower');
+    expect(locked.app.binValue('Donut')).toBeNull();
+    let flagged = false;
+    (locked.hud as unknown as { update: (s: unknown, f?: { locked?: boolean }) => void }).update = (_s, f) => {
+      flagged = !!f?.locked;
+    };
+    locked.scene.onUpdate?.(16);
+    expect(flagged).toBe(true);
+  });
+
+  it('refuses a bin change over the budget like any prop change', async () => {
+    const lv = binLevel({ budget: 3 });
+    const spec = binSpec([{ ...lv, parts: [{ ...lv.parts[0]!, locked: false }] }], { partCost: (p) => Number(p.props.bands) });
+    const { app, scene } = boot(spec);
+    await flush();
+    select(app, scene);
+    app.applyBin('band');
+    expect(app.parts[0]!.props.bands).toBe('3');
+    app.applyBin('band');
+    expect(app.parts[0]!.props.bands).toBe('3');
+  });
+
+  it("drop zones: the item's own, else the selected part's bounds; on screen through the scene camera", async () => {
+    const { app, scene } = boot(binSpec([binLevel()]));
+    await flush();
+    expect(app.binDropZone('band')).toBeNull(); // nothing selected
+    select(app, scene);
+    expect(app.binDropZone('band')).toEqual({ x: 20, y: 680, r: 0.5 * 32 });
+    expect(app.binDropZone('Donut')).toEqual({ x: 30, y: 690, r: 1 * 32 });
+    expect(app.binDropZone('nope')).toBeNull();
+    app.binDrag('band', true);
+    expect(scene.dropZone).toEqual({ zone: { at: { x: 2, y: 2 }, r: 0.5 }, hot: true });
+    app.binDrag(null, false);
+    expect(scene.dropZone).toEqual({ zone: null, hot: false });
+  });
+});
+
+describe('BuilderApp: a live SlideWidget drag', () => {
+  it('commits each notch while dragged with ONE undo entry, and skips the matching release', async () => {
+    const OPTS = ['1.5', '2', '2.5', '3'].map((v) => ({ value: v, label: v }));
+    const lv: L = { ...LEVEL, parts: [{ id: 1, kind: 'box', x: 3, y: 1, props: { armLen: '2' } }] };
+    const spec = makeSpec(SINGLE, {
+      levels: [lv],
+      catalog: { box: { label: 'Box', icon: '■', descriptors: [{ code: 'armLen', label: 'Arm', options: OPTS }] } },
+      widgets: (part) => [{ id: 'arm', kind: 'slide', code: 'armLen', from: { x: 3, y: 2 }, to: { x: 0, y: 2 }, options: OPTS, value: part.props.armLen ?? '2', live: true }],
+    });
+    const { app, scene, hud } = boot(spec);
+    await flush();
+    scene.onPartTapped?.(1);
+    frame(scene, hud);
+    expect(scene.widgetsNow.map((w) => w.kind)).toEqual(['slide']);
+    scene.onWidgetAction?.('arm', '2.5', true);
+    scene.onWidgetAction?.('arm', '3', true);
+    scene.onWidgetAction?.('arm', '3');
+    expect(app.parts[0]!.props.armLen).toBe('3');
+    expect(app.undoStack).toHaveLength(1);
+    // The slide drives its row: no drawer/chip row for armLen.
+    expect(frame(scene, hud).selected!.descriptors).toEqual([]);
   });
 });

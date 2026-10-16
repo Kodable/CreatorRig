@@ -7,6 +7,14 @@ import {
   BIG_PILL_H,
   DIAL_MIN_KNOB_PX,
   MIN_TOUCH_PX,
+  MINI_TAP_PX,
+  SLIDE_KNOB_PX,
+  slidePointAt,
+  slidePointT,
+  slidePointToValue,
+  slideTToValue,
+  slideValuePoint,
+  type SlideGeom,
   estimateBigTextWidth,
   widgetAnchor,
   type TapGeom,
@@ -22,7 +30,7 @@ import {
   type LeverGeom,
   type RackGeom,
 } from './widgetLayout';
-import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, TapWidget, Vec2 } from './types';
+import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, SlideWidget, TapWidget, Vec2 } from './types';
 
 const toPx = (v: Vec2): Vec2 => ({ x: v.x * 10, y: 500 - v.y * 10 });
 
@@ -423,5 +431,105 @@ describe('widgetAnchor (where the coach hand points)', () => {
     expect(handle.y).toBeCloseTo(pivot.y - 100, 6);
     expect(widgetAnchor(rg!)).toEqual((rg as RackGeom).cells[1]!.center);
     expect(widgetAnchor(lg!)).toEqual((lg as LeverGeom).knob);
+  });
+});
+
+// 2026-10-16: the catapult rebuild's controls (Jon: "arm length fully customizable"; Gao: "take
+// one band off").
+describe('SlideWidget layout (a handle dragged along a world segment)', () => {
+  const ARM = ['1.5', '1.75', '2', '2.25', '2.5', '2.75', '3', '3.25', '3.5', '3.75', '4'];
+  const slide: SlideWidget = {
+    id: 'arm',
+    kind: 'slide',
+    code: 'armLen',
+    from: { x: 10, y: 10 },
+    to: { x: 0, y: 10 }, // 100 stage px to the LEFT under toPx
+    options: ARM.map((v) => ({ value: v, label: `${v} m` })),
+    value: '2',
+    live: true,
+  };
+  const [g] = layoutWidgets([slide], toPx, 1) as [SlideGeom];
+
+  it('puts option i at from + (to - from) * i/(n-1), the knob on the current value', () => {
+    expect(g.kind).toBe('slide');
+    expect(g.from).toEqual({ x: 100, y: 400 });
+    expect(g.to).toEqual({ x: 0, y: 400 });
+    expect(g.notches).toHaveLength(11);
+    expect(g.notches[0]).toEqual({ x: 100, y: 400 });
+    expect(g.notches[10]!.x).toBeCloseTo(0, 9);
+    expect(g.notches[2]!.x).toBeCloseTo(80, 9);
+    expect(g.knob.x).toBeCloseTo(80, 9);
+    expect(slideValuePoint(g, '3')!.x).toBeCloseTo(40, 9);
+    expect(slideValuePoint(g, '9')).toBeNull();
+    expect(g.live).toBe(true);
+    expect(g.readout).toBe('knob');
+    expect(g.guide).toBe(true);
+  });
+
+  it('draws the knob `size` px (default 56) and never grabs with less than a 64 px circle', () => {
+    expect(g.knobR * 2).toBe(SLIDE_KNOB_PX);
+    const small = layoutWidgets([{ ...slide, size: 20 }], toPx, 1)[0] as SlideGeom;
+    expect(small.knobR * 2).toBe(DIAL_MIN_KNOB_PX);
+    for (const geom of [g, small]) {
+      expect(geom.hits).toHaveLength(1);
+      const hit = geom.hits[0]!.shape;
+      expect(hit.kind).toBe('circle');
+      if (hit.kind === 'circle') {
+        expect(hit.r * 2).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
+        expect(hit.x).toBeCloseTo(geom.knob.x, 9);
+      }
+    }
+    // Screen-constant: the knob halves (in panel px) at twice the zoom.
+    const zoomed = layoutWidgets([slide], toPx, 0.5)[0] as SlideGeom;
+    expect(zoomed.knobR).toBeCloseTo(g.knobR / 2, 9);
+  });
+
+  it('grabs only the knob (no hit along the track)', () => {
+    expect(hitWidget([g], g.knob.x + 10, g.knob.y)?.id).toBe('arm');
+    expect(hitWidget([g], 10, 400)).toBeNull();
+  });
+
+  it('projects a point onto the track and snaps to the nearest option', () => {
+    expect(slidePointT(g, 100, 400)).toBe(0);
+    expect(slidePointT(g, 50, 470)).toBeCloseTo(0.5, 9); // off the line: projected
+    expect(slidePointT(g, 300, 400)).toBe(0); // past the ends: clamped
+    expect(slidePointT(g, -50, 400)).toBe(1);
+    expect(slidePointToValue(g, 50, 400)).toBe('2.75');
+    expect(slidePointToValue(g, 57, 400)).toBe('2.5'); // t 0.43 -> notch 4
+    expect(slidePointToValue(g, -999, 400)).toBe('4');
+    expect(slideTToValue(g, 0.04)).toBe('1.5');
+    expect(slideTToValue(g, 0.06)).toBe('1.75');
+    expect(slidePointAt(g, 0.25)).toEqual({ x: 75, y: 400 });
+  });
+
+  it('anchors the coach hand on the knob', () => {
+    expect(widgetAnchor(g)).toEqual(g.knob);
+  });
+
+  it('carries locked and the readout/icon choices through', () => {
+    const lk = layoutWidgets([{ ...slide, locked: true, readout: 'none', icon: '↔', guide: false }], toPx, 1)[0] as SlideGeom;
+    expect(lk).toMatchObject({ locked: true, readout: 'none', icon: '↔', guide: false });
+  });
+});
+
+describe("TapWidget style 'mini' (a small round badge)", () => {
+  const mini: TapWidget = { id: 'less', kind: 'tap', at: { x: 5, y: 5 }, icon: '−', style: 'mini' };
+  it('draws 34 px by default (or `size`) but hits a circle at least 64 px across', () => {
+    const [g] = layoutWidgets([mini], toPx, 1) as [TapGeom];
+    expect(g.style).toBe('mini');
+    expect(g.size).toBe(MINI_TAP_PX);
+    const hit = g.hits[0]!.shape;
+    expect(hit.kind).toBe('circle');
+    if (hit.kind === 'circle') expect(hit.r * 2).toBe(MIN_TOUCH_PX);
+    const big = layoutWidgets([{ ...mini, size: 90 }], toPx, 1)[0] as TapGeom;
+    expect(big.size).toBe(90);
+    const bigHit = big.hits[0]!.shape;
+    if (bigHit.kind === 'circle') expect(bigHit.r).toBe(45);
+  });
+  it('is screen-constant and anchors the coach hand on its centre', () => {
+    const [g] = layoutWidgets([mini], toPx, 0.5) as [TapGeom];
+    expect(g.size).toBeCloseTo(MINI_TAP_PX / 2, 9);
+    expect(widgetAnchor(g)).toEqual(g.center);
+    expect(hitWidget([g], g.center.x + 15, g.center.y)?.id).toBe('less'); // inside the 32 px (x0.5) circle
   });
 });

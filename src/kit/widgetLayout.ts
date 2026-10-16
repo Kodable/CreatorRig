@@ -1,7 +1,7 @@
 // Phaser-free layout math for the widget layer: turns a course's `Widget[]` (world meters, sizes
 // in screen-constant stage px) into stage-px geometry BuilderScene draws from and hit-tests
 // against. Kept free of Phaser so it is unit-testable without a canvas.
-import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, TapWidget, Vec2, Widget } from './types';
+import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, SlideWidget, TapWidget, Vec2, Widget } from './types';
 
 /** The scene never draws or hit-tests a control smaller than this (on-screen px). */
 export const MIN_TOUCH_PX = 64;
@@ -9,6 +9,11 @@ export const MIN_TOUCH_PX = 64;
  * drag handle smaller" on the catapult's angle lever); its grab circle stays at least
  * MIN_TOUCH_PX * 1.2 across (see `layoutDial`), so the touch target never shrinks. */
 export const DIAL_MIN_KNOB_PX = 44;
+/** 2026-10-16: a `TapWidget.style` 'mini' badge's default drawn diameter (on-screen px); its hit
+ * circle stays MIN_TOUCH_PX across. */
+export const MINI_TAP_PX = 34;
+/** 2026-10-16: a `SlideWidget`'s default drawn knob diameter (on-screen px). */
+export const SLIDE_KNOB_PX = 56;
 
 /** A hit-test shape in stage px (the same coordinate space `toPx` produces, i.e. before
  * RENDER_SCALE and before the camera's zoom — the space the pointer handlers already compute via
@@ -43,8 +48,9 @@ export interface TapGeom extends WidgetGeomBase {
   color?: number;
   texture?: { role: string; tint?: number };
   hopTo?: Vec2;
-  /** 'card' (default) or 'big' (`TapWidget.style`). */
-  style: 'card' | 'big';
+  /** 'card' (default), 'big' or 'mini' (`TapWidget.style`). A 'mini' badge's `size` is its DRAWN
+   * diameter (default MINI_TAP_PX); its hit circle is never under MIN_TOUCH_PX. */
+  style: 'card' | 'big' | 'mini';
   /** 'big' only: the pill's box and its content metrics, stage px already multiplied by pxScale.
    * The icon sits at the left of the content run, then `gap`, then the label; the run is centred
    * in the pill. */
@@ -180,7 +186,25 @@ export interface PullGeom extends WidgetGeomBase {
   arrow: boolean;
 }
 
-export type WidgetGeom = TapGeom | DialGeom | RackGeom | LeverGeom | CycleGeom | PullGeom;
+/** A `SlideWidget` in stage px: the track's two ends (`from` = option 0), one notch per option,
+ * the knob at the current option and its drawn radius. */
+export interface SlideGeom extends WidgetGeomBase {
+  kind: 'slide';
+  from: Vec2;
+  to: Vec2;
+  notches: Vec2[];
+  knob: Vec2;
+  knobR: number;
+  options: SlideWidget['options'];
+  value: string;
+  readout: 'knob' | 'none';
+  icon?: string;
+  guide: boolean;
+  live: boolean;
+  color?: number;
+}
+
+export type WidgetGeom = TapGeom | DialGeom | RackGeom | LeverGeom | CycleGeom | PullGeom | SlideGeom;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -285,6 +309,12 @@ function layoutTap(w: TapWidget, toPx: (v: Vec2) => Vec2, pxScale: number, measu
       pill: { w: pw, h: ph, iconW: iconW * pxScale, labelW: labelW * pxScale, gap: gap * pxScale, contentW: contentW * pxScale, scale: k },
       hits: [{ shape: { kind: 'rect', x: center.x, y: center.y, w: pw + 2 * pad, h: ph + 2 * pad }, index: 0 }],
     };
+  }
+  if (w.style === 'mini') {
+    // 2026-10-16 ("take one band off"): a small round badge; the finger still gets a 64 px circle.
+    const drawn = Math.max(1, w.size ?? MINI_TAP_PX) * pxScale;
+    const r = Math.max(drawn / 2, (MIN_TOUCH_PX / 2) * pxScale);
+    return { ...base, size: drawn, style: 'mini', hits: [{ shape: { kind: 'circle', x: center.x, y: center.y, r }, index: 0 }] };
   }
   const size = sizeOf(w.size, 76, pxScale);
   return {
@@ -505,11 +535,74 @@ function layoutPull(w: PullWidget, toPx: (v: Vec2) => Vec2, pxScale: number): Pu
   };
 }
 
+function layoutSlide(w: SlideWidget, toPx: (v: Vec2) => Vec2, pxScale: number): SlideGeom {
+  const from = toPx(w.from);
+  const to = toPx(w.to);
+  const n = w.options.length;
+  const notches: Vec2[] = Array.from({ length: n }, (_, i) => lerpVec(from, to, n > 1 ? i / (n - 1) : 0));
+  const idx = Math.max(0, w.options.findIndex((o) => o.value === w.value));
+  const knob = notches[idx] ?? from;
+  const knobR = (Math.max(DIAL_MIN_KNOB_PX, w.size ?? SLIDE_KNOB_PX) * pxScale) / 2;
+  return {
+    id: w.id,
+    kind: 'slide',
+    from,
+    to,
+    notches,
+    knob,
+    knobR,
+    options: w.options,
+    value: w.value,
+    readout: w.readout ?? 'knob',
+    icon: w.icon,
+    guide: w.guide ?? true,
+    live: w.live ?? false,
+    color: w.color,
+    locked: w.locked ?? false,
+    // Only the knob, with a generous grab circle (never under MIN_TOUCH_PX across, the dial's rule):
+    // the track runs over the machine, where an invisible grab strip would steal taps.
+    hits: [{ shape: { kind: 'circle', x: knob.x, y: knob.y, r: Math.max(knobR * 1.2, MIN_TOUCH_PX * 0.6 * pxScale) }, index: idx }],
+  };
+}
+
+/** 0..1 of the way along a slide's track for a stage point (projected onto from..to, clamped). */
+export function slidePointT(g: Pick<SlideGeom, 'from' | 'to'>, sx: number, sy: number): number {
+  const dx = g.to.x - g.from.x;
+  const dy = g.to.y - g.from.y;
+  const lenSq = dx * dx + dy * dy;
+  return lenSq > 0 ? clamp(((sx - g.from.x) * dx + (sy - g.from.y) * dy) / lenSq, 0, 1) : 0;
+}
+
+/** The option nearest `t` (0..1 along the track): the slide's snap. */
+export function slideTToValue(g: Pick<SlideGeom, 'options' | 'value'>, t: number): string {
+  const n = g.options.length;
+  if (n === 0) return g.value;
+  const idx = n > 1 ? Math.round(clamp(t, 0, 1) * (n - 1)) : 0;
+  return g.options[idx]!.value;
+}
+
+/** The option nearest a stage point projected onto the slide's track. Pure, unit-tested. */
+export function slidePointToValue(g: SlideGeom, sx: number, sy: number): string {
+  return slideTToValue(g, slidePointT(g, sx, sy));
+}
+
+/** The stage point of option `value` on a laid-out slide, or null when it has no such option. */
+export function slideValuePoint(g: SlideGeom, value: string): Vec2 | null {
+  const i = g.options.findIndex((o) => o.value === value);
+  return i === -1 ? null : (g.notches[i] ?? null);
+}
+
+/** The stage point `t` (0..1) of the way along a slide's track. */
+export function slidePointAt(g: Pick<SlideGeom, 'from' | 'to'>, t: number): Vec2 {
+  return lerpVec(g.from, g.to, clamp(t, 0, 1));
+}
+
 /** Where a pointer (the coach's hand) should point on a laid-out widget, stage px: a tap/cycle
  * centre, a dial's handle, a rack's middle cell, a lever's knob, a pull's rest handle. */
 export function widgetAnchor(geom: WidgetGeom): Vec2 {
   switch (geom.kind) {
     case 'tap': {
+      if (geom.style === 'mini') return geom.center;
       // Near the button's bottom-right corner, not its middle: the glove hangs below-right of the
       // fingertip, so the icon and label stay visible (Gao, 2026-10-05).
       const w = geom.pill?.w ?? geom.size;
@@ -530,6 +623,8 @@ export function widgetAnchor(geom: WidgetGeom): Vec2 {
       return geom.knob;
     case 'pull':
       return geom.at;
+    case 'slide':
+      return geom.knob;
   }
 }
 
@@ -557,6 +652,8 @@ export function layoutWidgets(
         return layoutCycle(w, toPx, pxScale);
       case 'pull':
         return layoutPull(w, toPx, pxScale);
+      case 'slide':
+        return layoutSlide(w, toPx, pxScale);
     }
   });
 }

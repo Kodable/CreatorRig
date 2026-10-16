@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ARM,
+  ARM_LENGTHS,
   BAND_COLOR,
-  BAND_COUNT,
+  BAND_OPTIONS,
+  BAND_SPEED,
   CATALOG,
   CAN_COLORS,
   CRATE_BREAK,
@@ -11,12 +12,18 @@ import {
   FUZZ_TINT,
   SPLIT_ANGLE_DEG,
   SPLIT_OFFSET,
-  LAUNCH_SPEED,
   FUZZ_REF,
   FUZZ_SPEED_EXPONENT,
   MATERIALS,
-  MAX_LAUNCH_SPEED,
+  MAX_BANDS,
+  MAX_VISIBLE_BANDS,
+  SPACE_SPEED,
+  armFactor,
+  armLength,
+  bandCount,
+  bandSpeed,
   fuzzMass,
+  isSpaceShot,
   launchSpeed,
   PART_LIMIT,
   blockSize,
@@ -30,9 +37,12 @@ describe('catapult catalog', () => {
     expect(Object.keys(CATALOG).sort()).toEqual(['block', 'bullseye', 'can', 'catapult', 'shelf', 'wall']);
 
     const catapult = CATALOG.catapult;
-    expect(catapult.descriptors.map((d) => d.code)).toEqual(['power', 'angle', 'fuzz', 'arm']);
-    expect(catapult.descriptors[0]!.options.map((o) => o.value)).toEqual(['Low', 'Medium', 'High', 'Max']);
-    expect(catapult.descriptors[0]!.default).toBe('Medium');
+    // 2026-10-16: Power became the band count (1..60), Arm the arm length (1.5..4 m).
+    expect(catapult.descriptors.map((d) => d.code)).toEqual(['bands', 'angle', 'fuzz', 'armLen']);
+    expect(catapult.descriptors[0]!.label).toBe('Rubber bands');
+    expect(catapult.descriptors[0]!.options.map((o) => o.value)).toEqual(Array.from({ length: 60 }, (_, i) => String(i + 1)));
+    expect(catapult.descriptors[0]!.options.every((o) => o.image === undefined)).toBe(true);
+    expect(catapult.descriptors[0]!.default).toBe('2');
     expect(catapult.descriptors[1]!.options.map((o) => o.value)).toEqual(['15', '30', '45', '60', '75']);
     expect(catapult.descriptors[1]!.default).toBe('45');
     // One Fuzz row (stakeholder direction 2026-10-01: weight and shot type merged), five fuzzes in
@@ -48,8 +58,10 @@ describe('catapult catalog', () => {
       'parts/catapult/fuzz-Metal.png',
     ]);
     expect(catapult.descriptors[2]!.default).toBe('Fur');
-    expect(catapult.descriptors[3]!.options.map((o) => o.value)).toEqual(['Short', 'Long']);
-    expect(catapult.descriptors[3]!.default).toBe('Short');
+    expect(catapult.descriptors[3]!.label).toBe('Arm length');
+    expect(catapult.descriptors[3]!.options.map((o) => o.value)).toEqual([...ARM_LENGTHS]);
+    expect(catapult.descriptors[3]!.options.map((o) => o.label)).toEqual(ARM_LENGTHS.map((l) => `${l} m`));
+    expect(catapult.descriptors[3]!.default).toBe('2');
 
     const can = CATALOG.can;
     expect(can.descriptors.map((d) => d.code)).toEqual(['color']);
@@ -71,7 +83,7 @@ describe('catapult catalog', () => {
   });
 
   it('defaultProps returns each descriptor\'s stamped default', () => {
-    expect(defaultProps('catapult')).toEqual({ power: 'Medium', angle: '45', fuzz: 'Fur', arm: 'Short' });
+    expect(defaultProps('catapult')).toEqual({ bands: '2', angle: '45', fuzz: 'Fur', armLen: '2' });
     expect(defaultProps('can')).toEqual({ color: 'Red' });
     expect(defaultProps('block')).toEqual({ size: '1x1', material: 'wood' });
     expect(defaultProps('shelf')).toEqual({ length: '2' });
@@ -83,13 +95,68 @@ describe('catapult catalog', () => {
     expect(PART_LIMIT).toBe(12);
   });
 
-  it('LAUNCH_SPEED has the four power numbers from the plan', () => {
-    expect(LAUNCH_SPEED).toEqual({ Low: 7, Medium: 10, High: 12.5, Max: 15 });
+  it('the band and arm options (2026-10-16): 1..60 bands, 1.5..4 m in quarter metres, six bands drawn', () => {
+    expect(MAX_BANDS).toBe(60);
+    expect(BAND_OPTIONS).toHaveLength(60);
+    expect(ARM_LENGTHS).toEqual(['1.5', '1.75', '2', '2.25', '2.5', '2.75', '3', '3.25', '3.5', '3.75', '4']);
+    expect(MAX_VISIBLE_BANDS).toBe(6);
   });
 
-  it('ARM has length and speed factor per option', () => {
-    expect(ARM.Short).toEqual({ length: 2, factor: 0.95 });
-    expect(ARM.Long).toEqual({ length: 3, factor: 1.05 });
+  it('legacy props map: power Low/Medium/High/Max -> 1..4 bands, arm Short/Long -> 2 / 3 m; the new props win', () => {
+    expect(bandCount({ power: 'Low' })).toBe(1);
+    expect(bandCount({ power: 'Medium' })).toBe(2);
+    expect(bandCount({ power: 'High' })).toBe(3);
+    expect(bandCount({ power: 'Max' })).toBe(4);
+    expect(bandCount({})).toBe(2);
+    expect(bandCount({ power: 'Nope' })).toBe(2);
+    expect(bandCount({ bands: '45', power: 'Low' })).toBe(45);
+    expect(bandCount({ bands: '0' })).toBe(1);
+    expect(bandCount({ bands: '99' })).toBe(60);
+    expect(armLength({ arm: 'Short' })).toBe(2);
+    expect(armLength({ arm: 'Long' })).toBe(3);
+    expect(armLength({})).toBe(2);
+    expect(armLength({ armLen: '3.75', arm: 'Short' })).toBe(3.75);
+    expect(armLength({ armLen: '9' })).toBe(4);
+    expect(armLength({ armLen: '1' })).toBe(1.5);
+    // A saved old tuning flies exactly as before.
+    expect(launchSpeed({ power: 'High', arm: 'Long', fuzz: 'Metal' })).toBe(launchSpeed({ bands: '3', armLen: '3', fuzz: 'Metal' }));
+  });
+
+  it('band speed: the old table for 1..4 bands (7, 10, 12.5, 15), then 15 * sqrt(n / 4); no cap', () => {
+    expect(BAND_SPEED).toEqual([7, 10, 12.5, 15]);
+    expect([1, 2, 3, 4].map(bandSpeed)).toEqual([7, 10, 12.5, 15]);
+    for (const n of [5, 6, 10, 16, 45, 60]) expect(bandSpeed(n)).toBeCloseTo(15 * Math.sqrt(n / 4), 12);
+    expect(bandSpeed(16)).toBeCloseTo(30, 12);
+    for (let n = 2; n <= 60; n++) expect(bandSpeed(n)).toBeGreaterThan(bandSpeed(n - 1));
+  });
+
+  it('arm factor 0.75 + 0.1 L: 0.95 at 2 m and 1.05 at 3 m (the old Short and Long)', () => {
+    expect(armFactor(2)).toBeCloseTo(0.95, 12);
+    expect(armFactor(3)).toBeCloseTo(1.05, 12);
+    expect(armFactor(1.5)).toBeCloseTo(0.9, 12);
+    expect(armFactor(4)).toBeCloseTo(1.15, 12);
+    for (const len of ARM_LENGTHS) {
+      expect(launchSpeed({ bands: '4', armLen: len, fuzz: 'Fur' })).toBeCloseTo(15 * (0.75 + 0.1 * Number(len)), 12);
+    }
+  });
+
+  it('space shot: over SPACE_SPEED (24 m/s) - 12 bands on the Fur with the 2 m arm, 10 with 3 m, 8 for the Flower; 45 bands always', () => {
+    expect(SPACE_SPEED).toBe(24);
+    const firstSpace = (fuzz: string, armLen: string) => {
+      for (let n = 1; n <= 60; n++) if (isSpaceShot({ bands: String(n), fuzz, armLen })) return n;
+      return null;
+    };
+    expect(firstSpace('Fur', '2')).toBe(12);
+    expect(firstSpace('Fur', '3')).toBe(10);
+    expect(firstSpace('Flower', '2')).toBe(8);
+    expect(firstSpace('Metal', '2')).toBe(20);
+    for (const fuzz of FUZZ_NAMES) for (const armLen of ARM_LENGTHS) {
+      expect(isSpaceShot({ bands: '45', fuzz, armLen }), `${fuzz}/${armLen}`).toBe(true);
+      // Every old tuning (1..4 bands, 2 or 3 m) stays on the ground.
+      for (const bands of ['1', '2', '3', '4']) expect(isSpaceShot({ bands, fuzz, armLen: '2' })).toBe(false);
+    }
+    expect(isSpaceShot({ bands: '11', fuzz: 'Fur', armLen: '2' })).toBe(false);
+    expect(launchSpeed({ bands: '12', fuzz: 'Fur', armLen: '2' })).toBeGreaterThan(SPACE_SPEED);
   });
 
   it('FUZZ has radius and density per fuzz, light to heavy; Flower/Fur/Metal keep the old ' +
@@ -122,11 +189,7 @@ describe('catapult catalog', () => {
     expect(CAN_COLORS).toEqual({ Red: 0xe0392f, Blue: 0x05aeed, Green: 0x61bb46 });
   });
 
-  it('BAND_COUNT gives 1..4 rubber bands, Low to Max', () => {
-    expect(BAND_COUNT).toEqual({ Low: 1, Medium: 2, High: 3, Max: 4 });
-  });
-
-  it('every band is the same red (BAND_COLOR), matching the drawer\'s power pictures', () => {
+  it('every band is the same red (BAND_COLOR)', () => {
     expect(BAND_COLOR).toBe(0xee3b3b);
   });
 
@@ -156,10 +219,10 @@ describe('catapult catalog', () => {
 });
 
 // Gao, 2026-10-15: "theres no gameplay reason to use a lighter fuzz right now". The bands store a
-// fixed energy per power setting: a heavier fuzz leaves slower, a lighter one faster.
+// fixed energy per band count: a heavier fuzz leaves slower, a lighter one faster.
 describe('catapult catalog: the energy rule (launchSpeed)', () => {
-  const POWERS = ['Low', 'Medium', 'High', 'Max'];
-  const ARMS = ['Short', 'Long'];
+  const BANDS = ['1', '2', '3', '4', '6', '10'];
+  const ARMS = ['1.5', '2', '3', '4'];
 
   it('fuzzMass is the disc mass Rapier gives the body (pi r^2 density), light to heavy', () => {
     expect(fuzzMass({ r: 0.3, density: 1 })).toBeCloseTo(Math.PI * 0.09, 12);
@@ -167,43 +230,38 @@ describe('catapult catalog: the energy rule (launchSpeed)', () => {
     for (let i = 1; i < masses.length; i++) expect(masses[i]!).toBeGreaterThan(masses[i - 1]!);
   });
 
-  it('the Fur (the reference) keeps exactly the speeds every fuzz had before: power x arm factor', () => {
+  it('the Fur (the reference) flies at exactly band speed x arm factor', () => {
     expect(FUZZ_REF).toBe('Fur');
-    for (const power of POWERS) {
-      for (const arm of ARMS) {
-        expect(launchSpeed({ power, arm, fuzz: 'Fur' })).toBeCloseTo(LAUNCH_SPEED[power]! * ARM[arm]!.factor, 12);
+    for (const bands of BANDS) {
+      for (const armLen of ARMS) {
+        expect(launchSpeed({ bands, armLen, fuzz: 'Fur' })).toBeCloseTo(bandSpeed(Number(bands)) * armFactor(Number(armLen)), 12);
       }
     }
-    // Defaults: Medium, Short arm, the Fur.
+    // Defaults: 2 bands, the 2 m arm, the Fur.
     expect(launchSpeed({})).toBeCloseTo(10 * 0.95, 12);
   });
 
-  it('a lighter fuzz leaves faster at every power and arm (equal only where two hit the cap)', () => {
-    for (const power of POWERS) {
-      for (const arm of ARMS) {
-        const speeds = FUZZ_NAMES.map((fuzz) => launchSpeed({ power, arm, fuzz })); // light to heavy
-        for (let i = 1; i < speeds.length; i++) {
-          if (speeds[i - 1]! < MAX_LAUNCH_SPEED) expect(speeds[i]!, `${power}/${arm}`).toBeLessThan(speeds[i - 1]!);
-          else expect(speeds[i]!, `${power}/${arm}`).toBeLessThanOrEqual(speeds[i - 1]!);
-        }
-        // The Fur and everything heavier never hit the cap; the Metal is always slowest.
-        expect(speeds[2]!).toBeLessThanOrEqual(MAX_LAUNCH_SPEED);
-        expect(speeds[4]!).toBeLessThan(speeds[2]!);
+  it('a lighter fuzz always leaves faster (no cap any more, 2026-10-16)', () => {
+    for (const bands of BANDS) {
+      for (const armLen of ARMS) {
+        const speeds = FUZZ_NAMES.map((fuzz) => launchSpeed({ bands, armLen, fuzz })); // light to heavy
+        for (let i = 1; i < speeds.length; i++) expect(speeds[i]!, `${bands}/${armLen}`).toBeLessThan(speeds[i - 1]!);
       }
     }
+    // The old 15.75 m/s cap is gone: the Flower at 4 bands on the 2 m arm leaves at 17.7 m/s.
+    expect(launchSpeed({ bands: '4', armLen: '2', fuzz: 'Flower' })).toBeGreaterThan(15.75);
   });
 
-  it('below the cap, speed goes as mass^-FUZZ_SPEED_EXPONENT (0.25): m v^4 is the same for every fuzz at a power', () => {
+  it('speed goes as mass^-FUZZ_SPEED_EXPONENT (0.25): m v^4 is the same for every fuzz at a band count', () => {
     expect(FUZZ_SPEED_EXPONENT).toBe(0.25);
     const mRef = fuzzMass(FUZZ.Fur!);
-    for (const power of POWERS) {
-      for (const arm of ARMS) {
-        const vRef = launchSpeed({ power, arm, fuzz: 'Fur' });
+    for (const bands of BANDS) {
+      for (const armLen of ARMS) {
+        const vRef = launchSpeed({ bands, armLen, fuzz: 'Fur' });
         for (const fuzz of FUZZ_NAMES) {
-          const v = launchSpeed({ power, arm, fuzz });
-          if (v >= MAX_LAUNCH_SPEED) continue;
+          const v = launchSpeed({ bands, armLen, fuzz });
           const m = fuzzMass(FUZZ[fuzz]!);
-          expect(v / vRef, `${power}/${arm}/${fuzz}`).toBeCloseTo(Math.pow(mRef / m, 0.25), 12);
+          expect(v / vRef, `${bands}/${armLen}/${fuzz}`).toBeCloseTo(Math.pow(mRef / m, 0.25), 12);
           expect(m * v ** 4).toBeCloseTo(mRef * vRef ** 4, 6);
         }
       }
@@ -211,28 +269,18 @@ describe('catapult catalog: the energy rule (launchSpeed)', () => {
     // The pure energy rule (1/2 m v^2 fixed) would be the exponent 0.5; softened so the Metal still
     // reaches mid-range targets and the Flower does not fly 2.4x as far. The heavier fuzz still
     // carries more momentum (m v ~ m^0.75): it hits harder.
-    const p = (fuzz: string) => fuzzMass(FUZZ[fuzz]!) * launchSpeed({ power: 'High', fuzz });
+    const p = (fuzz: string) => fuzzMass(FUZZ[fuzz]!) * launchSpeed({ bands: '3', fuzz });
     expect(p('Metal')).toBeGreaterThan(p('Helmet'));
     expect(p('Helmet')).toBeGreaterThan(p('Fur'));
     expect(p('Fur')).toBeGreaterThan(p('Flower'));
   });
 
-  it('nothing ever leaves faster than the fastest shot before the rule (Max power, Long arm, 15.75 m/s)', () => {
-    expect(MAX_LAUNCH_SPEED).toBeCloseTo(LAUNCH_SPEED.Max! * ARM.Long!.factor, 12);
-    for (const power of POWERS) for (const arm of ARMS) for (const fuzz of FUZZ_NAMES) {
-      expect(launchSpeed({ power, arm, fuzz })).toBeLessThanOrEqual(MAX_LAUNCH_SPEED);
-    }
-    // Only the light ones near the top are capped: the Flower at High / Long and at Max, the Donut at Max / Long.
-    expect(launchSpeed({ power: 'Max', arm: 'Short', fuzz: 'Flower' })).toBe(MAX_LAUNCH_SPEED);
-    expect(launchSpeed({ power: 'High', arm: 'Short', fuzz: 'Flower' })).toBeLessThan(MAX_LAUNCH_SPEED);
-  });
-
-  it('the speed table (m/s, Short arm) the levels are tuned against', () => {
+  it('the speed table (m/s, 2 m arm, 1..4 bands) the levels are tuned against', () => {
     const table = Object.fromEntries(
-      FUZZ_NAMES.map((fuzz) => [fuzz, POWERS.map((power) => Math.round(launchSpeed({ power, fuzz, arm: 'Short' }) * 100) / 100)]),
+      FUZZ_NAMES.map((fuzz) => [fuzz, ['1', '2', '3', '4'].map((bands) => Math.round(launchSpeed({ bands, fuzz, armLen: '2' }) * 100) / 100)]),
     );
     expect(table).toEqual({
-      Flower: [8.28, 11.82, 14.78, 15.75],
+      Flower: [8.28, 11.82, 14.78, 17.74],
       Donut: [7.28, 10.4, 13, 15.6],
       Fur: [6.65, 9.5, 11.88, 14.25],
       Helmet: [5.77, 8.24, 10.3, 12.36],

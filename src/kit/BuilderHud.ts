@@ -5,6 +5,7 @@
 // intro / hint inside the world panel, and the quick lines in the top row left of the picker), and the Hint button moved to the
 // bottom bar's left end.
 import type {
+  BinItem,
   CoachTarget,
   Goal,
   GoalResult,
@@ -20,6 +21,9 @@ import type {
 } from './types';
 import { levelPickerLabel } from './chapters';
 import { hasShelfKinds, nonShelfKinds, shelfGroups } from './shelf';
+import { kitGoalCardLive, levelOver, type KitGoalCardState } from './goalCards';
+import { binGroups, insideDropZone } from './bin';
+import { dropPose } from './coachGesture';
 import { playGoalsIntro as animateGoalsIntro, prefersReducedMotion } from '../ui/goalsIntro';
 import { BrunoDialog, type QuickLine } from '../ui/brunoDialog';
 import './builder.css';
@@ -118,12 +122,50 @@ interface Flyer {
 /** A flight lasts 520 ms; if it has not landed 400 ms after that, commit anyway. */
 const FLIGHT_FALLBACK_MS = 920;
 
+/** A kit goal card (`HudSpec.goalCards`, 2026-10-16): the card, its bar's fill and the look it
+ * last drew (a state change re-pops the card through its CSS class, like the coaster's). */
+interface GoalCardItem {
+  card: HTMLLIElement;
+  fill: HTMLDivElement | null;
+  check: boolean;
+  editLive: boolean;
+  state: KitGoalCardState | null;
+  fillPct: number;
+}
+
+/** The SUPPLY BIN (2026-10-16): a finger moving this far (stage px) from where it pressed a tile
+ * turns the press into a drag; less is a tap. */
+const BIN_DRAG_PX = 8;
+/** The dragged tile's ghost picture, stage px across. */
+const BIN_GHOST_PX = 72;
+/** A drop zone's radius for the drop test is never under this (stage px): a small part still
+ * takes a drop from a finger. */
+const BIN_DROP_MIN_R = 40;
+/** The coach's 'drop' demonstration carries a ghost this big (stage px). */
+const COACH_GHOST_PX = 56;
+
+/** A bin tile pressed (and maybe dragged) by one pointer. */
+interface BinPress {
+  itemId: string;
+  pointerId: number;
+  tile: HTMLElement;
+  img: HTMLImageElement;
+  /** Where it pressed, stage px. */
+  start: { x: number; y: number };
+  dragging: boolean;
+  ghost: HTMLImageElement | null;
+  hot: boolean;
+}
+
 interface PendingFlight {
   code: string;
   value: string;
   partId: number;
   flyers: Flyer[];
   committed: boolean;
+  /** 2026-10-16: how the flight commits when it is not a plain `setProp(code, value)` (a bin tile:
+   * `applyBin`, which recomputes a `step` item's value at landing). */
+  apply?: () => void;
   /** Safety net: commits the change even if the animation clock stalls (a background tab pauses
    * animations, so `onfinish` may never fire there). */
   fallback?: ReturnType<typeof setTimeout>;
@@ -150,6 +192,24 @@ export class BuilderHud<
   private allLevels: L[] = [];
   private levelIndex = 0;
   private goalItems: GoalItem[] = [];
+  /** `HudSpec.goalCards` with `goalsOverlay`: the goals are the coaster's row of cards. */
+  private readonly goalCardsMode: boolean;
+  private goalCardItems: GoalCardItem[] = [];
+
+  // ---- the SUPPLY BIN (2026-10-16, `CourseSpec.bin` / `HudState.bin`; drawer courses only) ----
+  private drawerBinEl!: HTMLDivElement;
+  private drawerBinBodyEl!: HTMLDivElement;
+  private binKey: string | null = null;
+  /** The tiles drawn now, by item id (the coach's 'bin' target, the drag's way home). */
+  private binTiles = new Map<string, { tile: HTMLElement; img: HTMLImageElement }>();
+  /** This frame's items by id (locked/active read at event time). */
+  private binItemsById = new Map<string, BinItem>();
+  private binPress: BinPress | null = null;
+  /** The selected part's id as of the last `update` (a bin tap's flight is started for it). */
+  private lastSelectedPartId: number | null = null;
+  /** The coach's 'drop' demonstration: the ghost it carries, and when its stroke started. */
+  private coachGhostEl!: HTMLImageElement;
+  private coachStrokeStart = 0;
 
   /** Bruno's dialog box: the modal lesson intro / hint, and the quick lines (src/ui/brunoDialog.ts).
    * The controller (BuilderApp) runs the modal; `update` feeds the quick line every frame. */
@@ -339,6 +399,7 @@ export class BuilderHud<
     this.tools = tools;
     this.scrollView = Math.max(0, Math.min(1, scrollView));
     this.metersOverlay = !!hud.metersOverlay || !!hud.goalsOverlay;
+    this.goalCardsMode = !!hud.goalsOverlay && !!hud.goalCards;
     this.panelTop = panelTop;
     // Every rule anchored to the world panel's top (builder.css: the drawer, the win banner;
     // style.css: the meters/goals overlays) reads it from here; their fallback is the default 210px.
@@ -372,6 +433,7 @@ export class BuilderHud<
       }
       this.flight = null;
     }
+    this.cancelBinPress(false);
     this.root.innerHTML = '';
     // The root (#ui) is shared with the next activity (the coaster HUD among them).
     this.root.style.removeProperty('--panel-top');
@@ -529,7 +591,9 @@ export class BuilderHud<
     const dash = document.createElement('div');
     dash.id = 'dash';
     const goalsOverlay = this.hud.goalsOverlay ? document.createElement('div') : null;
-    if (goalsOverlay) goalsOverlay.className = 'goals-overlay';
+    // 2026-10-16: `hud.goalCards` turns the overlay into the coaster's row of goal cards (the
+    // global style.css `.goals-overlay.goal-cards` drops the navy panel).
+    if (goalsOverlay) goalsOverlay.className = this.goalCardsMode ? 'goals-overlay goal-cards' : 'goals-overlay';
 
     const goalsCol = document.createElement('div');
     goalsCol.className = 'goals-col';
@@ -827,9 +891,17 @@ export class BuilderHud<
     img.src = COACH_HAND_FRAMES[0]!.src;
     img.alt = '';
     hand.appendChild(img);
-    this.root.appendChild(hand);
+    // 2026-10-16: the 'drop' demonstration's ghost tile (under the glove, `syncCoachHand`).
+    const ghost = document.createElement('img');
+    ghost.className = 'coach-drop-ghost';
+    ghost.alt = '';
+    ghost.draggable = false;
+    ghost.hidden = true;
+    this.boolCache.set(ghost, true);
+    this.root.append(ghost, hand);
     this.coachHandEl = hand;
     this.coachHandImgEl = img;
+    this.coachGhostEl = ghost;
   }
 
   /** Restarts a one-shot CSS animation class on `el` (even mid-animation). */
@@ -935,6 +1007,8 @@ export class BuilderHud<
           return this.drawerOptionsByCode.get(t.code)?.get(t.value) ?? this.propChipsByCode.get(t.code)?.get(t.value) ?? null;
         }
         return this.drawerSectionByCode.get(t.code) ?? this.propRowByCode.get(t.code) ?? null;
+      case 'bin':
+        return this.binTiles.get(t.itemId)?.tile ?? null;
       case 'bar':
         switch (t.button) {
           case 'play':
@@ -960,11 +1034,16 @@ export class BuilderHud<
     const step = state.coach;
     const el = step ? this.coachTargetEl(step.target) : null;
     const rect = el ? this.visibleStageRect(el) : null;
-    if (!step || !rect) {
+    // The hand steps aside while the child has a bin tile in hand.
+    if (!step || !rect || this.binPress?.dragging) {
       this.setHidden(this.coachHandEl, true);
+      this.setHidden(this.coachGhostEl, true);
       this.coachHandKey = '';
       return;
     }
+    if (step.target.type === 'bin' && step.gesture?.kind === 'drop' && this.syncCoachDrop(step.id, step.target.itemId, rect)) return;
+    this.setHidden(this.coachGhostEl, true);
+    this.coachHandEl.style.opacity = '';
     const frameIdx = prefersReducedMotion()
       ? 0
       : COACH_FRAME_SEQUENCE[Math.floor(performance.now() / COACH_FRAME_MS) % COACH_FRAME_SEQUENCE.length]!;
@@ -994,6 +1073,42 @@ export class BuilderHud<
       this.coachHandKey = key;
       this.restartAnim(this.coachHandEl, 'enter');
     }
+  }
+
+  /** The coach's 'drop' demonstration on a bin tile (`CoachGesture` 'drop', 2026-10-16): the glove
+   * presses the tile, carries a ghost of its picture along `dropPose` to the item's drop zone,
+   * lets go, fades and repeats. False (the caller draws the plain tap) when the item has no drop
+   * zone on screen. */
+  private syncCoachDrop(stepId: string, itemId: string, rect: { x: number; y: number; w: number; h: number }): boolean {
+    const zone = this.cb.binDropZone(itemId);
+    const tile = this.binTiles.get(itemId);
+    if (!zone || !tile) return false;
+    const key = `${stepId}|bin:${itemId}|drop`;
+    if (key !== this.coachHandKey) {
+      this.coachHandKey = key;
+      this.coachStrokeStart = performance.now();
+      this.coachHandEl.classList.remove('enter');
+    }
+    const imgRect = this.visibleStageRect(tile.img) ?? rect;
+    const from = { x: imgRect.x + imgRect.w / 2, y: imgRect.y + imgRect.h / 2 };
+    const pose = dropPose(from, { x: zone.x, y: zone.y }, performance.now() - this.coachStrokeStart);
+    const frame = COACH_HAND_FRAMES[prefersReducedMotion() ? 0 : pose.frame]!;
+    if (this.coachHandImgEl.getAttribute('src') !== frame.src) this.coachHandImgEl.src = frame.src;
+    this.coachHandEl.classList.remove('side');
+    this.coachHandEl.style.left = `${(pose.tip.x - frame.fx * COACH_HAND_W).toFixed(1)}px`;
+    this.coachHandEl.style.top = `${(pose.tip.y - frame.fy * COACH_HAND_H).toFixed(1)}px`;
+    this.coachHandEl.style.opacity = pose.alpha.toFixed(3);
+    this.setHidden(this.coachHandEl, pose.alpha <= 0);
+    if (pose.ghost && pose.alpha > 0) {
+      if (this.coachGhostEl.getAttribute('src') !== tile.img.src) this.coachGhostEl.src = tile.img.src;
+      this.coachGhostEl.style.left = `${(pose.ghost.x - COACH_GHOST_PX / 2).toFixed(1)}px`;
+      this.coachGhostEl.style.top = `${(pose.ghost.y - COACH_GHOST_PX / 2).toFixed(1)}px`;
+      this.coachGhostEl.style.opacity = (0.65 * pose.alpha).toFixed(3);
+      this.setHidden(this.coachGhostEl, false);
+    } else {
+      this.setHidden(this.coachGhostEl, true);
+    }
+    return true;
   }
 
   /** The button an unlocked kind lives on right now: its shelf button while the drawer is open,
@@ -1246,6 +1361,22 @@ export class BuilderHud<
 
     const body = document.createElement('div');
     body.className = 'prop-drawer-body';
+    // 2026-10-16: the SUPPLY BIN (`HudState.bin`), over any rows left: a blue classroom tub titled
+    // "Supply Bin" holding the tiles (builder.css `.supply-bin`). Hidden without a bin.
+    const bin = document.createElement('div');
+    bin.className = 'supply-bin';
+    bin.hidden = true;
+    const binRim = document.createElement('div');
+    binRim.className = 'supply-bin-rim';
+    const binTub = document.createElement('div');
+    binTub.className = 'supply-bin-tub';
+    const binPlate = document.createElement('div');
+    binPlate.className = 'supply-bin-plate';
+    binPlate.textContent = 'Supply Bin';
+    const binBody = document.createElement('div');
+    binBody.className = 'supply-bin-body';
+    binTub.append(binPlate, binBody);
+    bin.append(binRim, binTub);
     const rows = document.createElement('div');
     rows.className = 'drawer-rows';
     // The shelf lives below the selected part's rows, separated by a thin rule; both scroll as
@@ -1257,7 +1388,7 @@ export class BuilderHud<
     const shelf = document.createElement('div');
     shelf.className = 'drawer-shelf';
     shelf.hidden = true;
-    body.append(rows, separator, shelf);
+    body.append(bin, rows, separator, shelf);
 
     // Pinned selected-part panel (shelf courses only): a sibling of `body`, so it sits OUTSIDE the
     // scrollable area and the shelf inside `body` never moves when this slides open/closed. Reuses
@@ -1278,6 +1409,8 @@ export class BuilderHud<
     this.drawerBudgetPillEl = budgetPill;
     this.drawerBudgetPillTextEl = budgetPillText;
     this.drawerRowsEl = rows;
+    this.drawerBinEl = bin;
+    this.drawerBinBodyEl = binBody;
     this.drawerSeparatorEl = separator;
     this.drawerShelfEl = shelf;
     this.drawerPinnedEl = pinned;
@@ -1321,12 +1454,16 @@ export class BuilderHud<
     // ---- goals column ----
     this.goalListEl.innerHTML = '';
     this.goalItems = [];
+    this.goalCardItems = [];
     if (level.goals.length === 0) {
       this.goalsColEl.classList.add('empty');
       const li = document.createElement('li');
       li.className = 'goals-empty';
       li.textContent = this.hud.lines.freePlay;
       this.goalListEl.appendChild(li);
+    } else if (this.goalCardsMode) {
+      this.goalsColEl.classList.remove('empty');
+      this.goalCardItems = level.goals.map((goal: Goal<M>) => this.makeGoalCard(goal));
     } else {
       this.goalsColEl.classList.remove('empty');
       this.goalItems = level.goals.map((goal: Goal<M>) => {
@@ -1376,6 +1513,64 @@ export class BuilderHud<
     this.pickerLeft = -1; // the label's width moves the picker: measure again for the quick line
     this.setDisabled(this.pickerPrevBtn, this.levelIndex <= 0);
     this.setDisabled(this.pickerNextBtn, this.levelIndex >= all.length - 1);
+  }
+
+  /** One kit goal card (`HudSpec.goalCards`; the coaster's `makeGoalCard` in src/ui/hud.ts, same
+   * DOM and global `.gcard*` classes): the big target number and unit over the course's picture,
+   * an UNDER tab on a "stay under" goal, a tiny caption and a bar; a yes/no card is a bigger
+   * picture with no number and no bar. The corner check / "!" is CSS, shown by the state class. */
+  private makeGoalCard(goal: Goal<M>): GoalCardItem {
+    const spec = this.hud.goalCards!(goal);
+    const check = !!spec.check;
+    const under = !!spec.under && !check;
+    const card = document.createElement('li');
+    card.className = `gcard ${check ? 'gcard-check' : 'gcard-number'}`;
+    card.classList.toggle('under', under);
+    card.setAttribute('aria-label', goal.label);
+    card.title = goal.label;
+    if (under) {
+      const badge = document.createElement('span');
+      badge.className = 'gcard-badge';
+      badge.textContent = 'under';
+      card.appendChild(badge);
+    }
+    if (!check) {
+      const target = document.createElement('div');
+      target.className = 'gcard-target';
+      const num = document.createElement('span');
+      num.className = 'gcard-num';
+      num.textContent = spec.number;
+      const unit = document.createElement('span');
+      unit.className = 'gcard-unit';
+      unit.textContent = spec.unit;
+      target.append(num, unit);
+      card.appendChild(target);
+    }
+    const icon = document.createElement('img');
+    icon.className = 'gcard-icon';
+    icon.src = spec.icon;
+    icon.alt = '';
+    icon.draggable = false;
+    const caption = document.createElement('span');
+    caption.className = 'gcard-caption';
+    caption.textContent = spec.caption;
+    card.append(icon, caption);
+    let fill: HTMLDivElement | null = null;
+    if (!check) {
+      const bar = document.createElement('div');
+      bar.className = 'gcard-bar';
+      fill = document.createElement('div');
+      fill.className = 'gcard-fill';
+      bar.appendChild(fill);
+      card.appendChild(bar);
+    }
+    const tick = document.createElement('span');
+    tick.className = 'gcard-tick';
+    tick.setAttribute('aria-hidden', 'true');
+    card.appendChild(tick);
+    this.goalListEl.appendChild(card);
+    const editLive = (this.hud.goalCardEditMetrics ?? []).includes(goal.metric);
+    return { card, fill, check, editLive, state: null, fillPct: -1 };
   }
 
   private rebuildPropPanel(state: HudState<K, M, O, L>): void {
@@ -1638,6 +1833,272 @@ export class BuilderHud<
     }
   }
 
+  // ---- the SUPPLY BIN (2026-10-16, Jon: "a classroom supply bin / toolbox you pull parts from
+  // instead of menu rows"; `CourseSpec.bin`) ----
+
+  /** Shows `items` (`HudState.bin`, already gated and stamped by the controller) in the drawer's
+   * tub, grouped (`binGroups`). Rebuilds the tiles only when what they show changes; a press in
+   * progress on a tile that is gone is cancelled (its ghost flies home). Hidden with no bin. */
+  private syncBin(items: BinItem[] | null): void {
+    this.setHidden(this.drawerBinEl, !items);
+    this.binItemsById = new Map((items ?? []).map((it) => [it.id, it]));
+    if (!items) {
+      this.binKey = null;
+      if (this.binPress) this.cancelBinPress(true);
+      return;
+    }
+    const key = items
+      .map((it) => `${it.id}|${it.group ?? ''}|${it.image}|${it.label}|${it.badge ?? ''}|${it.active ? 1 : 0}|${it.locked ? 1 : 0}|${it.isNew ? 1 : 0}`)
+      .join(';');
+    if (key === this.binKey) return;
+    this.binKey = key;
+    if (this.binPress && !this.binItemsById.has(this.binPress.itemId)) this.cancelBinPress(true);
+    this.drawerBinBodyEl.innerHTML = '';
+    this.binTiles.clear();
+    for (const section of binGroups(items)) {
+      const sec = document.createElement('div');
+      sec.className = 'supply-bin-section';
+      if (section.group) {
+        const label = document.createElement('div');
+        label.className = 'supply-bin-group';
+        label.textContent = section.group;
+        sec.appendChild(label);
+      }
+      const grid = document.createElement('div');
+      grid.className = 'supply-bin-grid';
+      for (const item of section.items) grid.appendChild(this.makeBinTile(item));
+      sec.appendChild(grid);
+      this.drawerBinBodyEl.appendChild(sec);
+    }
+  }
+
+  /** One bin tile: a white card with the item's big picture and caption, a corner badge ('∞' or a
+   * count), NEW (top-left), a padlock when locked, an "In use" ribbon when active. Press and drag
+   * it onto the machine, or tap it (pointer events: mouse and touch alike; `touch-action: none`,
+   * so a drag never scrolls the page). */
+  private makeBinTile(item: BinItem): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'bin-tile-wrap';
+    const tile = document.createElement('div');
+    tile.className = 'bin-tile';
+    tile.setAttribute('role', 'button');
+    tile.setAttribute('aria-label', item.label);
+    tile.classList.toggle('active', !!item.active);
+    tile.classList.toggle('locked', !!item.locked);
+    const img = document.createElement('img');
+    img.src = item.image;
+    img.alt = '';
+    img.draggable = false;
+    const caption = document.createElement('span');
+    caption.className = 'bin-tile-label';
+    caption.textContent = item.label;
+    tile.append(img, caption);
+    if (item.active) {
+      const ribbon = document.createElement('span');
+      ribbon.className = 'bin-tile-inuse';
+      ribbon.textContent = 'In use';
+      tile.appendChild(ribbon);
+    }
+    if (item.locked) {
+      const lock = document.createElement('span');
+      lock.className = 'bin-tile-lock';
+      lock.textContent = '\u{1F512}';
+      tile.appendChild(lock);
+    }
+    wrap.appendChild(tile);
+    if (item.badge) {
+      const badge = document.createElement('span');
+      badge.className = 'bin-tile-badge';
+      badge.textContent = item.badge;
+      wrap.appendChild(badge);
+    }
+    if (item.isNew) wrap.appendChild(this.makeOptionNewBadge());
+
+    const id = item.id;
+    tile.addEventListener('pointerdown', (e) => this.onBinDown(e, id, tile, img));
+    tile.addEventListener('pointermove', (e) => this.onBinMove(e));
+    tile.addEventListener('pointerup', (e) => this.onBinUp(e));
+    tile.addEventListener('pointercancel', (e) => {
+      if (this.binPress?.pointerId === e.pointerId) this.cancelBinPress(true);
+    });
+    tile.addEventListener('lostpointercapture', (e) => {
+      // Capture lost without a pointerup (the tile left the DOM, the browser took the gesture).
+      if (this.binPress?.pointerId === e.pointerId) this.cancelBinPress(true);
+    });
+    this.binTiles.set(id, { tile, img });
+    return wrap;
+  }
+
+  /** A client-px pointer position in stage px (the HUD root is CSS-scaled onto the canvas). */
+  private clientToStage(clientX: number, clientY: number): { x: number; y: number } | null {
+    const r = this.root.getBoundingClientRect();
+    if (r.width <= 0) return null;
+    const k = STAGE_W / r.width;
+    return { x: (clientX - r.left) * k, y: (clientY - r.top) * k };
+  }
+
+  private onBinDown(e: PointerEvent, itemId: string, tile: HTMLElement, img: HTMLImageElement): void {
+    if (this.binPress || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const start = this.clientToStage(e.clientX, e.clientY);
+    if (!start) return;
+    e.preventDefault(); // no text selection, no native image drag, no emulated mouse events
+    try {
+      tile.setPointerCapture(e.pointerId);
+    } catch {
+      // Capture is a nicety: moves over the tile still arrive without it.
+    }
+    tile.classList.add('pressed');
+    this.binPress = { itemId, pointerId: e.pointerId, tile, img, start, dragging: false, ghost: null, hot: false };
+  }
+
+  private onBinMove(e: PointerEvent): void {
+    const press = this.binPress;
+    if (!press || press.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const p = this.clientToStage(e.clientX, e.clientY);
+    if (!p) return;
+    if (!press.dragging) {
+      if (Math.hypot(p.x - press.start.x, p.y - press.start.y) < BIN_DRAG_PX) return;
+      const item = this.binItemsById.get(press.itemId);
+      // A locked or in-use tile does not come out of the bin; the release still counts as a tap
+      // (a locked one then flashes Bruno's "locked" line).
+      if (!item || item.locked || item.active) return;
+    }
+    const started = !press.dragging;
+    if (started) {
+      press.dragging = true;
+      press.ghost = this.makeBinGhost(press.img.src);
+      press.tile.classList.add('lifted');
+    }
+    this.placeBinGhost(press.ghost!, p);
+    const zone = this.cb.binDropZone(press.itemId);
+    const hot = !!zone && insideDropZone(zone, p, BIN_DROP_MIN_R);
+    // The scene rings the zone from the drag's first move, brighter while the finger is inside.
+    if (started || hot !== press.hot) this.cb.binDrag(press.itemId, hot);
+    press.ghost!.classList.toggle('hot', hot);
+    press.hot = hot;
+  }
+
+  private onBinUp(e: PointerEvent): void {
+    const press = this.binPress;
+    if (!press || press.pointerId !== e.pointerId) return;
+    this.binPress = null;
+    press.tile.classList.remove('pressed', 'lifted');
+    try {
+      press.tile.releasePointerCapture(e.pointerId);
+    } catch {
+      // Already released.
+    }
+    if (!press.dragging) {
+      this.tapBinItem(press.itemId, press.tile, press.img);
+      return;
+    }
+    this.cb.binDrag(null, false);
+    const p = this.clientToStage(e.clientX, e.clientY);
+    const zone = this.cb.binDropZone(press.itemId);
+    if (p && zone && insideDropZone(zone, p, BIN_DROP_MIN_R)) {
+      // Dropped on the machine: the ghost pops where it landed and the change goes in.
+      this.popBinGhost(press.ghost!);
+      this.lastSpendButton = press.tile;
+      this.cb.applyBin(press.itemId);
+    } else {
+      this.flyBinGhostHome(press.ghost!, press.img);
+    }
+  }
+
+  /** Ends a press without applying anything (the bin went away, the pointer was cancelled): a
+   * dragged ghost flies back to its tile (`animate`) or just goes. */
+  private cancelBinPress(animate: boolean): void {
+    const press = this.binPress;
+    if (!press) return;
+    this.binPress = null;
+    press.tile.classList.remove('pressed', 'lifted');
+    if (!press.dragging) return;
+    this.cb.binDrag(null, false);
+    if (press.ghost) {
+      if (animate && press.img.isConnected) this.flyBinGhostHome(press.ghost, press.img);
+      else press.ghost.remove();
+    }
+  }
+
+  /** A plain tap on a tile: the change flies to the machine like a drawer option (`flyTargets`),
+   * then commits through `applyBin`; with nothing to fly (no targets, reduced motion, a locked or
+   * in-use tile) it commits (or refuses) at once. */
+  private tapBinItem(itemId: string, tile: HTMLElement, img: HTMLImageElement): void {
+    this.restartAnim(tile, 'pop');
+    this.lastSpendButton = tile;
+    this.finishFlightInstant();
+    const next = this.cb.binValue(itemId);
+    const targets = next && !prefersReducedMotion() ? this.cb.flyTargets(next.code, next.value) : [];
+    if (!next || targets.length === 0) {
+      this.cb.applyBin(itemId);
+      return;
+    }
+    const partId = this.flightPartId();
+    this.startFlight('', '', partId, img, new Map(), targets, () => this.cb.applyBin(itemId));
+  }
+
+  /** The selected part's id for a bin flight (a flight that outlives its selection commits early). */
+  private flightPartId(): number {
+    return this.lastSelectedPartId ?? -1;
+  }
+
+  private makeBinGhost(src: string): HTMLImageElement {
+    const ghost = document.createElement('img');
+    ghost.className = 'bin-ghost';
+    ghost.src = src;
+    ghost.alt = '';
+    ghost.draggable = false;
+    ghost.style.width = `${BIN_GHOST_PX}px`;
+    ghost.style.height = `${BIN_GHOST_PX}px`;
+    this.root.appendChild(ghost);
+    return ghost;
+  }
+
+  private placeBinGhost(ghost: HTMLImageElement, p: { x: number; y: number }): void {
+    ghost.style.left = `${(p.x - BIN_GHOST_PX / 2).toFixed(1)}px`;
+    ghost.style.top = `${(p.y - BIN_GHOST_PX / 2).toFixed(1)}px`;
+  }
+
+  /** The drop's landing: the ghost swells and fades where the finger let go (220 ms). */
+  private popBinGhost(ghost: HTMLImageElement): void {
+    if (prefersReducedMotion() || typeof ghost.animate !== 'function') {
+      ghost.remove();
+      return;
+    }
+    const anim = ghost.animate(
+      [
+        { transform: 'scale(1)', opacity: 1 },
+        { transform: 'scale(1.35)', opacity: 0.9, offset: 0.4 },
+        { transform: 'scale(0.6)', opacity: 0 },
+      ],
+      { duration: 220, easing: 'ease-out', fill: 'forwards' },
+    );
+    anim.onfinish = () => ghost.remove();
+  }
+
+  /** A drop outside the zone: the ghost flies back into its tile (260 ms) and goes. */
+  private flyBinGhostHome(ghost: HTMLImageElement, img: HTMLImageElement): void {
+    const home = this.visibleStageRect(img);
+    if (!home || prefersReducedMotion() || typeof ghost.animate !== 'function') {
+      ghost.remove();
+      return;
+    }
+    const left = Number.parseFloat(ghost.style.left) || 0;
+    const top = Number.parseFloat(ghost.style.top) || 0;
+    const dx = home.x + home.w / 2 - (left + BIN_GHOST_PX / 2);
+    const dy = home.y + home.h / 2 - (top + BIN_GHOST_PX / 2);
+    const k = Math.max(0.3, home.w / BIN_GHOST_PX);
+    const anim = ghost.animate(
+      [
+        { transform: 'translate(0px, 0px) scale(1)', opacity: 1 },
+        { transform: `translate(${dx}px, ${dy}px) scale(${k})`, opacity: 0.6 },
+      ],
+      { duration: 260, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'forwards' },
+    );
+    anim.onfinish = () => ghost.remove();
+  }
+
   /** The parts shelf at the bottom of the drawer body: one section per `shelfGroups` group, each
    * a wrap-grid of picture buttons (`state.palette` kinds with a `partInfo` image). A tap adds the
    * part. Hidden entirely when the course/level has no shelf kinds. Rebuilds the button grid only
@@ -1732,6 +2193,8 @@ export class BuilderHud<
     img: HTMLImageElement,
     btnMap: Map<string, HTMLButtonElement>,
     targets: { x: number; y: number; size: number }[],
+    /** Commits the change instead of `setProp(code, value)` (a bin tile: `applyBin`). */
+    apply?: () => void,
   ): void {
     // Visual only, right away: the real props haven't changed yet (that lands with the flight),
     // but the tap should feel instant. `syncDrawerActive` keeps this correct on every later frame
@@ -1742,7 +2205,8 @@ export class BuilderHud<
     const imgRect = img.getBoundingClientRect();
     if (rootRect.width <= 0 || rootRect.height <= 0) {
       // The HUD isn't laid out (e.g. mid-teardown): skip the flight, commit at once.
-      this.cb.setProp(code, value);
+      if (apply) apply();
+      else this.cb.setProp(code, value);
       return;
     }
     // `syncTransform` lays the HUD root out as `translate(rect.left, rect.top) scale(rect.width /
@@ -1779,7 +2243,7 @@ export class BuilderHud<
       return { el, anim, dx, dy, targetScale };
     });
 
-    const flight: PendingFlight = { code, value, partId, flyers, committed: false };
+    const flight: PendingFlight = { code, value, partId, flyers, committed: false, apply };
     this.flight = flight;
     // "When the FIRST flyer finishes": every target shares the same duration/easing and starts
     // together, so they land within the same frame; flyers[0] stands in for "the flight".
@@ -1795,8 +2259,13 @@ export class BuilderHud<
     flight.committed = true;
     clearTimeout(flight.fallback);
     this.flight = null;
-    this.cb.setProp(flight.code, flight.value);
+    this.commitFlight(flight);
     for (const f of flight.flyers) this.playLandingPop(f);
+  }
+
+  private commitFlight(flight: PendingFlight): void {
+    if (flight.apply) flight.apply();
+    else this.cb.setProp(flight.code, flight.value);
   }
 
   /** 160 ms landing pop (scale 1 -> 1.18 -> 1, opacity 1 -> 0) on one flyer, then removes it. */
@@ -1826,7 +2295,7 @@ export class BuilderHud<
     clearTimeout(flight.fallback);
     if (!flight.committed) {
       flight.committed = true;
-      this.cb.setProp(flight.code, flight.value);
+      this.commitFlight(flight);
     }
     for (const f of flight.flyers) {
       f.anim.onfinish = null;
@@ -2046,6 +2515,28 @@ export class BuilderHud<
       this.setText(meter.main, spec.format(m[meter.metric] as number, m, live));
     }
 
+    // ---- goal cards (2026-10-16, `hud.goalCards`): fill toward the target, green with a check
+    // once met, red once an "under" limit breaks or the level is over and failed (goalCards.ts) ----
+    if (this.goalCardsMode) {
+      const over = levelOver(state.mode, state.passed, state.canPlay);
+      state.goals.forEach((gr: GoalResult<M>, i: number) => {
+        const item = this.goalCardItems[i];
+        if (!item) return;
+        const live = kitGoalCardLive(gr, { mode: state.mode, check: item.check, editLive: item.editLive, levelOver: over, passed: state.passed });
+        if (item.state !== live.state) {
+          if (item.state) item.card.classList.remove(item.state);
+          item.card.classList.add(live.state);
+          item.state = live.state;
+        }
+        item.card.classList.toggle('warn', live.warn);
+        const pct = Math.round(live.fill * 1000) / 10;
+        if (item.fill && item.fillPct !== pct) {
+          item.fill.style.width = `${pct}%`;
+          item.fillPct = pct;
+        }
+      });
+    }
+
     // ---- goals ----
     state.goals.forEach((gr: GoalResult<M>, i: number) => {
       const item = this.goalItems[i];
@@ -2154,6 +2645,8 @@ export class BuilderHud<
         this.setHidden(this.drawerHeaderIconEl, true);
         this.setText(this.drawerHeaderLabelEl, 'Parts');
       }
+      this.lastSelectedPartId = state.selected?.part.id ?? null;
+      this.syncBin(showDrawer ? state.bin : null);
       this.syncShelf(state, shelfOn);
       // The pinned panel only exists for shelf courses, slid up while a part WITH rows is selected
       // (the base has none: shelf only); a no-shelf course's drawer never opens it.

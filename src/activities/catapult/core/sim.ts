@@ -1,9 +1,20 @@
 // CatapultSim: owns one PhysicsWorld built from a level's PlacedPart[], runs the fixed-step
 // per-shot simulation (settle -> play -> swing -> fly -> quiet), and derives Metrics/Outcome.
+//
+// 2026-10-16 (huddle with Jon): rubber bands are unlimited ("45 bands launches into space and
+// fails"), so a shot over catalog.ts SPACE_SPEED is a SPACE SHOT here: the fuzz rockets out of the
+// top of the world with a sparkle trail, touching nothing, and the shot ends 'space'. The knock-down
+// check is smarter (Jon: the "moved from start" check could be better): a target is down once it
+// has tipped past its balance point (at least 45 degrees) or dropped more than half its own height,
+// or broke - sliding along its shelf no longer counts as anything (`updateLatches`). And every
+// target a goal needs wears a small bobbing marker until it is down, then a green check pops there
+// (Jon: the two-target "Heavy or light" level did not read as two targets; `markerOverlay`).
 import {
   armAngleFor,
+  bandBundleAt,
   bandSegments,
   bandSprite,
+  bandThickness,
   buildArm,
   buildGround,
   buildPart,
@@ -20,8 +31,23 @@ import {
   STRING_HOOK_SIZE,
   stringAnchor,
   FUZZ_PART_ID,
+  WORLD_H,
+  WORLD_W,
 } from './build';
-import { ARM, CRATE_BREAK, FUZZ, FUZZ_TINT, SPLIT_ANGLE_DEG, SPLIT_OFFSET, fuzzName, fuzzSpec, launchSpeed } from './catalog';
+import {
+  CRATE_BREAK,
+  FUZZ,
+  FUZZ_TINT,
+  MAX_VISIBLE_BANDS,
+  SPLIT_ANGLE_DEG,
+  SPLIT_OFFSET,
+  armLength,
+  bandCount,
+  fuzzName,
+  fuzzSpec,
+  isSpaceShot,
+  launchSpeed,
+} from './catalog';
 import type {
   BodyId,
   BodyRole,
@@ -90,12 +116,108 @@ const SPLIT_FILTER = { group: 0x4, mask: 0xfffb };
 
 type ShapeInfo = { hw: number; hh: number; symmetry: number };
 
-function wrapSym(angle: number, symmetry: number): number {
-  let a = angle % symmetry;
-  if (a > symmetry / 2) a -= symmetry;
-  if (a < -symmetry / 2) a += symmetry;
+/** `angle` wrapped into (-pi, pi]. */
+function wrapPi(angle: number): number {
+  let a = angle % (2 * Math.PI);
+  if (a > Math.PI) a -= 2 * Math.PI;
+  if (a <= -Math.PI) a += 2 * Math.PI;
   return a;
 }
+
+// ---- the knock-down rule (2026-10-16) --------------------------------------------------------
+// Jon: the "moved from start" win check could be better. A target (can or block) is DOWN, latched for
+// good, once it has
+//  - tipped: turned (in total, either way, since it settled) past its own balance point - the angle at
+//    which it would fall over its bottom corner, atan(half width / half height) in its start pose - plus
+//    TIP_MARGIN, and never less than TIP_MIN (45 degrees): a can or a domino at 45, a cube at 48, a 2x1
+//    plank lying flat at 66 (a plank rocked to 50 degrees falls back flat, so it does not count);
+//  - dropped: its centre has fallen more than half its own (start-pose) height below where it settled
+//    (fell off a shelf or a stack, or the crate under it broke);
+//  - or broke (a crate, `breakCrates`).
+// Sliding along its support - however far - is none of these, so it never counts. The total turn is
+// tracked step by step (`turned`), so a cube that tumbles onto its next face counts (until 2026-10-16
+// a cube's turn was read modulo 90 degrees and never passed 45).
+export const TIP_MIN = Math.PI / 4;
+export const TIP_MARGIN = (3 * Math.PI) / 180;
+
+// ---- the space shot (2026-10-16) -----------------------------------------------------------
+/** The space shot's flight: the fuzz keeps its launch velocity, then rockets upward (SPACE_LIFT
+ * m/s^2 up, no gravity) while its sideways speed bleeds off (SPACE_DRAG_X per second), so even a flat
+ * shot curls up and out of the top of the world. No collider: it touches nothing. */
+export const SPACE_LIFT = 30;
+export const SPACE_DRAG_X = 1.5;
+/** The fuzz is gone once its centre is this far over the top of the world (or past either side). */
+export const SPACE_EXIT_MARGIN = 1;
+/** The shot ends this long after the fuzz left the world (the trail fades), or at SPACE_MAX_TIME. */
+export const SPACE_AFTER = 0.8;
+export const SPACE_MAX_TIME = 4;
+/** The sparkle trail: one sparkle every SPACE_TRAIL_EVERY ticks, each fading over SPACE_TRAIL_TIME s. */
+export const SPACE_TRAIL_EVERY = 2;
+export const SPACE_TRAIL_TIME = 0.7;
+const SPARKLE_COLORS = [0xffffff, 0xffe066, 0xff9de2, 0x9fe8ff];
+
+/** One fixed step of the space flight (semi-implicit Euler, the same update the sim drives the
+ * fuzz's kinematic body with): the new velocity, then the position it moves to. */
+export function spaceStep(p: Vec2, v: Vec2, dt: number): { p: Vec2; v: Vec2 } {
+  const nv = { x: v.x * (1 - SPACE_DRAG_X * dt), y: v.y + SPACE_LIFT * dt };
+  return { p: { x: p.x + nv.x * dt, y: p.y + nv.y * dt }, v: nv };
+}
+
+/** True once a space-shot fuzz at `p` has left the world (over the top, or past either side). */
+export function outOfWorld(p: Vec2): boolean {
+  return p.y > WORLD_H + SPACE_EXIT_MARGIN || p.x < -SPACE_EXIT_MARGIN || p.x > WORLD_W + SPACE_EXIT_MARGIN;
+}
+
+/** The space shot's whole path from the release point, one point per fixed step, until it leaves the
+ * world (its last point is outside) - for the dotted preview. */
+export function spacePath(tip: Vec2, v: Vec2, dt: number = FIXED_DT, maxT = SPACE_MAX_TIME): Vec2[] {
+  const out: Vec2[] = [{ ...tip }];
+  let state = { p: { ...tip }, v: { ...v } };
+  for (let t = 0; t < maxT && !outOfWorld(state.p); t += dt) {
+    state = spaceStep(state.p, state.v, dt);
+    out.push(state.p);
+  }
+  return out;
+}
+
+// ---- target markers (2026-10-16) ------------------------------------------------------------
+// Jon: the two-target "Heavy or light" level did not read as two targets. Every target a goal
+// needs (a can or block for a knock-down goal, a crate for a smash goal, a piece over the line for a
+// line goal, a bullseye for a hits goal) wears a small hot-pink marker over it, screen-sized so it
+// reads at every zoom, bobbing gently, until it is down (or under the line, smashed, hit); then a
+// green check pops there and fades. Numbered 1..N (left to right) on a level with 2..MARKER_NUMBER_MAX
+// of them, an arrow beyond that. A target with another marked target resting on it (a tower) wears
+// its marker on itself, not over the top, so a tower shows one small badge per piece, never a pile.
+export const MARKER_COLOR = 0xff3b7f;
+/** Where the "×n" band-count label sits relative to the middle of the band bundle (m). */
+export const BAND_LABEL_OFFSET = { x: -0.55, y: 0.2 };
+export const CHECK_COLOR = 0x2fb344;
+export const MARKER_NUMBER_MAX = 5;
+/** Marker label size (stage px), its height over the target's top (m) and its bob (m, s). */
+export const MARKER_SIZE = 18;
+export const MARKER_GAP = 0.55;
+export const MARKER_BOB = 0.12;
+export const MARKER_BOB_PERIOD = 1.2;
+/** The check: pops to CHECK_SIZE, holds, then shrinks away by CHECK_TIME (page-clock seconds, like
+ * the preview: cosmetic only, and it keeps animating after the shot has ended). */
+export const CHECK_SIZE = 26;
+export const CHECK_TIME = 1.4;
+
+type MarkTarget = {
+  /** A stable key (the part id) for the overlay ids. */
+  key: number;
+  body: BodyId;
+  kind: 'knock' | 'smash' | 'line' | 'bullseye';
+  /** 1-based number, or 0 for the arrow. */
+  n: number;
+  /** Whether a marked target sits on this one (the marker goes on the target itself). */
+  covered: boolean;
+  /** Page-clock time it went down; null while standing. */
+  doneAt: number | null;
+  /** Its last known centre and top (m), for where the check pops after a crate's body is gone. */
+  at: Vec2;
+  top: number;
+};
 
 /** The flying fuzz's cosmetic tumble rate (rad/s): about two-thirds of a turn a second. */
 export const FLIGHT_SPIN = 4;
@@ -186,6 +308,24 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   private debris: { id: string; key: string; p0: Vec2; v: Vec2; a0: number; spin: number; size: number; t0: number }[] = [];
   private debrisCounter = 0;
 
+  /** The knock-down rule's per-target numbers (see TIP_MIN): the total turn since the target settled
+   * (radians, signed), its angle after the previous step, the turn that tips it, and the drop that
+   * downs it (half its start-pose height). Filled by `settle()`. */
+  private readonly turned = new Map<BodyId, number>();
+  private readonly prevAngle = new Map<BodyId, number>();
+  private readonly tipLimit = new Map<BodyId, number>();
+  private readonly dropLimit = new Map<BodyId, number>();
+  /** Body id -> part id, for the markers' stable overlay ids. */
+  private readonly partOfBody = new Map<BodyId, number>();
+  /** The targets the level's goals need, each with its marker state (see MARKER_COLOR). */
+  private marks: MarkTarget[] = [];
+
+  /** This shot's space flight (catalog.ts SPACE_SPEED), or null: the fuzz's kinematic body (no
+   * collider), its velocity, when it left the world (sim time), and its sparkle trail. */
+  private space: { id: BodyId; v: Vec2; exitAt: number | null; ticks: number; trail: { p: Vec2; t0: number; i: number }[] } | null = null;
+  private spaceShotThisShot = false;
+  private sparkleCounter = 0;
+
   private shotsLeftInternal: number;
   private shotsUsed = 0;
   private hits = 0;
@@ -256,6 +396,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
       } else if (isTarget(part)) {
         const body = handle.bodies[0]!;
         this.targetBodies.push(body.id);
+        this.partOfBody.set(body.id, part.id);
         this.dynamicBodies.add(body.id);
         this.targetKind.set(body.id, part.kind === 'block' ? 'block' : 'can');
         if (isCrate(part)) this.crateBodies.add(body.id);
@@ -268,7 +409,10 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
         }
       } else if (part.kind === 'bullseye') {
         const disc = handle.bodies.find((b) => b.role === 'bullseye');
-        if (disc) this.bullseyeBodies.add(disc.id);
+        if (disc) {
+          this.bullseyeBodies.add(disc.id);
+          this.partOfBody.set(disc.id, part.id);
+        }
       } else if (part.kind === 'shelf' || part.kind === 'wall') {
         for (const b of handle.bodies) this.solidBodies.add(b.id);
       }
@@ -280,7 +424,22 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   settle(): void {
     for (let i = 0; i < SETTLE_TICKS; i++) this.world.step(FIXED_DT, FIXED_SUBSTEPS);
 
-    for (const id of this.targetBodies) this.baseline.set(id, this.world.getTransform(id));
+    for (const id of this.targetBodies) {
+      const t = this.world.getTransform(id);
+      this.baseline.set(id, t);
+      this.turned.set(id, 0);
+      this.prevAngle.set(id, t.angle);
+      const info = this.shapeInfo.get(id);
+      if (info) {
+        // The start pose's half extents across (horizontal) and up (vertical).
+        const c = Math.abs(Math.cos(t.angle));
+        const s = Math.abs(Math.sin(t.angle));
+        const across = c * info.hw + s * info.hh;
+        const up = s * info.hw + c * info.hh;
+        this.tipLimit.set(id, Math.max(TIP_MIN, Math.atan2(across, up) + TIP_MARGIN));
+        this.dropLimit.set(id, up);
+      }
+    }
 
     this.partHandles.forEach((handle) => {
       if (handle.partId === this.catapultPartId) return;
@@ -291,6 +450,61 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
       const t = this.world.getTransform(body.id);
       handle.bounds = this.rotatedBoxBounds(t, info);
     });
+
+    this.marks = this.pickMarks();
+  }
+
+  /** The targets the level's goals need (see MARKER_COLOR): every can/block for a knock-down goal,
+   * the crates for a smash goal, the pieces over the line for a line goal, the bullseyes for a hits
+   * goal. Numbered left to right when there are 2..MARKER_NUMBER_MAX. */
+  private pickMarks(): MarkTarget[] {
+    const metrics = new Set(this.level.goals.map((g) => g.metric));
+    const picked: { body: BodyId; kind: MarkTarget['kind'] }[] = [];
+    for (const id of this.targetBodies) {
+      if (metrics.has('knockedDown') || metrics.has('targetsLeft')) picked.push({ body: id, kind: 'knock' });
+      else if (metrics.has('smashed') && this.crateBodies.has(id)) picked.push({ body: id, kind: 'smash' });
+      else if (metrics.has('aboveLine') && this.isAboveLine(id)) picked.push({ body: id, kind: 'line' });
+    }
+    if (metrics.has('hits')) for (const id of this.bullseyeBodies) picked.push({ body: id, kind: 'bullseye' });
+
+    const boxes = new Map(picked.map((m) => [m.body, this.bodyBox(m.body)] as const));
+    const sorted = [...picked].sort((a, b) => boxes.get(a.body)!.x - boxes.get(b.body)!.x || boxes.get(a.body)!.y - boxes.get(b.body)!.y);
+    const numbered = sorted.length >= 2 && sorted.length <= MARKER_NUMBER_MAX;
+    return sorted.map((m, i) => {
+      const box = boxes.get(m.body)!;
+      // Covered: another marked target rests on this one (its box starts within 0.2 m of this top and
+      // overlaps it sideways).
+      const covered = sorted.some((o) => {
+        if (o.body === m.body) return false;
+        const ob = boxes.get(o.body)!;
+        const bottom = ob.y - ob.h / 2;
+        return Math.abs(bottom - (box.y + box.h / 2)) < 0.2 && Math.abs(ob.x - box.x) < (ob.w + box.w) / 2 - 0.05;
+      });
+      return {
+        key: this.partOfBody.get(m.body) ?? m.body,
+        body: m.body,
+        kind: m.kind,
+        n: numbered ? i + 1 : 0,
+        covered,
+        doneAt: null,
+        at: { x: box.x, y: box.y },
+        top: box.y + box.h / 2,
+      };
+    });
+  }
+
+  /** A target's or bullseye disc's live world box (a bullseye: its 1.2 m disc). */
+  private bodyBox(id: BodyId): { x: number; y: number; w: number; h: number } {
+    const t = this.world.getTransform(id);
+    const info = this.shapeInfo.get(id);
+    if (info) return this.rotatedBoxBounds(t, info);
+    return { x: t.position.x, y: t.position.y, w: 1.2, h: 1.2 };
+  }
+
+  /** Read-only view of the markers for tests and the course: each marked target's part id, kind,
+   * number (0 = arrow) and whether it is down. */
+  markedTargets(): { partId: number; kind: MarkTarget['kind']; n: number; done: boolean }[] {
+    return this.marks.map((m) => ({ partId: m.key, kind: m.kind, n: m.n, done: m.doneAt !== null }));
   }
 
   /** `updatePart` only ever recreates the catapult; other kinds trigger a full rebuild (return
@@ -325,7 +539,11 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   showPreview(): void {
     if (this.currentOutcome === 'running') return;
     const { tip, v } = catapultRelease(this.catapultPart);
-    this.previewDots = dotsAlong(flightPath(tip, v, GRAVITY_Y, (a, b) => this.castFuzz(a, b)));
+    // A space shot's arc curls up and out of the world, through everything (it touches nothing).
+    const path = isSpaceShot(this.catapultPart.props)
+      ? spacePath(tip, v)
+      : flightPath(tip, v, GRAVITY_Y, (a, b) => this.castFuzz(a, b));
+    this.previewDots = dotsAlong(path);
     this.previewShownAt = this.clock();
   }
 
@@ -389,7 +607,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     this.shotsLeftInternal--;
     this.reloadArm();
 
-    const armSpec = ARM[this.catapultPart.props.arm ?? 'Short'] ?? ARM.Short!;
+    const armLen = armLength(this.catapultPart.props);
     const angleDeg = Number(this.catapultPart.props.angle ?? '45') || 45;
     const releaseArmAngle = armAngleFor(angleDeg);
     const speed = launchSpeed(this.catapultPart.props); // the same speed catapultRelease fires at
@@ -400,7 +618,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     // fast or slow at the extremes, so the swing TIME is clamped instead and ω re-derived from
     // the clamped time (angle traveled stays exact; only the rate changes).
     const swingSpan = REST_ANGLE - releaseArmAngle; // > 0 for every angle option (15..75)
-    const rawOmega = speed / armSpec.length;
+    const rawOmega = speed / armLen;
     const rawSwingTime = swingSpan / rawOmega;
     const swingTime = Math.min(Math.max(rawSwingTime, MIN_SWING_TIME), MAX_SWING_TIME);
     this.omegaAbs = swingSpan / swingTime;
@@ -425,6 +643,8 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     this.crashShown = false;
     this.shotFuzzes = [];
     this.debris = [];
+    this.space = null;
+    this.spaceShotThisShot = isSpaceShot(this.catapultPart.props);
   }
 
   step(): void {
@@ -438,7 +658,8 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
         if (!this.released) {
           this.released = true;
           this.dropLoadedFuzzVisual();
-          this.spawnFuzz();
+          if (this.spaceShotThisShot) this.spawnSpaceFuzz();
+          else this.spawnFuzz();
         }
         // Variant A: the stop pose IS the release pose, so the arm halts the instant it lets go -
         // snap it exactly onto the crossbar (a fresh kinematic body, no residual velocity) rather
@@ -451,8 +672,10 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
 
     this.applyRollingResistance();
     this.recordPreStepSpeeds();
+    this.driveSpaceFuzz();
 
     const result = this.world.step(FIXED_DT, FIXED_SUBSTEPS);
+    this.trackSpaceFuzz();
 
     // Crates break after the step, never mid-step: the world is stepped whole, then the crates
     // that took a hard enough hit during it are taken out.
@@ -470,14 +693,16 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
 
     // A shot does not end on quiet while a broken crate's planks are still tumbling, so the
     // effect plays out instead of freezing mid-air (the overlay ages on sim time).
-    const settled = this.quietElapsed >= QUIET_TIME && !this.debrisBusy();
+    const settled = this.quietElapsed >= QUIET_TIME && !this.debrisBusy() && !this.spaceBusy();
     if ((this.shotElapsed >= MIN_SHOT_TIME && settled) || this.shotElapsed >= MAX_SHOT_TIME) {
       this.finishShot();
     }
   }
 
+  /** Play may run again: after a plain 'shot', or after a 'space' shot while shots are left. */
   canReplay(): boolean {
-    return this.currentOutcome === 'shot';
+    if (this.currentOutcome === 'shot') return true;
+    return this.currentOutcome === 'space' && (this.level.shots === 0 || this.shotsLeftInternal > 0);
   }
 
   snapshot(): SimSnapshot<Outcome> {
@@ -498,9 +723,11 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     // on top of the fuzz"); the meters panel still shows the distance.
     // The loaded fuzz's name is shown by the fuzz shelf widget (spec.ts), not by a label here.
     overlay.push(...this.debrisOverlay());
+    overlay.push(...this.sparkleOverlay());
     overlay.push(...this.burstOverlay());
     overlay.push(...this.bandOverlay());
     overlay.push(...this.stringOverlay());
+    overlay.push(...this.markerOverlay());
 
     return { elapsed: this.shotElapsed, outcome: this.currentOutcome, transforms, overlay };
   }
@@ -538,6 +765,21 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
         locked: true,
         lockPosition: true,
         textureKey: f.textureKey,
+      });
+    }
+    if (this.space && this.space.exitAt === null) {
+      // The space-shot fuzz (a kinematic body, no collider) is the first 'fuzz' item (right after the
+      // parts, ahead of any fuzz resting from an earlier shot), so the camera follows it up.
+      const spec = fuzzSpec(this.catapultPart.props);
+      items.splice(this.partHandles.reduce((n, h) => n + h.visuals.length, 0), 0, {
+        partId: FUZZ_PART_ID,
+        body: this.space.id,
+        shape: { kind: 'circle', r: spec.r },
+        color: FUZZ_TINT[fuzzName(this.catapultPart.props)] ?? FUZZ_TINT.Fur!,
+        role: 'fuzz',
+        locked: true,
+        lockPosition: true,
+        textureKey: fuzzTextureKey(this.catapultPart.props, true),
       });
     }
     const impactVisual = this.impactBody !== null ? this.targetVisual.get(this.impactBody) : undefined;
@@ -586,6 +828,71 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     });
     fuzz.canSplit = splits;
     this.activeFuzz = fuzz;
+  }
+
+  /** The space shot's fuzz (2026-10-16): a kinematic body with no collider at the release point,
+   * flown by `driveSpaceFuzz` until it leaves the world. Not a FuzzBody: it never touches, rolls,
+   * splits or counts for range. */
+  private spawnSpaceFuzz(): void {
+    const { tip, v } = catapultRelease(this.catapultPart);
+    const id = this.world.createBody({ type: 'kinematic', position: tip, linearVelocity: v });
+    this.space = { id, v: { ...v }, exitAt: null, ticks: 0, trail: [] };
+  }
+
+  /** Before the world step: the space fuzz's next velocity (`spaceStep`), which its kinematic body
+   * then moves at for the step. */
+  private driveSpaceFuzz(): void {
+    const sp = this.space;
+    if (!sp || sp.exitAt !== null) return;
+    const t = this.world.getTransform(sp.id);
+    sp.v = spaceStep(t.position, sp.v, FIXED_DT).v;
+    this.world.setLinearVelocity(sp.id, sp.v);
+  }
+
+  /** After the world step: drops a sparkle every SPACE_TRAIL_EVERY ticks, and takes the fuzz out
+   * once it has left the world. */
+  private trackSpaceFuzz(): void {
+    const sp = this.space;
+    if (!sp || sp.exitAt !== null) return;
+    const p = this.world.getTransform(sp.id).position;
+    sp.ticks++;
+    if (sp.ticks % SPACE_TRAIL_EVERY === 0) {
+      this.sparkleCounter++;
+      sp.trail.push({ p: { ...p }, t0: this.shotElapsed, i: this.sparkleCounter });
+    }
+    if (outOfWorld(p)) {
+      sp.exitAt = this.shotElapsed;
+      this.world.destroyBody(sp.id);
+    }
+  }
+
+  /** A space shot keeps the shot open until the fuzz is gone and its trail has faded. */
+  private spaceBusy(): boolean {
+    const sp = this.space;
+    if (!sp) return false;
+    if (this.shotElapsed >= SPACE_MAX_TIME) return false;
+    return sp.exitAt === null || this.shotElapsed - sp.exitAt < SPACE_AFTER;
+  }
+
+  /** The space shot's sparkle trail: each sparkle a twinkling screen-sized dot (a soft halo and a
+   * bright core, in turn white, gold, pink and ice blue), scattered a little either side of the path,
+   * shrinking and fading over SPACE_TRAIL_TIME. Sim time, so it replays the same. */
+  private sparkleOverlay(): OverlayItem[] {
+    const sp = this.space;
+    if (!sp) return [];
+    const out: OverlayItem[] = [];
+    for (const s of sp.trail) {
+      const age = this.shotElapsed - s.t0;
+      if (age < 0 || age >= SPACE_TRAIL_TIME) continue;
+      const k = 1 - age / SPACE_TRAIL_TIME;
+      const side = ((s.i * 37) % 7) / 6 - 0.5; // -0.5 .. 0.5, a fixed scatter per sparkle
+      const p = { x: s.p.x + side * 0.5, y: s.p.y - side * 0.2 };
+      const color = SPARKLE_COLORS[s.i % SPARKLE_COLORS.length]!;
+      const r = (s.i % 3 === 0 ? 6 : 4) * (0.5 + 0.5 * k);
+      out.push({ kind: 'dot', p, r: r * 1.9, color, alpha: 0.25 * k, screen: true });
+      out.push({ kind: 'dot', p, r, color, alpha: 0.95 * k, screen: true });
+    }
+    return out;
   }
 
   /** Creates one flying fuzz body and registers it everywhere a fuzz counts (contacts, range,
@@ -741,9 +1048,12 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
       const fuzzId = aIsFuzz ? c.bodyA : c.bodyB;
       const otherId = aIsFuzz ? c.bodyB : c.bodyA;
 
-      if (!this.hitThisShot && this.bullseyeBodies.has(otherId)) {
-        this.hits++;
-        this.hitThisShot = true;
+      if (this.bullseyeBodies.has(otherId)) {
+        if (!this.hitThisShot) {
+          this.hits++;
+          this.hitThisShot = true;
+        }
+        this.markDone(otherId);
       }
 
       this.recordBurst(otherId, fuzzId);
@@ -814,17 +1124,20 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
   /** Targets whose live AABB top (rotated box bounds) is above `level.line`; 0 without a line.
    * Live, so it reads the settled pose at rest and the wreck after a topple. */
   private countAboveLine(): number {
-    const line = this.level.line;
-    if (line === undefined) return 0;
+    if (this.level.line === undefined) return 0;
     let n = 0;
-    for (const id of this.targetBodies) {
-      if (this.brokenCrates.has(id)) continue; // a broken crate is gone: nothing left above
-      const info = this.shapeInfo.get(id);
-      if (!info) continue;
-      const b = this.rotatedBoxBounds(this.world.getTransform(id), info);
-      if (b.y + b.h / 2 > line + 1e-3) n++;
-    }
+    for (const id of this.targetBodies) if (this.isAboveLine(id)) n++;
     return n;
+  }
+
+  /** Whether a target's live box top is above `level.line` (false without a line, or once broken). */
+  private isAboveLine(id: BodyId): boolean {
+    const line = this.level.line;
+    if (line === undefined || this.brokenCrates.has(id)) return false; // a broken crate is gone
+    const info = this.shapeInfo.get(id);
+    if (!info) return false;
+    const b = this.rotatedBoxBounds(this.world.getTransform(id), info);
+    return b.y + b.h / 2 > line + 1e-3;
   }
 
   /** The live crates hit hard this step (catalog.ts `CRATE_BREAK`): more than `impulse` N s from
@@ -865,6 +1178,7 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
         this.knockedBodies.add(id);
         this.knockedThisShot.push(id);
       }
+      this.markDone(id);
       const handle = this.partHandles.find((h) => h.bodies.some((b) => b.id === id));
       if (handle) {
         handle.bodies = [];
@@ -959,15 +1273,77 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
    * bands come first, then the hooks, so a hook always sits on top of its band. */
   private bandOverlay(): OverlayItem[] {
     const segs = bandSegments(this.catapultPart, this.armAngle);
+    const n = bandCount(this.catapultPart.props);
+    const thickness = bandThickness(n);
     const bands: OverlayItem[] = [];
     const hooks: OverlayItem[] = [];
     segs.forEach(({ a, b }, i) => {
-      const band = bandSprite(`band-${i}`, a, b);
+      const band = bandSprite(`band-${i}`, a, b, thickness);
       if (band) bands.push(band);
       const theta = Math.atan2(b.y - a.y, b.x - a.x);
       hooks.push(hookSprite(`band-${i}-hook-a`, a, theta), hookSprite(`band-${i}-hook-b`, b, theta + Math.PI));
     });
-    return [...bands, ...hooks];
+    const out = [...bands, ...hooks];
+    // 2026-10-16: past MAX_VISIBLE_BANDS the bundle carries its count ("×12"), riding the bands.
+    // Beside the bundle (BAND_LABEL_OFFSET, up and back over the arm), not on it: the scene draws
+    // overlay sprites (the bands) above overlay labels, so a label on the bundle would be hidden.
+    if (n > MAX_VISIBLE_BANDS) {
+      const mid = bandBundleAt(this.catapultPart, this.armAngle);
+      const p = { x: mid.x + BAND_LABEL_OFFSET.x, y: mid.y + BAND_LABEL_OFFSET.y };
+      out.push({ kind: 'label', id: 'band-count', p, text: `×${n}`, color: 0xffffff, bg: 0xc42b2b, size: 14 });
+    }
+    return out;
+  }
+
+  /** The target markers and check pops (see MARKER_COLOR). A standing target's marker bobs over its
+   * live top (or sits on the target itself when another marked one rests on it); once down, a green
+   * check pops where it was (a growing, fading ring under it) and is gone after CHECK_TIME. */
+  private markerOverlay(): OverlayItem[] {
+    if (this.marks.length === 0) return [];
+    const now = this.clock();
+    const out: OverlayItem[] = [];
+    for (const m of this.marks) {
+      if (m.doneAt === null) {
+        if (this.world.bodies().includes(m.body)) {
+          const box = this.bodyBox(m.body);
+          m.at = { x: box.x, y: box.y };
+          m.top = box.y + box.h / 2;
+        }
+        const bob = MARKER_BOB * Math.sin((2 * Math.PI * now) / MARKER_BOB_PERIOD + m.key);
+        const p = m.covered ? { x: m.at.x, y: m.at.y + bob * 0.4 } : { x: m.at.x, y: m.top + MARKER_GAP + bob };
+        const text = m.n > 0 ? String(m.n) : m.covered ? '●' : '▼';
+        out.push({ kind: 'label', id: `mark-${m.key}`, p, text, color: 0xffffff, bg: MARKER_COLOR, size: MARKER_SIZE });
+        continue;
+      }
+      const age = now - m.doneAt;
+      if (age < 0 || age >= CHECK_TIME) continue;
+      // Pop (0 -> 1.25 by 0.15 s), settle to 1 by 0.3 s, hold, shrink away over the last 0.4 s.
+      let k: number;
+      if (age < 0.15) k = 1.25 * (age / 0.15);
+      else if (age < 0.3) k = 1.25 - 0.25 * ((age - 0.15) / 0.15);
+      else if (age < CHECK_TIME - 0.4) k = 1;
+      else k = (CHECK_TIME - age) / 0.4;
+      const p = m.covered ? { ...m.at } : { x: m.at.x, y: m.top + MARKER_GAP };
+      const ring = Math.min(1, age / 0.5);
+      out.push({ kind: 'dot', p, r: 14 + 16 * ring, color: CHECK_COLOR, alpha: 0.45 * (1 - ring), screen: true });
+      out.push({ kind: 'label', id: `mark-${m.key}`, p, text: '✓', color: 0xffffff, bg: CHECK_COLOR, size: Math.max(6, Math.round(CHECK_SIZE * k)) });
+    }
+    return out;
+  }
+
+  /** Latches a marked target (or bullseye) as done: its check pops from now. */
+  private markDone(body: BodyId): void {
+    for (const m of this.marks) {
+      if (m.body === body && m.doneAt === null) m.doneAt = this.clock();
+    }
+  }
+
+  /** The line-goal markers follow the live line: a piece that is no longer over the line is done. */
+  private updateLineMarks(): void {
+    for (const m of this.marks) {
+      if (m.kind !== 'line' || m.doneAt !== null) continue;
+      if (this.brokenCrates.has(m.body) || !this.isAboveLine(m.body)) m.doneAt = this.clock();
+    }
   }
 
   /** The trigger string, drawn as a red strength band like the power bands: tied (cup underside ->
@@ -1024,20 +1400,28 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     return { kind: 'sprite', id: 'snip', textureKey: 'fx-snip', p, size: 1.0 * pop, alpha };
   }
 
+  /** The knock-down rule (see TIP_MIN): tipped past its balance point, dropped more than half its
+   * height, or broken (`breakCrates`). Latched for good: once down, a target stays counted. */
   private updateLatches(): void {
     for (const id of this.targetBodies) {
-      if (this.knockedBodies.has(id)) continue;
-      const info = this.shapeInfo.get(id);
+      if (this.knockedBodies.has(id) || this.brokenCrates.has(id)) continue;
       const base = this.baseline.get(id);
-      if (!info || !base) continue;
+      const tipLimit = this.tipLimit.get(id);
+      const dropLimit = this.dropLimit.get(id);
+      if (!base || tipLimit === undefined || dropLimit === undefined) continue;
       const t = this.world.getTransform(id);
-      const dropped = base.position.y - t.position.y > 0.5;
-      const tipped = Math.abs(wrapSym(t.angle - base.angle, info.symmetry)) > Math.PI / 4;
+      const turned = (this.turned.get(id) ?? 0) + wrapPi(t.angle - (this.prevAngle.get(id) ?? t.angle));
+      this.turned.set(id, turned);
+      this.prevAngle.set(id, t.angle);
+      const dropped = base.position.y - t.position.y > dropLimit;
+      const tipped = Math.abs(turned) > tipLimit;
       if (dropped || tipped) {
         this.knockedBodies.add(id);
         this.knockedThisShot.push(id);
+        this.markDone(id);
       }
     }
+    this.updateLineMarks();
     this.maybeCrash();
   }
 
@@ -1065,6 +1449,15 @@ export class CatapultSim implements CourseSim<Metrics, Outcome> {
     // child keeps firing until the shot budget runs out (the goals decide the pass).
     if (this.targetBodies.length > 0 && targetsLeft === 0) {
       this.currentOutcome = 'cleared';
+    } else if (this.spaceShotThisShot) {
+      // The fuzz went to space (2026-10-16): this shot's outcome says so, whether or not shots are
+      // left; with shots left the machine reloads below and FIRE works again (`canReplay`).
+      this.currentOutcome = 'space';
+      if (this.level.shots === 0 || this.shotsLeftInternal > 0) {
+        this.reloadArm();
+        this.stringCut = false;
+        this.showPreview();
+      }
     } else if (this.level.shots > 0 && this.shotsLeftInternal === 0) {
       this.currentOutcome = 'outOfShots';
     } else {

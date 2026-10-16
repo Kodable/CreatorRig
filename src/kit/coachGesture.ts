@@ -6,7 +6,7 @@
 // both courses' drag tutorials feel the same; only the path differs (an arc, not straight up).
 import { dragHandPose, DRAG_HAND, DRAG_HAND_PERIOD_MS } from '../core/coach';
 import type { Vec2 } from './types';
-import { dialPoint, type DialGeom } from './widgetLayout';
+import { dialPoint, slideValuePoint, type DialGeom, type SlideGeom } from './widgetLayout';
 
 export { DRAG_HAND as DIAL_DRAG_HAND, DRAG_HAND_PERIOD_MS as DIAL_DRAG_PERIOD_MS };
 
@@ -47,4 +47,50 @@ export function dialDragPose(geom: DialGeom, toValue: string, tMs: number): Dial
   const tip = dialPoint(geom.pivot, geom.radiusPx, angle);
   const pressed = p.alpha > 0 && (p.frame === 2 || p.rise > 0);
   return { frame: p.frame, along: p.rise, angle, tip, alpha: p.alpha, ghost: pressed ? tip : null };
+}
+
+/** The glove's pose on a straight stroke (a slide's knob, a bin tile's ghost): the same fields as
+ * the dial's, with the fingertip on the path instead of an arc. */
+export interface StrokePose {
+  frame: 0 | 1 | 2;
+  /** 0..1 of the way from the start to the end (eased). */
+  along: number;
+  /** The fingertip, stage px. */
+  tip: Vec2;
+  alpha: number;
+  /** The ghost under the pressed finger (stage px), or null when the finger is not pressed. */
+  ghost: Vec2 | null;
+}
+
+/** 2026-10-16: the drag demonstration on a SLIDE widget (the catapult's arm-length handle): the
+ * glove presses the knob, slides it along the track to option `toValue`, lets go, fades, repeats
+ * (the dial's stroke, straight). Null (the plain tap) when the slide has no such option or the
+ * knob is already there. */
+export function slideDragPose(geom: SlideGeom, toValue: string, tMs: number): StrokePose | null {
+  const to = slideValuePoint(geom, toValue);
+  if (!to || toValue === geom.value) return null;
+  const from = geom.knob;
+  const p = dragHandPose(tMs);
+  const tip = { x: from.x + (to.x - from.x) * p.rise, y: from.y + (to.y - from.y) * p.rise };
+  const pressed = p.alpha > 0 && (p.frame === 2 || p.rise > 0);
+  return { frame: p.frame, along: p.rise, tip, alpha: p.alpha, ghost: pressed ? tip : null };
+}
+
+/** How high (stage px) the 'drop' stroke arcs over the straight line from the bin to the machine,
+ * at its middle: the ghost is lifted out of the bin and set down, not dragged along the floor. */
+export const DROP_ARC_PX = 60;
+
+/** 2026-10-16: the 'drop' demonstration on a SUPPLY BIN tile (`CoachGesture` 'drop'): the glove
+ * presses the tile at `from`, carries a ghost of its picture along a gentle arc to the drop zone
+ * at `to` (stage px both), lets go there, fades, pauses and repeats: the drag hand's 2.65 s stroke.
+ * The ghost rides under the pressed finger and stays at the drop zone through the hold. */
+export function dropPose(from: Vec2, to: Vec2, tMs: number): StrokePose {
+  const p = dragHandPose(tMs);
+  const k = p.rise;
+  const tip = {
+    x: from.x + (to.x - from.x) * k,
+    y: from.y + (to.y - from.y) * k - Math.sin(Math.PI * k) * DROP_ARC_PX,
+  };
+  const pressed = p.alpha > 0 && (p.frame === 2 || p.rise > 0);
+  return { frame: p.frame, along: k, tip, alpha: p.alpha, ghost: pressed ? tip : null };
 }

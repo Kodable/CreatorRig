@@ -23,10 +23,29 @@
 //   shot - Metal/High/30 until the energy rule). Split velocities are read through
 //   `sim['world']` (TypeScript allows bracket access to a private member): the public snapshot
 //   carries positions only, and the split rule is about velocities.
+// - 2026-10-16: these tests build catapults with the legacy `power` / `arm` props (catalog.ts maps
+//   Low..Max to 1..4 bands and Short/Long to 2/3 m, so every number here is unchanged); the bands /
+//   arm length / space shot / knock-down rule / marker tests near the end use the new props.
 import { describe, expect, it } from 'vitest';
-import { armAngleFor, bandSegments, catapultRelease, crossbarPoseFor, fireSpot, stringAnchor, FUZZ_PART_ID, REST_ANGLE, STRING_HOOK_H } from './build';
-import { FUZZ, FUZZ_NAMES, SPLIT_ANGLE_DEG, SPLIT_OFFSET, fuzzMass, launchSpeed } from './catalog';
-import { createCatapultSim, CRASH_SIZE, DUST_SIZE, IMPACT_PART_ID } from './sim';
+import { armAngleFor, bandBundleAt, bandSegments, catapultRelease, crossbarPoseFor, fireSpot, stringAnchor, FUZZ_PART_ID, REST_ANGLE, STRING_HOOK_H, WORLD_H } from './build';
+import { FUZZ, FUZZ_NAMES, SPLIT_ANGLE_DEG, SPLIT_OFFSET, fuzzMass, isSpaceShot, launchSpeed } from './catalog';
+import {
+  BAND_LABEL_OFFSET,
+  createCatapultSim,
+  CHECK_COLOR,
+  CHECK_SIZE,
+  CHECK_TIME,
+  CRASH_SIZE,
+  DUST_SIZE,
+  IMPACT_PART_ID,
+  MARKER_BOB,
+  MARKER_COLOR,
+  MARKER_GAP,
+  outOfWorld,
+  SPACE_MAX_TIME,
+  spacePath,
+  TIP_MIN,
+} from './sim';
 import type { CatapultLevel, OverlayItem, PlacedPart, RenderItem } from './types';
 
 /** A payoff/effect sprite (hit burst, dust, CRASH!, snip) - as opposed to the machine's own
@@ -435,13 +454,13 @@ describe('CatapultSim: the swing (rear-facing arm, forward release, crossbar sto
     const sim = await createCatapultSim([cp], level);
     const armKeys = () => sim.renderItems().filter((it) => it.partId === cp.id && it.role === 'arm').map((it) => it.textureKey);
     expect(sim.renderItems().some((it) => it.role === 'fuzzGear')).toBe(false);
-    expect(armKeys()).toEqual(['real-arm-Short', 'real-gear', 'real-cup']);
+    expect(armKeys()).toEqual(['real-arm-2', 'real-gear', 'real-cup']);
     sim.play();
     for (let i = 0; i < 60; i++) {
       sim.step();
       expect(sim.renderItems().some((it) => it.role === 'fuzzGear' || it.textureKey?.startsWith('gear-'))).toBe(false);
     }
-    expect(armKeys()).toEqual(['real-arm-Short', 'real-gear', 'real-cup']);
+    expect(armKeys()).toEqual(['real-arm-2', 'real-gear', 'real-cup']);
     sim.destroy();
   });
 
@@ -1151,8 +1170,8 @@ describe('CatapultSim: breakable crates', () => {
     return { id: id(), kind: 'block', x, y, props: { size, material: 'crate' } };
   }
 
-  async function shoot(fuzz: string, extra: PlacedPart[] = [], line?: number) {
-    const parts = [catapult({ fuzz, power: 'Max', angle: '15' }), crate(22.5, 1, '1x2'), ...extra];
+  async function shoot(fuzz: string, extra: PlacedPart[] = [], line?: number, over: Record<string, string> = {}) {
+    const parts = [catapult({ fuzz, power: 'Max', angle: '15', ...over }), crate(22.5, 1, '1x2'), ...extra];
     const level = { ...makeLevel(parts, 2), ...(line !== undefined ? { line } : {}) };
     const sim = await createCatapultSim(parts, level);
     const crateBody = sim.handles().find((h) => h.partId === parts[1]!.id)!.bodies[0]!.id;
@@ -1197,7 +1216,8 @@ describe('CatapultSim: breakable crates', () => {
   });
 
   it('a gentle hit (the light Flower) only bumps it: a BOOM, no smash, the crate stays', async () => {
-    const { sim, crateBody, seen, brokeAt } = await shoot('Flower');
+    // On the 1.5 m arm: since the speed cap went (2026-10-16) the Flower on the 2 m arm skims over.
+    const { sim, crateBody, seen, brokeAt } = await shoot('Flower', [], undefined, { armLen: '1.5' });
     expect(seen.has('fx-boom')).toBe(true); // it did hit the crate
     expect(brokeAt).toBe(-1);
     expect(seen.has('fx-smash')).toBe(false);
@@ -1265,6 +1285,316 @@ describe('CatapultSim: breakable crates', () => {
     await runUntilNotRunning(sim);
     expect(sim.metrics().smashed).toBe(0);
     expect(sim.handles().find((h) => h.partId === block.id)!.bodies).toHaveLength(1);
+    sim.destroy();
+  });
+});
+
+// ---- 2026-10-16: unlimited bands, the space shot, the knock-down rule, the target markers --------
+
+/** A catapult with the new props (bands / armLen), defaults 2 bands, 45 degrees, the Fur, 2 m. */
+function newCatapult(props: Record<string, string> = {}, x = 5): PlacedPart {
+  return { id: id(), kind: 'catapult', x, y: 0, props: { bands: '2', angle: '45', fuzz: 'Fur', armLen: '2', ...props } };
+}
+
+type Sim = Awaited<ReturnType<typeof createCatapultSim>>;
+const labels = (sim: Sim) => (sim.snapshot().overlay ?? []).filter((o): o is Extract<OverlayItem, { kind: 'label' }> => o.kind === 'label');
+const label = (sim: Sim, lid: string) => labels(sim).find((o) => o.id === lid);
+
+describe('CatapultSim: rubber bands past six (2026-10-16)', () => {
+  it('draws at most six bands; past six the bundle carries a "×n" label riding the bands', async () => {
+    for (const [n, drawn] of [[1, 1], [6, 6], [7, 6], [20, 6]] as const) {
+      const cp = newCatapult({ bands: String(n) });
+      const sim = await createCatapultSim([cp], makeLevel([cp], 1));
+      const overlay = sim.snapshot().overlay ?? [];
+      expect(overlay.filter((o) => o.kind === 'sprite' && /^band-\d+$/.test(o.id))).toHaveLength(drawn);
+      const count = label(sim, 'band-count');
+      if (n > 6) {
+        expect(count?.text).toBe(`×${n}`);
+        const mid = bandBundleAt(cp);
+        expect(count?.p).toEqual({ x: mid.x + BAND_LABEL_OFFSET.x, y: mid.y + BAND_LABEL_OFFSET.y });
+      } else {
+        expect(count).toBeUndefined();
+      }
+      sim.destroy();
+    }
+  });
+
+  it('the arm, the swing and the release all follow armLen: a 4 m arm releases farther out and faster than a 1.5 m arm', async () => {
+    const short = catapultRelease(newCatapult({ armLen: '1.5' }));
+    const long = catapultRelease(newCatapult({ armLen: '4' }));
+    expect(Math.hypot(long.v.x, long.v.y) / Math.hypot(short.v.x, short.v.y)).toBeCloseTo(1.15 / 0.9, 9);
+    for (const armLen of ['1.5', '3', '4']) {
+      const cp = newCatapult({ armLen });
+      const sim = await createCatapultSim([cp], makeLevel([cp], 1));
+      expect(sim.renderItems().find((it) => it.role === 'arm')!.textureKey).toBe(`real-arm-${armLen}`);
+      sim.play();
+      await runUntilNotRunning(sim);
+      sim.destroy();
+    }
+  });
+});
+
+describe('CatapultSim: the space shot (2026-10-16)', () => {
+  it('over SPACE_SPEED the fuzz rockets out of the top of the world: no collisions, a sparkle trail, outcome "space", FIRE again while shots are left', async () => {
+    const cp = newCatapult({ bands: '45' });
+    expect(isSpaceShot(cp.props)).toBe(true);
+    // A can on a tall shelf right in the normal flight path, and one on the ground ahead.
+    const shelf: PlacedPart = { id: id(), kind: 'shelf', x: 8, y: 6, props: { length: '4' } };
+    const can: PlacedPart = { id: id(), kind: 'can', x: 8, y: 6.5, props: { color: 'Red' } };
+    const can2: PlacedPart = { id: id(), kind: 'can', x: 12, y: 0.4, props: { color: 'Blue' } };
+    const parts = [cp, shelf, can, can2];
+    const level = makeLevel(parts, 2, [{ metric: 'knockedDown', op: '>=', value: 1, label: '' }]);
+    const sim = await createCatapultSim(parts, level);
+    const dynamicBefore = sim['world'].bodies().length;
+    sim.play();
+    let sparkles = 0;
+    let maxY = -Infinity;
+    let fuzzFirst = false;
+    for (let t = 0; t < 700 && sim.outcome === 'running'; t++) {
+      sim.step();
+      const items = sim.renderItems();
+      const fuzz = items.find((it) => it.role === 'fuzz');
+      if (fuzz && fuzz.partId === FUZZ_PART_ID) {
+        fuzzFirst = true;
+        const tr = sim.snapshot().transforms.get(fuzz.body);
+        if (tr) maxY = Math.max(maxY, tr.position.y);
+      }
+      sparkles = Math.max(sparkles, (sim.snapshot().overlay ?? []).filter((o) => o.kind === 'dot' && o.screen).length);
+    }
+    expect(fuzzFirst).toBe(true);
+    expect(maxY).toBeGreaterThan(WORLD_H - 2); // it reached the top of the world
+    expect(sparkles).toBeGreaterThan(4);
+    expect(sim.outcome).toBe('space');
+    const m = sim.metrics();
+    expect(m.shotsUsed).toBe(1);
+    expect(m.knockedDown).toBe(0);
+    expect(m.maxRange).toBe(0);
+    expect(sim['world'].bodies().length).toBe(dynamicBefore); // the space fuzz is gone again
+    // Shots left: FIRE works again, the arm is reloaded and the string tied.
+    expect(sim.canReplay()).toBe(true);
+    expect(sim.renderItems().some((it) => it.role === 'fuzz' && it.partId === cp.id)).toBe(true);
+    expect((sim.snapshot().overlay ?? []).some((o) => o.kind === 'sprite' && o.id === 'string')).toBe(true);
+    // The last shot into space ends the level (no replay), still 'space'.
+    sim.play();
+    await runUntilNotRunning(sim);
+    expect(sim.outcome).toBe('space');
+    expect(sim.canReplay()).toBe(false);
+    expect(sim.metrics().shotsUsed).toBe(2);
+    sim.destroy();
+  });
+
+  it('the threshold: 11 bands on the Fur with the 2 m arm is a normal shot, 12 is a space shot', async () => {
+    for (const [bands, space] of [['11', false], ['12', true]] as const) {
+      const cp = newCatapult({ bands, angle: '75' });
+      const sim = await createCatapultSim([cp], makeLevel([cp], 2));
+      sim.play();
+      await runUntilNotRunning(sim);
+      expect(sim.outcome, bands).toBe(space ? 'space' : 'shot');
+      sim.destroy();
+    }
+  });
+
+  it('the space shot is quick: it ends within SPACE_MAX_TIME, even fired flat', async () => {
+    for (const angle of ['15', '45', '75']) {
+      const cp = newCatapult({ bands: '60', angle, fuzz: 'Metal', armLen: '1.5' });
+      const sim = await createCatapultSim([cp], makeLevel([cp], 1));
+      sim.play();
+      const ticks = await runUntilNotRunning(sim);
+      expect(sim.outcome).toBe('space');
+      expect(ticks * (1 / 60)).toBeLessThanOrEqual(SPACE_MAX_TIME + 0.7);
+      sim.destroy();
+    }
+  });
+
+  it('spacePath leaves the world through the top; the preview of a space shot follows it (through everything)', async () => {
+    const cp = newCatapult({ bands: '45', angle: '30' });
+    const { tip, v } = catapultRelease(cp);
+    const path = spacePath(tip, v);
+    expect(outOfWorld(path[path.length - 1]!)).toBe(true);
+    expect(path[path.length - 1]!.y).toBeGreaterThan(WORLD_H);
+    const wall: PlacedPart = { id: id(), kind: 'wall', x: 9, y: 3, props: { height: '6' } };
+    const sim = await createCatapultSim([cp, wall], makeLevel([cp, wall], 1), () => 0);
+    sim.showPreview();
+    const dots = (sim.snapshot().overlay ?? []).filter((o): o is Extract<OverlayItem, { kind: 'dot' }> => o.kind === 'dot');
+    expect(Math.max(...dots.map((d) => d.p.y))).toBeGreaterThan(WORLD_H - 1);
+    sim.destroy();
+  });
+});
+
+describe('CatapultSim: the knock-down rule (2026-10-16: tipped or dropped, never slid)', () => {
+  /** A level whose catapult fires a harmless short lob, so the sim steps while the test pushes. */
+  async function pushed(target: PlacedPart, push: (sim: Sim, body: number) => void, extra: PlacedPart[] = []) {
+    const cp = newCatapult({ bands: '1', angle: '75' });
+    const parts = [cp, ...extra, target];
+    const sim = await createCatapultSim(parts, makeLevel(parts, 3));
+    const body = sim.handles().find((h) => h.partId === target.id)!.bodies[0]!.id;
+    sim.play();
+    push(sim, body);
+    for (let t = 0; t < 30; t++) sim.step();
+    // Keep pushing for a moment (a slide needs a steady shove; a tip one kick).
+    await runUntilNotRunning(sim);
+    return { sim, body };
+  }
+
+  it('a block slid 2 m along the ground (no turn, no drop) is NOT knocked down', async () => {
+    const block: PlacedPart = { id: id(), kind: 'block', x: 20, y: 0.5, props: { size: '2x1', material: 'steel' } };
+    const { sim, body } = await pushed(block, (s, b) => s['world'].setLinearVelocity(b, { x: 4, y: 0 }));
+    const t = sim.snapshot().transforms.get(body)!;
+    expect(Math.abs(t.position.x - 20)).toBeGreaterThan(0.5); // it really moved
+    expect(sim.metrics().knockedDown).toBe(0);
+    sim.destroy();
+  });
+
+  it('a standing domino tipped over is knocked down (turned past 45 degrees)', async () => {
+    const domino: PlacedPart = { id: id(), kind: 'block', x: 20, y: 1, props: { size: 'domino', material: 'wood' } };
+    const { sim } = await pushed(domino, (s, b) => s['world'].setAngularVelocity(b, -3));
+    expect(sim.metrics().knockedDown).toBe(1);
+    sim.destroy();
+  });
+
+  it('a can pushed off its shelf drops (more than half its height) and is knocked down, even landing upright', async () => {
+    const shelf: PlacedPart = { id: id(), kind: 'shelf', x: 20, y: 1.5, props: { length: '2' } };
+    const can: PlacedPart = { id: id(), kind: 'can', x: 20.6, y: 2, props: { color: 'Red' } };
+    const { sim, body } = await pushed(can, (s, b) => s['world'].setLinearVelocity(b, { x: 3, y: 0 }), [shelf]);
+    expect(sim.snapshot().transforms.get(body)!.position.y).toBeLessThan(1.5);
+    expect(sim.metrics().knockedDown).toBe(1);
+    sim.destroy();
+  });
+
+  it('a cube that tumbles onto its next face counts (its turn is tracked in total, not modulo 90 degrees)', async () => {
+    const cube: PlacedPart = { id: id(), kind: 'block', x: 20, y: 0.5, props: { size: '1x1', material: 'wood' } };
+    const { sim, body } = await pushed(cube, (s, b) => {
+      s['world'].setAngularVelocity(b, -6);
+      s['world'].setLinearVelocity(b, { x: 2, y: 2 });
+    });
+    const t = sim.snapshot().transforms.get(body)!;
+    expect(t.position.y).toBeCloseTo(0.5, 1); // back on the ground on a face
+    expect(sim.metrics().knockedDown).toBe(1);
+    sim.destroy();
+  });
+
+  it('the tip limit is the balance point plus 3 degrees, never under 45: can/domino 45, cube 48, a 2x1 plank lying flat 66', async () => {
+    const cp = newCatapult();
+    const mk = (size: string, y: number): PlacedPart => ({ id: id(), kind: 'block', x: 20 + nextId, y, props: { size, material: 'wood' } });
+    const can: PlacedPart = { id: id(), kind: 'can', x: 14, y: 0.4, props: { color: 'Red' } };
+    const parts = [cp, can, mk('domino', 1), mk('1x1', 0.5), mk('2x1', 0.5)];
+    const sim = await createCatapultSim(parts, makeLevel(parts, 1));
+    const limits = parts.slice(1).map((p) => (sim['tipLimit'].get(sim.handles().find((h) => h.partId === p.id)!.bodies[0]!.id)! * 180) / Math.PI);
+    expect(limits[0]).toBeCloseTo(45, 6);
+    expect(limits[1]).toBeCloseTo(45, 6);
+    expect(limits[2]).toBeCloseTo(48, 6);
+    expect(limits[3]).toBeCloseTo(Math.atan2(1, 0.5) * (180 / Math.PI) + 3, 0); // its settled pose is a hair off level
+    expect(TIP_MIN).toBeCloseTo(Math.PI / 4, 12);
+    sim.destroy();
+  });
+});
+
+describe('CatapultSim: target markers and check pops (2026-10-16)', () => {
+  const two = () => {
+    const cp = newCatapult({ bands: '1', angle: '75' });
+    const a: PlacedPart = { id: id(), kind: 'can', x: 14, y: 0.4, props: { color: 'Red' } };
+    const b: PlacedPart = { id: id(), kind: 'block', x: 18, y: 1, props: { size: '1x2', material: 'wood' } };
+    return { cp, a, b, parts: [cp, a, b] };
+  };
+
+  it('every target a knock-down goal needs wears a numbered marker over it (left to right); none without goals', async () => {
+    const { a, b, parts } = two();
+    const sim = await createCatapultSim(parts, makeLevel(parts, 2, [{ metric: 'knockedDown', op: '>=', value: 2, label: '' }]), () => 0);
+    expect(sim.markedTargets()).toEqual([
+      { partId: a.id, kind: 'knock', n: 1, done: false },
+      { partId: b.id, kind: 'knock', n: 2, done: false },
+    ]);
+    const ma = label(sim, `mark-${a.id}`)!;
+    const mb = label(sim, `mark-${b.id}`)!;
+    expect([ma.text, mb.text]).toEqual(['1', '2']);
+    expect(ma.bg).toBe(MARKER_COLOR);
+    // Over each target's top (the can 0.8 m tall, the block 2 m), by MARKER_GAP plus the bob.
+    expect(ma.p.y).toBeGreaterThan(0.8 + MARKER_GAP - MARKER_BOB - 0.05);
+    expect(mb.p.y).toBeGreaterThan(2 + MARKER_GAP - MARKER_BOB - 0.05);
+    expect(ma.p.x).toBeCloseTo(14, 1);
+    sim.destroy();
+
+    const free = await createCatapultSim(parts, makeLevel(parts, 2), () => 0);
+    expect(free.markedTargets()).toEqual([]);
+    expect(labels(free).filter((o) => o.id.startsWith('mark-'))).toEqual([]);
+    free.destroy();
+  });
+
+  it('the marker bobs on the page clock', async () => {
+    const { parts, a } = two();
+    let now = 0;
+    const sim = await createCatapultSim(parts, makeLevel(parts, 2, [{ metric: 'knockedDown', op: '>=', value: 2, label: '' }]), () => now);
+    const ys = [0, 0.3, 0.6, 0.9].map((t) => {
+      now = t;
+      return label(sim, `mark-${a.id}`)!.p.y;
+    });
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(MARKER_BOB);
+    sim.destroy();
+  });
+
+  it('once a target is down its marker becomes a green check that pops, then is gone after CHECK_TIME', async () => {
+    const { parts, b } = two();
+    let now = 10;
+    const sim = await createCatapultSim(parts, makeLevel(parts, 2, [{ metric: 'knockedDown', op: '>=', value: 2, label: '' }]), () => now);
+    const body = sim.handles().find((h) => h.partId === b.id)!.bodies[0]!.id;
+    sim.play();
+    sim['world'].setAngularVelocity(body, -5);
+    sim['world'].setLinearVelocity(body, { x: 2, y: 1 });
+    await runUntilNotRunning(sim);
+    expect(sim.metrics().knockedDown).toBe(1);
+    expect(sim.markedTargets().find((m) => m.partId === b.id)!.done).toBe(true);
+    // The check was stamped at now = 10 (the clock did not move during the shot).
+    now = 10 + 0.5;
+    const check = label(sim, `mark-${b.id}`)!;
+    expect(check.text).toBe('✓');
+    expect(check.bg).toBe(CHECK_COLOR);
+    expect(check.size).toBe(CHECK_SIZE);
+    now = 10 + 0.1;
+    expect(label(sim, `mark-${b.id}`)!.size!).toBeGreaterThan(CHECK_SIZE * 0.5); // popping in
+    now = 10 + CHECK_TIME + 0.01;
+    expect(label(sim, `mark-${b.id}`)).toBeUndefined();
+    sim.destroy();
+  });
+
+  it('a line goal marks only the pieces over the line; a smash goal the crates; a hits goal the bullseye (done once hit)', async () => {
+    const cp = newCatapult({ bands: '2', angle: '45' });
+    const low: PlacedPart = { id: id(), kind: 'block', x: 20, y: 0.5, props: { size: '1x1', material: 'wood' } };
+    const high: PlacedPart = { id: id(), kind: 'block', x: 20, y: 1.5, props: { size: '1x1', material: 'wood' } };
+    const lineParts = [cp, low, high];
+    const lineSim = await createCatapultSim(lineParts, { ...makeLevel(lineParts, 1, [{ metric: 'aboveLine', op: '==', value: 0, label: '' }]), line: 1.5 }, () => 0);
+    expect(lineSim.markedTargets().map((m) => [m.partId, m.kind])).toEqual([[high.id, 'line']]);
+    lineSim.destroy();
+
+    const crate: PlacedPart = { id: id(), kind: 'block', x: 22, y: 0.5, props: { size: '1x1', material: 'crate' } };
+    const smashParts = [cp, low, crate];
+    const smashSim = await createCatapultSim(smashParts, makeLevel(smashParts, 1, [{ metric: 'smashed', op: '>=', value: 1, label: '' }]), () => 0);
+    expect(smashSim.markedTargets().map((m) => [m.partId, m.kind, m.n])).toEqual([[crate.id, 'smash', 0]]);
+    expect(label(smashSim, `mark-${crate.id}`)!.text).toBe('▼');
+    smashSim.destroy();
+
+    // The measured Medium / 45 / Fur shot lands ~11.3 m past the tip: put the bullseye there, low.
+    const { tip } = catapultRelease(cp);
+    const bull: PlacedPart = { id: id(), kind: 'bullseye', x: tip.x + 10.6, y: 0.9, props: { size: 'M' } };
+    const hitParts = [cp, bull];
+    const hitSim = await createCatapultSim(hitParts, makeLevel(hitParts, 1, [{ metric: 'hits', op: '>=', value: 1, label: '' }]), () => 0);
+    expect(hitSim.markedTargets()).toEqual([{ partId: bull.id, kind: 'bullseye', n: 0, done: false }]);
+    hitSim.play();
+    await runUntilNotRunning(hitSim);
+    expect(hitSim.metrics().hits).toBe(1);
+    expect(hitSim.markedTargets()[0]!.done).toBe(true);
+    hitSim.destroy();
+  });
+
+  it('in a tower, a piece with another marked piece on it wears its marker on itself, not over the top', async () => {
+    const cp = newCatapult();
+    const parts: PlacedPart[] = [cp, ...[0.5, 1.5, 2.5].map((y) => ({ id: id(), kind: 'block' as const, x: 20, y, props: { size: '1x1', material: 'wood' } }))];
+    const sim = await createCatapultSim(parts, makeLevel(parts, 1, [{ metric: 'knockedDown', op: '>=', value: 3, label: '' }]), () => 0);
+    const marks = parts.slice(1).map((p) => label(sim, `mark-${p.id}`)!);
+    // Numbered 1..3 (bottom first, same x), the bottom two on their own block, the top one above it.
+    expect(marks.map((m) => m.text)).toEqual(['1', '2', '3']);
+    expect(marks[0]!.p.y).toBeCloseTo(0.5, 0);
+    expect(marks[1]!.p.y).toBeCloseTo(1.5, 0);
+    expect(marks[2]!.p.y).toBeGreaterThan(3 + MARKER_GAP - MARKER_BOB - 0.05);
     sim.destroy();
   });
 });

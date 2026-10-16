@@ -1,4 +1,4 @@
-// Fuzz Fling: "Bruno's carnival stall." The child tunes a catapult (power, angle, fuzz, arm),
+// Fuzz Fling: "Bruno's carnival stall." The child tunes a catapult (bands, angle, fuzz, arm length),
 // taps FIRE, and flings fuzzes at cans, block towers and a bullseye. Units are meters, y up,
 // ground top at y = 0, world 30 x 19.125 m (15 m until 2026-10-07: the taller world is all sky,
 // see build.ts WORLD_H), walls at x 0 and 30. See core/types.ts for the frozen
@@ -43,8 +43,27 @@
 // level (after Smash it) needs a light fuzz, and the Donut level was re-laid for the faster Donut.
 // The other levels kept their layouts and, where a heavy fuzz now falls short, re-picked a
 // solution with more power (each level's comment gives the counts before and after).
+//
+// Bands and arm length (2026-10-16, Jon: "rubber bands unlimited like rover wheels ... 45 bands
+// launches into space and fails"; "arm length fully customizable"): the Power row is a band count
+// now ('bands', 1..60; Low/Medium/High/Max were 1/2/3/4 bands) and the Arm row a length ('armLen',
+// 1.5..4 m; Short/Long were 2/3 m), so every level's tunings below moved over with identical numbers
+// (Low -> '1' ... Max -> '4', Short -> '2', Long -> '3'). The old 15.75 m/s cap is gone (only the
+// light Flower and Donut ever hit it) and a shot over SPACE_SPEED flies into space (`failHints.space`).
+// Every level was re-swept over bands 1..16, every angle and fuzz the level allows and arm lengths
+// 1.5..4 m (a scratch sweep, not in the repo). More bands is never a shortcut: past 3-4 bands most
+// shots overshoot (the world is 30 m wide) and the pass rate falls with every band; the levels whose
+// bands are locked (Over the wall, Heavy or light, Long arm, Smash it, Long shot) cannot reach space.
+// Changed: Long arm's bullseye moved to (29, 3) so every arm from 2.75 m up hits it (at (28.5, 4) the
+// 3.5 m arm flew over it while 3 and 4 m hit); Long shot locks the arm at 2 m (a 3.5-4 m arm let the
+// Fur reach the can, skipping the light-fuzz lesson). Smash it's Flower now skims over the crate
+// instead of bouncing off it (its first hint changed to match). Fling it now teaches "not too many": 2 bands is
+// the only count that knocks the can down (1 drops short, 3 and up fly over the shelf).
 import { defaultProps } from './catalog';
 import type { CatapultLevel, PlacedPart } from './types';
+
+/** Bruno's line after a space shot (catalog.ts SPACE_SPEED), on every level. */
+export const SPACE_HINT = "Too many bands! The fuzz flew into space. Let's take some off.";
 
 
 /** A locked, position-locked block (the stack levels 11-14 are built from these). */
@@ -57,7 +76,7 @@ function crateBlock(id: number, x: number, y: number, size = '1x1'): PlacedPart 
   return stackBlock(id, x, y, size, 'crate');
 }
 
-/** The weight level (Heavy or light): catapult at x 5 locked at High / 45, a wood 1x2 block where the
+/** The weight level (Heavy or light): catapult at x 5 locked at 3 bands / 45, a wood 1x2 block where the
  * Metal comes down and a can on a shelf where only the Flower reaches, with the given fuzz loaded. */
 function weightParts(fuzz: string): PlacedPart[] {
   return [
@@ -66,10 +85,10 @@ function weightParts(fuzz: string): PlacedPart[] {
       kind: 'catapult',
       x: 5,
       y: 0,
-      props: { ...defaultProps('catapult'), power: 'High', angle: '45', fuzz },
+      props: { ...defaultProps('catapult'), bands: '3', angle: '45', fuzz },
       locked: true,
       lockPosition: true,
-      lockedProps: ['power', 'angle'],
+      lockedProps: ['bands', 'angle'],
     },
     { id: 2, kind: 'block', x: 14.5, y: 1, props: { ...defaultProps('block'), size: '1x2', material: 'wood' }, locked: true, lockPosition: true },
     { id: 3, kind: 'shelf', x: 27, y: 2, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
@@ -77,13 +96,13 @@ function weightParts(fuzz: string): PlacedPart[] {
   ];
 }
 
-/** Where the Smash it level's tall crate stands: in the path of the locked Max / 15 shot, where every
+/** Where the Smash it level's tall crate stands: in the path of the locked 4-band / 15 shot (was Max), where every
  * fuzz reaches it (the Flower only bumps it; the Fur, Helmet and Metal smash it anywhere from 21 to
  * 24 m). */
 const SMASH_CRATE_X = 22.5;
 
-/** The Long shot level: catapult at x 5, power locked at Medium, a can on a crate on a low shelf
- * 13.5 m out, with the given props over the defaults. */
+/** The Long shot level: catapult at x 5, bands locked at 2 and the arm at 2 m, a can on a crate on a
+ * low shelf 13.5 m out, with the given props over the defaults. */
 function longShotParts(props: Record<string, string>): PlacedPart[] {
   return [
     {
@@ -91,10 +110,10 @@ function longShotParts(props: Record<string, string>): PlacedPart[] {
       kind: 'catapult',
       x: 5,
       y: 0,
-      props: { ...defaultProps('catapult'), power: 'Medium', ...props },
+      props: { ...defaultProps('catapult'), bands: '2', armLen: '2', ...props },
       locked: true,
       lockPosition: true,
-      lockedProps: ['power'],
+      lockedProps: ['bands', 'armLen'],
     },
     { id: 2, kind: 'shelf', x: 18.5, y: 1, props: { ...defaultProps('shelf'), length: '2' }, locked: true, lockPosition: true },
     crateBlock(3, 18.5, 1.6),
@@ -120,7 +139,7 @@ function stackCatapult(props: Record<string, string>): PlacedPart {
 
 /** Every stack level starts on the same soft toss (Low, 45 degrees, the heavy Metal) that never
  * reaches (the Flower did until the energy rule; now it flies 8 m at Low). */
-const STACK_PRESET = { power: 'Low', angle: '45', fuzz: 'Metal' };
+const STACK_PRESET = { bands: '1', angle: '45', fuzz: 'Metal' };
 
 const LINE_COLOR = 0xffc629;
 
@@ -168,16 +187,18 @@ function dominoesStack(): PlacedPart[] {
 }
 
 export const LEVELS: CatapultLevel[] = [
-  // 1. power ---------------------------------------------------------------------------------
-  // Angle locked 45. At x = 5.5 (inside C1's measured 5.0-6.5 passing range), Low barely clears
-  // the base and Medium lands square on the can. The angle lever is hidden (not yet introduced),
-  // so the hints no longer mention it as a visible control.
+  // 1. power (rubber bands) -------------------------------------------------------------------
+  // Angle locked 45. At x = 5.5 (inside C1's measured 5.0-6.5 passing range), 1 band (was Low)
+  // barely clears the base and 2 (was Medium) lands square on the can. Since bands are unlimited
+  // (2026-10-16) 3 and up fly over the shelf (swept 1..16): exactly 2 bands pass, a "just enough"
+  // lesson. The angle lever is hidden (not yet introduced), so the hints never mention it. The level
+  // id stays 'power' (saved progress and the coach key on it); it introduces the 'bands' row.
   {
     id: 'power',
-    introduces: ['power'],
+    introduces: ['bands'],
     title: 'Fling it',
     bruno:
-      "Let's knock that can down. How much power will it take?",
+      "Let's knock that can down. How many rubber bands will it take?",
     goals: [{ metric: 'knockedDown', op: '>=', value: 1, label: 'Can knocked down' }],
     palette: [],
     shots: 3,
@@ -187,7 +208,7 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 5.5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Low', angle: '45' },
+        props: { ...defaultProps('catapult'), bands: '1', angle: '45' },
         locked: true,
         lockPosition: true,
         lockedProps: ['angle'],
@@ -212,18 +233,18 @@ export const LEVELS: CatapultLevel[] = [
       },
     ],
     hints: [
-      'Low power barely leaves the ground. What could reach that shelf?',
-      'Tap the catapult, then check the rubber bands. Power is yours to tune.',
-      "Try Medium power, then tap FIRE.",
+      'One band barely gets the fuzz off the ground. What could reach that shelf?',
+      'Tap the catapult, then check the rubber bands. Too few falls short, too many flies over.',
+      'Try 2 rubber bands, then tap FIRE.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! The can is still standing up there. Try turning up the power.' },
+    failHints: { outOfShots: 'Out of fuzzes! The can is still standing up there. Try a different number of bands.', space: SPACE_HINT },
     solution: [
       {
         id: 1,
         kind: 'catapult',
         x: 5.5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Medium', angle: '45' },
+        props: { ...defaultProps('catapult'), bands: '2', angle: '45' },
         locked: true,
         lockPosition: true,
         lockedProps: ['angle'],
@@ -250,7 +271,7 @@ export const LEVELS: CatapultLevel[] = [
   },
 
   // 2. angle ---------------------------------------------------------------------------------
-  // Power is locked High. At x = 5.25 (inside C1's measured 4.75-6.25 passing range) the preset
+  // The bands are locked at 3 (was High). At x = 5.25 (inside C1's measured 4.75-6.25 passing range) the preset
   // 30 degrees still clips the wall; 60 degrees clears it by a wide margin and comes down right
   // on the can. This is the level that unlocks the angle lever, so the hint now names it directly.
   {
@@ -267,10 +288,10 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 5.25,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'High', angle: '30' },
+        props: { ...defaultProps('catapult'), bands: '3', angle: '30' },
         locked: true,
         lockPosition: true,
-        lockedProps: ['power'],
+        lockedProps: ['bands'],
       },
       {
         id: 2,
@@ -302,20 +323,20 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       'That flat, low arc just smacks straight into the wall.',
-      'Power is locked at High. What else can we change? Try the lever knob.',
+      'The bands are locked at 3. What else can we change? Try the lever knob.',
       'Set the angle to 60. That loops the fuzz well over the wall and back down onto the can.',
     ],
-    failHints: { outOfShots: "Out of fuzzes. Good tests! Let's try a steeper angle." },
+    failHints: { outOfShots: "Out of fuzzes. Good tests! Let's try a steeper angle.", space: SPACE_HINT },
     solution: [
       {
         id: 1,
         kind: 'catapult',
         x: 5.25,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'High', angle: '60' },
+        props: { ...defaultProps('catapult'), bands: '3', angle: '60' },
         locked: true,
         lockPosition: true,
-        lockedProps: ['power'],
+        lockedProps: ['bands'],
       },
       {
         id: 2,
@@ -373,21 +394,24 @@ export const LEVELS: CatapultLevel[] = [
       'Same bands, different fuzz. A light fuzz flies farther, a heavy one hits harder.',
       "Pick Metal for the block, then the light Flower for the can. Let's try both.",
     ],
-    failHints: { outOfShots: "Out of fuzzes. Heavy for the near block, light for the far can. Let's try again." },
+    failHints: { outOfShots: "Out of fuzzes. Heavy for the near block, light for the far can. Let's try again.", space: SPACE_HINT },
     solution: weightParts('Metal'),
     // Shot 1 keeps the solution's Metal (the block), shot 2 switches to the Flower (the can).
     solutionShots: [{ fuzz: 'Metal' }, { fuzz: 'Flower' }],
   },
 
-  // 4. arm -------------------------------------------------------------------------------------
-  // Power/angle locked Max/45. At x = 5.5 (inside C1's measured 4.5-6.5 passing range) the Short
-  // arm's arc lands well short of the bullseye; the Long arm reaches it right through the middle.
-  // This is the level that unlocks the arm chip. Since the energy rule (2026-10-15) the fuzz is
-  // locked too (the Fur, the default): the light Flower on the Short arm reaches the bullseye at
-  // Max / 45, which would skip the arm lesson right after the weight level taught "light flies far".
+  // 4. arm (arm length) --------------------------------------------------------------------------
+  // Bands/angle locked 4/45 (was Max/45). At x = 5.5 the 2 m arm's arc (the old Short) lands well
+  // short of the bullseye; a longer arm reaches it. This is the level that unlocks the arm length
+  // ('armLen', 2026-10-16: 1.5..4 m, was Short/Long). Since the energy rule (2026-10-15) the fuzz is
+  // locked too (the Fur, the default): the light Flower on the 2 m arm reaches the bullseye at 4 / 45,
+  // which would skip the arm lesson right after the weight level taught "light flies far". The
+  // bullseye moved from (28.5, 4) to (29, 3) on 2026-10-16: every length from 2.75 m up hits it
+  // (the longest by dropping off the right-hand wall through it), 2.5 m and shorter fall short; at
+  // (28.5, 4) the 3.5 m arm flew over it while 3 and 4 m hit, which reads as a broken rule.
   {
     id: 'arm',
-    introduces: ['arm'],
+    introduces: ['armLen'],
     title: 'Long arm',
     bruno: "That target is far away. What could help us reach it?",
     goals: [{ metric: 'hits', op: '>=', value: 1, label: 'Bullseye hit' }],
@@ -399,43 +423,43 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 5.5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Max', angle: '45', arm: 'Short' },
+        props: { ...defaultProps('catapult'), bands: '4', angle: '45', armLen: '2' },
         locked: true,
         lockPosition: true,
-        lockedProps: ['power', 'angle', 'fuzz'],
+        lockedProps: ['bands', 'angle', 'fuzz'],
       },
       {
         id: 2,
         kind: 'bullseye',
-        x: 28.5,
-        y: 4,
+        x: 29,
+        y: 3,
         props: { ...defaultProps('bullseye') },
         locked: true,
         lockPosition: true,
       },
     ],
     hints: [
-      "Even at max power, this short arm just does not have the reach.",
-      'Power, angle and fuzz are locked. Tap the catapult and look at the Arm.',
-      'Switch the arm to Long. The extra length and speed get the fuzz all the way out to the bullseye.',
+      'Even with four bands, this short arm just does not have the reach.',
+      'Bands, angle and fuzz are locked. Tap the catapult and look at the arm length.',
+      'Make the arm 3 m long. The extra length and speed get the fuzz all the way out to the bullseye.',
     ],
-    failHints: { outOfShots: "Out of fuzzes. That arm can't reach. Let's try a longer one." },
+    failHints: { outOfShots: "Out of fuzzes. That arm can't reach. Let's try a longer one.", space: SPACE_HINT },
     solution: [
       {
         id: 1,
         kind: 'catapult',
         x: 5.5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Max', angle: '45', arm: 'Long' },
+        props: { ...defaultProps('catapult'), bands: '4', angle: '45', armLen: '3' },
         locked: true,
         lockPosition: true,
-        lockedProps: ['power', 'angle', 'fuzz'],
+        lockedProps: ['bands', 'angle', 'fuzz'],
       },
       {
         id: 2,
         kind: 'bullseye',
-        x: 28.5,
-        y: 4,
+        x: 29,
+        y: 3,
         props: { ...defaultProps('bullseye') },
         locked: true,
         lockPosition: true,
@@ -480,16 +504,16 @@ export const LEVELS: CatapultLevel[] = [
     hints: [
       'The Donut splits into three at the top of the arc. Each little donut flies a little differently.',
       'The low one falls short and the high one flies long. Split it just before the cans.',
-      'Try High power at 45 degrees. The three little donuts spread out right across the shelves.',
+      'Try 3 rubber bands at 45 degrees. The three little donuts spread out right across the shelves.',
     ],
-    failHints: { outOfShots: 'Not enough cans down! Change the power and angle so the Donut splits right before the shelves.' },
+    failHints: { outOfShots: 'Not enough cans down! Change the bands and angle so the Donut splits right before the shelves.', space: SPACE_HINT },
     solution: [
       {
         id: 1,
         kind: 'catapult',
         x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), fuzz: 'Donut', power: 'High', angle: '45' },
+        props: { ...defaultProps('catapult'), fuzz: 'Donut', bands: '3', angle: '45' },
         locked: true,
         lockPosition: true,
         lockedProps: ['fuzz'],
@@ -504,11 +528,13 @@ export const LEVELS: CatapultLevel[] = [
   // The crates' own first level, gentle (course rule: one new thing at a time): one tall wooden
   // crate (1x2) on the ground. Since the energy rule each fuzz flies its own arc, so the shot is
   // locked fast and flat (Max / 15): every fuzz comes in low and reaches the crate (a lob would
-  // carry the light ones over it and drop the heavy ones short). The preset's Flower hits it and
-  // bounces off (a light fuzz never passes the crate's break impulse, catalog.ts CRATE_BREAK); the
-  // Fur, Helmet and Metal all smash it (anywhere from 21 to 24 m; Medium / 45 on a 1x1 crate, the
-  // first version, now sails the Flower over it). The goal counts smashed crates, so shoving the
-  // crate over does not count. No `introduces`: crates are a target, not a drawer row.
+  // carry the light ones over it and drop the heavy ones short). The preset's Flower never breaks it:
+  // until 2026-10-16 it hit it and bounced off (a light fuzz never passes the crate's break impulse,
+  // catalog.ts CRATE_BREAK); without the old speed cap it now leaves faster and skims just over the
+  // crate (it bumps it on the 1.5 m arm). The Fur, Helmet, Metal and Donut all smash it (anywhere
+  // from 21 to 24 m, on the 2 m and 3 m arms; Medium / 45 on a 1x1 crate, the first version, sails
+  // the Flower over it). The goal counts smashed crates, so shoving the crate over does not count. No
+  // `introduces`: crates are a target, not a drawer row. Bands locked at 4 (was Max).
   {
     id: 'smash',
     title: 'Smash it',
@@ -522,29 +548,29 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Max', angle: '15', fuzz: 'Flower' },
+        props: { ...defaultProps('catapult'), bands: '4', angle: '15', fuzz: 'Flower' },
         locked: true,
         lockPosition: true,
-        lockedProps: ['power', 'angle'],
+        lockedProps: ['bands', 'angle'],
       },
       crateBlock(2, SMASH_CRATE_X, 1, '1x2'),
     ],
     hints: [
-      'A good hit, but the little Flower just bounced off the crate.',
-      'Power and angle are locked. Tap the catapult. Which fuzz hits harder?',
+      'The little Flower is too light. It will never break that crate.',
+      'The bands and angle are locked. Tap the catapult. Which fuzz hits harder?',
       'Pick a heavier fuzz, like Fur or Metal. Same shot, much harder hit.',
     ],
-    failHints: { outOfShots: "Out of fuzzes. That crate needs a harder hit. Let's try a heavier fuzz." },
+    failHints: { outOfShots: "Out of fuzzes. That crate needs a harder hit. Let's try a heavier fuzz.", space: SPACE_HINT },
     solution: [
       {
         id: 1,
         kind: 'catapult',
         x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Max', angle: '15', fuzz: 'Fur' },
+        props: { ...defaultProps('catapult'), bands: '4', angle: '15', fuzz: 'Fur' },
         locked: true,
         lockPosition: true,
-        lockedProps: ['power', 'angle'],
+        lockedProps: ['bands', 'angle'],
       },
       crateBlock(2, SMASH_CRATE_X, 1, '1x2'),
     ],
@@ -558,26 +584,27 @@ export const LEVELS: CatapultLevel[] = [
   // Short, 60 Long) or a Donut (15 Long, 30 Short and Long, 45 Long); the Fur, Helmet and Metal
   // never reach at any angle or arm (levels.test.ts proves it). The shelf keeps a heavy fuzz from
   // rolling in along the ground (with the crate on the ground the Fur and Helmet did, at 15
-  // degrees). The preset's Metal lands about 7 m out.
+  // degrees). The preset's Metal lands about 7 m out. 2026-10-16: the arm is locked at 2 m too (with
+  // arms up to 4 m the Fur reached the can from 3.25 m up); with it locked 3 of 25 tunings pass, all
+  // light: the Flower at 30 and 45, the Donut at 30.
   {
     id: 'longshot',
     title: 'Long shot',
-    bruno: "That can is way out there, and power is stuck at Medium. How can we reach it?",
+    bruno: "That can is way out there, and the bands and arm are locked. How can we reach it?",
     goals: [{ metric: 'knockedDown', op: '>=', value: 1, label: 'Can knocked down' }],
     palette: [],
     shots: 3,
     parts: longShotParts({ angle: '45', fuzz: 'Metal' }),
     hints: [
-      'The heavy Metal fuzz drops way short. Power is locked, so what else can change?',
+      'The heavy Metal fuzz drops way short. The bands are locked, so what else can change?',
       'The bands push every fuzz the same. A lighter fuzz leaves faster and flies farther.',
       'Try the light Flower at 45 degrees. It sails all the way to the can.',
     ],
-    failHints: { outOfShots: "Out of fuzzes. A heavy fuzz can't get that far. Let's try a lighter one." },
+    failHints: { outOfShots: "Out of fuzzes. A heavy fuzz can't get that far. Let's try a lighter one.", space: SPACE_HINT },
     solution: longShotParts({ angle: '45', fuzz: 'Flower' }),
     altSolutions: [
-      { angle: '30', fuzz: 'Flower', arm: 'Short' },
-      { angle: '60', fuzz: 'Flower', arm: 'Long' },
-      { angle: '30', fuzz: 'Donut', arm: 'Long' },
+      { angle: '30', fuzz: 'Flower' },
+      { angle: '30', fuzz: 'Donut' },
     ],
   },
 
@@ -603,7 +630,7 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 4.5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Low', angle: '45', fuzz: 'Flower' },
+        props: { ...defaultProps('catapult'), bands: '1', angle: '45', fuzz: 'Flower' },
         locked: true,
         lockPosition: true,
       },
@@ -615,17 +642,17 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       "That soft, low toss does not even reach the tower.",
-      'Smash the crate at the bottom and the whole tower drops. A heavy fuzz needs lots of power.',
-      'Try Max power, angle 45 and the Metal fuzz. That sends the whole tower tumbling.',
+      'Smash the crate at the bottom and the whole tower drops. A heavy fuzz needs lots of bands.',
+      'Try 4 rubber bands, angle 45 and the Metal fuzz. That sends the whole tower tumbling.',
     ],
-    failHints: { outOfShots: "Out of fuzzes. Let's hit the tower harder this time." },
+    failHints: { outOfShots: "Out of fuzzes. Let's hit the tower harder this time.", space: SPACE_HINT },
     solution: [
       {
         id: 1,
         kind: 'catapult',
         x: 4.5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Max', angle: '45', fuzz: 'Metal' },
+        props: { ...defaultProps('catapult'), bands: '4', angle: '45', fuzz: 'Metal' },
         locked: true,
         lockPosition: true,
       },
@@ -663,7 +690,7 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Low', angle: '45', fuzz: 'Flower' },
+        props: { ...defaultProps('catapult'), bands: '1', angle: '45', fuzz: 'Flower' },
         locked: true,
         lockPosition: true,
       },
@@ -674,10 +701,10 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       'A soft toss with a light fuzz does not even reach the tower.',
-      'Pick a heavy fuzz with lots of power, then aim a fast, flat shot low. That crate can break.',
-      'Try Max power, 30 degrees and the Metal fuzz. The whole stack comes crashing down.',
+      'Pick a heavy fuzz with lots of bands, then aim a fast, flat shot low. That crate can break.',
+      'Try 4 rubber bands, 30 degrees and the Metal fuzz. The whole stack comes crashing down.',
     ],
-    failHints: { outOfShots: "Out of fuzzes! Some of the tower is still above the line. Let's hit it harder." },
+    failHints: { outOfShots: "Out of fuzzes! Some of the tower is still above the line. Let's hit it harder.", space: SPACE_HINT },
     markers: [{ kind: 'hline', y: 1.5, color: 0xffc629, label: 'Nothing above this line!' }],
     solution: [
       {
@@ -685,7 +712,7 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Max', angle: '30', fuzz: 'Metal' },
+        props: { ...defaultProps('catapult'), bands: '4', angle: '30', fuzz: 'Metal' },
         locked: true,
         lockPosition: true,
       },
@@ -721,7 +748,7 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Low', angle: '45' },
+        props: { ...defaultProps('catapult'), bands: '1', angle: '45' },
         locked: true,
         lockPosition: true,
       },
@@ -734,9 +761,9 @@ export const LEVELS: CatapultLevel[] = [
     hints: [
       'That toss lands short. The fuzz has to reach the very first domino.',
       'Hit the first domino. If you hit one in the middle, the ones behind it stay standing.',
-      'Try Medium power at 30 degrees. That tips the first domino and the rest follow.',
+      'Try 2 rubber bands at 30 degrees. That tips the first domino and the rest follow.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! Some dominoes are still standing. Aim for the first one in the row.' },
+    failHints: { outOfShots: 'Out of fuzzes! Some dominoes are still standing. Aim for the first one in the row.', space: SPACE_HINT },
     markers: [{ kind: 'hline', y: 1.2, color: 0xffc629, label: 'Nothing above this line!' }],
     solution: [
       {
@@ -744,7 +771,7 @@ export const LEVELS: CatapultLevel[] = [
         kind: 'catapult',
         x: 5,
         y: 0,
-        props: { ...defaultProps('catapult'), power: 'Medium', angle: '30' },
+        props: { ...defaultProps('catapult'), bands: '2', angle: '30' },
         locked: true,
         lockPosition: true,
       },
@@ -790,19 +817,19 @@ export const LEVELS: CatapultLevel[] = [
     line: 3.5,
     parts: [stackCatapult(STACK_PRESET), ...pyramidStack()],
     hints: [
-      'That heavy fuzz on Low power drops way short of the pyramid.',
+      'That heavy fuzz on one band drops way short of the pyramid.',
       'Those two top crates are wobbly. Any good bump to the pyramid can shake them off.',
-      'Lots of settings work here. A heavy fuzz needs more power, a light one flies far. Try a few!',
+      'Lots of settings work here. A heavy fuzz needs more bands, a light one flies far. Try a few!',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! The hat is still on. Try more power, or a lighter fuzz to reach farther.' },
+    failHints: { outOfShots: 'Out of fuzzes! The hat is still on. Try more bands, or a lighter fuzz to reach farther.', space: SPACE_HINT },
     markers: [{ kind: 'hline', y: 3.5, color: LINE_COLOR, label: 'Nothing above this line!' }],
-    solution: [stackCatapult({ power: 'Medium', angle: '45', fuzz: 'Fur' }), ...pyramidStack()],
+    solution: [stackCatapult({ bands: '2', angle: '45', fuzz: 'Fur' }), ...pyramidStack()],
     altSolutions: [
-      { power: 'Low', angle: '30', fuzz: 'Flower', arm: 'Long' },
-      { power: 'Medium', angle: '15', fuzz: 'Metal', arm: 'Short' },
-      { power: 'High', angle: '30', fuzz: 'Metal', arm: 'Short' },
-      { power: 'High', angle: '75', fuzz: 'Flower', arm: 'Short' },
-      { power: 'Max', angle: '15', fuzz: 'Metal', arm: 'Short' },
+      { bands: '1', angle: '30', fuzz: 'Flower', armLen: '3' },
+      { bands: '2', angle: '15', fuzz: 'Metal', armLen: '2' },
+      { bands: '3', angle: '30', fuzz: 'Metal', armLen: '2' },
+      { bands: '3', angle: '75', fuzz: 'Flower', armLen: '2' },
+      { bands: '4', angle: '15', fuzz: 'Metal', armLen: '2' },
     ],
   },
 
@@ -822,19 +849,19 @@ export const LEVELS: CatapultLevel[] = [
     line: 4.5,
     parts: [stackCatapult(STACK_PRESET), ...towersStack()],
     hints: [
-      'That heavy fuzz on Low power lands way short of the towers.',
+      'That heavy fuzz on one band lands way short of the towers.',
       'Shake the towers and the end blocks slide off. Or smash a crate and the plank drops.',
-      'Try more power, or a lighter fuzz to fly farther, then a flatter or higher angle. Plenty work!',
+      'Try more bands, or a lighter fuzz to fly farther, then a flatter or higher angle. Plenty work!',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! A block is still up there. Try more power, or a heavier fuzz with it.' },
+    failHints: { outOfShots: 'Out of fuzzes! A block is still up there. Try more bands, or a heavier fuzz with it.', space: SPACE_HINT },
     markers: [{ kind: 'hline', y: 4.5, color: LINE_COLOR, label: 'Nothing above this line!' }],
-    solution: [stackCatapult({ power: 'High', angle: '45', fuzz: 'Metal' }), ...towersStack()],
+    solution: [stackCatapult({ bands: '3', angle: '45', fuzz: 'Metal' }), ...towersStack()],
     altSolutions: [
-      { power: 'Medium', angle: '15', fuzz: 'Fur', arm: 'Short' },
-      { power: 'Medium', angle: '30', fuzz: 'Flower', arm: 'Short' },
-      { power: 'High', angle: '60', fuzz: 'Fur', arm: 'Short' },
-      { power: 'Max', angle: '15', fuzz: 'Metal', arm: 'Short' },
-      { power: 'Low', angle: '30', fuzz: 'Fur', arm: 'Long' },
+      { bands: '2', angle: '15', fuzz: 'Fur', armLen: '2' },
+      { bands: '2', angle: '30', fuzz: 'Flower', armLen: '2' },
+      { bands: '3', angle: '60', fuzz: 'Fur', armLen: '2' },
+      { bands: '4', angle: '15', fuzz: 'Metal', armLen: '2' },
+      { bands: '1', angle: '30', fuzz: 'Fur', armLen: '3' },
     ],
   },
 
@@ -855,19 +882,19 @@ export const LEVELS: CatapultLevel[] = [
     line: 2.5,
     parts: [stackCatapult(STACK_PRESET), ...wallStack()],
     hints: [
-      'That heavy fuzz on Low power does not reach the wall yet.',
+      'That heavy fuzz on one band does not reach the wall yet.',
       'The bricks are heavy, but the top crates are only half on. Rattle the wall and they tip.',
-      'Experiment! Try more power or a lighter fuzz, and try a few different angles.',
+      'Experiment! Try more bands or a lighter fuzz, and try a few different angles.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! A crate is still above the line. Try a new angle or more power.' },
+    failHints: { outOfShots: 'Out of fuzzes! A crate is still above the line. Try a new angle or more bands.', space: SPACE_HINT },
     markers: [{ kind: 'hline', y: 2.5, color: LINE_COLOR, label: 'Nothing above this line!' }],
-    solution: [stackCatapult({ power: 'Medium', angle: '45', fuzz: 'Fur' }), ...wallStack()],
+    solution: [stackCatapult({ bands: '2', angle: '45', fuzz: 'Fur' }), ...wallStack()],
     altSolutions: [
-      { power: 'Low', angle: '30', fuzz: 'Flower', arm: 'Short' },
-      { power: 'Medium', angle: '60', fuzz: 'Fur', arm: 'Short' },
-      { power: 'High', angle: '15', fuzz: 'Metal', arm: 'Short' },
-      { power: 'Max', angle: '15', fuzz: 'Metal', arm: 'Short' },
-      { power: 'Low', angle: '15', fuzz: 'Fur', arm: 'Long' },
+      { bands: '1', angle: '30', fuzz: 'Flower', armLen: '2' },
+      { bands: '2', angle: '60', fuzz: 'Fur', armLen: '2' },
+      { bands: '3', angle: '15', fuzz: 'Metal', armLen: '2' },
+      { bands: '4', angle: '15', fuzz: 'Metal', armLen: '2' },
+      { bands: '1', angle: '15', fuzz: 'Fur', armLen: '3' },
     ],
   },
 
@@ -889,19 +916,19 @@ export const LEVELS: CatapultLevel[] = [
     line: 3.5,
     parts: [stackCatapult(STACK_PRESET), ...dominoesStack()],
     hints: [
-      'That heavy fuzz drops short on Low power. What would reach?',
+      'That heavy fuzz drops short on one band. What would reach?',
       'Knock any domino and it pushes the rest into the tower. Or smash the crate on top!',
-      'Try more power with that heavy fuzz, or a lighter fuzz. Lots of settings bring it down.',
+      'Try more bands with that heavy fuzz, or a lighter fuzz. Lots of settings bring it down.',
     ],
-    failHints: { outOfShots: 'Out of fuzzes! Something is still above the line. Try more power.' },
+    failHints: { outOfShots: 'Out of fuzzes! Something is still above the line. Try more bands.', space: SPACE_HINT },
     markers: [{ kind: 'hline', y: 3.5, color: LINE_COLOR, label: 'Nothing above this line!' }],
-    solution: [stackCatapult({ power: 'Medium', angle: '30', fuzz: 'Metal' }), ...dominoesStack()],
+    solution: [stackCatapult({ bands: '2', angle: '30', fuzz: 'Metal' }), ...dominoesStack()],
     altSolutions: [
-      { power: 'Low', angle: '15', fuzz: 'Fur', arm: 'Short' },
-      { power: 'Medium', angle: '15', fuzz: 'Fur', arm: 'Short' },
-      { power: 'High', angle: '30', fuzz: 'Metal', arm: 'Short' },
-      { power: 'High', angle: '60', fuzz: 'Fur', arm: 'Short' },
-      { power: 'Max', angle: '75', fuzz: 'Fur', arm: 'Short' },
+      { bands: '1', angle: '15', fuzz: 'Fur', armLen: '2' },
+      { bands: '2', angle: '15', fuzz: 'Fur', armLen: '2' },
+      { bands: '3', angle: '30', fuzz: 'Metal', armLen: '2' },
+      { bands: '3', angle: '60', fuzz: 'Fur', armLen: '2' },
+      { bands: '4', angle: '75', fuzz: 'Fur', armLen: '2' },
     ],
   },
 
@@ -933,7 +960,7 @@ export const LEVELS: CatapultLevel[] = [
       'Stack blocks into your own tower, or line up a shelf just where you want it.',
       "There's no wrong answer in free play, just have fun flinging fuzzes!",
     ],
-    failHints: { outOfShots: 'All out of fuzzes for now! Hit reset to fling some more.' },
+    failHints: { outOfShots: 'All out of fuzzes for now! Hit reset to fling some more.', space: SPACE_HINT },
   },
 ];
 

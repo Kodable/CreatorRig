@@ -549,3 +549,101 @@
   outline: none; box-shadow: 0 4px 0 rgba(11, 16, 48, 0.35);
 }
 #bottombar button:active { box-shadow: 0 2px 0 rgba(11, 16, 48, 0.35); transform: translateY(2px); }
+
+/* ======== 2026-10-16: the catapult rebuild's kit pieces (Jon: "a classroom supply bin / toolbox
+   you pull parts from instead of menu rows"; Gao: "use goal cards like the roller coaster"). Only
+   courses that opt in (`CourseSpec.bin`, `HudSpec.goalCards`) ever render this DOM. ======== */
+
+/* ---- Goal cards (`HudSpec.goalCards`): the coaster's `.goals-overlay.goal-cards` row and `.gcard`
+   cards live in src/style.css (global). The kit only adds the result card under the row in done
+   mode: on the bare sky it needs its own navy panel (the kit's `.goals-overlay .result-card` rule
+   above assumed the overlay's panel behind it). ---- */
+.goals-overlay.goal-cards { align-items: flex-start; }
+/* The cards keep to the left edge (style.css centres the list, which the coaster's row never
+   notices: there nothing wider sits under it). */
+.goals-overlay.goal-cards #goalList { justify-content: flex-start; }
+.goals-overlay.goal-cards .result-card {
+  align-self: flex-start; min-width: 220px; max-width: 360px; box-sizing: border-box;
+  margin-top: 12px; padding: 7px 12px 8px; border-top: 0; border-radius: 10px;
+  background: rgba(11, 16, 48, 0.62); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* ---- The SUPPLY BIN (`HudState.bin`, BuilderHud.syncBin): a blue classroom tub at the top of the
+   drawer body, in the palette of public/ui/bin/bin.svg (pure CSS, so it never waits on the art):
+   a light rim with a navy outline, the tub under it, a white label plate "Supply Bin", and the
+   tiles inside, grouped. Tiles are white cards (the pictures read on white), 92 px wide, three to a
+   row in the 340 px drawer. ---- */
+.supply-bin { position: relative; margin: 4px 2px 12px; }
+.supply-bin-rim {
+  position: relative; z-index: 1; height: 16px; margin: 0 -2px;
+  border: 3px solid #1a2142; border-radius: 9px; background: #52d0fb;
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.45);
+}
+.supply-bin-tub {
+  position: relative; margin: -5px 6px 0; padding: 12px 8px 10px;
+  border: 3px solid #1a2142; border-top: 0; border-radius: 0 0 16px 16px;
+  background: linear-gradient(#2ec0f5, #0592d0);
+  box-shadow: inset 10px 0 0 -7px rgba(10, 127, 186, 0.55), inset -10px 0 0 -7px rgba(10, 127, 186, 0.55);
+}
+.supply-bin-plate {
+  width: max-content; margin: 0 auto 8px; padding: 2px 14px 3px;
+  border: 2.5px solid #1a2142; border-radius: 6px; background: #fff; color: #1a2142;
+  font-family: "Kodable", "Nunito", "Arial Rounded MT Bold", ui-rounded, sans-serif;
+  font-size: 15px; font-weight: 900; letter-spacing: 0.02em; line-height: 1.2;
+  box-shadow: inset 0 -4px 0 #ffb40f;
+}
+.supply-bin-body { display: flex; flex-direction: column; gap: 8px; }
+.supply-bin-section { display: flex; flex-direction: column; gap: 4px; }
+.supply-bin-group {
+  font-family: "Kodable", "Nunito", "Arial Rounded MT Bold", ui-rounded, sans-serif;
+  font-size: 12px; font-weight: 800; color: #fff; text-shadow: 0 1px 0 rgba(10, 60, 100, 0.6); padding-left: 2px;
+}
+.supply-bin-grid { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+.bin-tile-wrap { position: relative; flex: 0 0 auto; width: 84px; height: 88px; }
+.bin-tile {
+  position: absolute; inset: 0; box-sizing: border-box; cursor: grab; user-select: none; -webkit-user-select: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 3px 5px;
+  border: 3px solid #1a2142; border-radius: 14px; background: #fff; color: #1a2142;
+  box-shadow: 0 3px 0 rgba(11, 16, 48, 0.35);
+  touch-action: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+.bin-tile img { width: 54px; height: 54px; object-fit: contain; pointer-events: none; }
+.bin-tile-label {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: "Kodable", "Nunito", "Arial Rounded MT Bold", ui-rounded, sans-serif;
+  font-size: 11px; font-weight: 800; line-height: 1.1;
+}
+.bin-tile.pressed { transform: scale(0.94); box-shadow: 0 1px 0 rgba(11, 16, 48, 0.35); }
+/* The tile whose picture is out in the world: a faint hole left behind. */
+.bin-tile.lifted { opacity: 0.45; transform: scale(0.94); }
+.bin-tile.pop { animation: option-pop 120ms ease; }
+/* What the machine has now (the fuzz in the cup): a green rim and an "In use" ribbon. */
+.bin-tile.active { border-color: #61bb46; box-shadow: 0 0 0 3px rgba(97, 187, 70, 0.45); cursor: default; }
+.bin-tile-inuse {
+  position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%);
+  padding: 1px 7px 2px; border-radius: 8px; background: #61bb46; color: #fff; white-space: nowrap;
+  font-size: 10px; font-weight: 900; line-height: 1.2;
+}
+.bin-tile.locked { opacity: 0.5; cursor: default; }
+.bin-tile-lock { position: absolute; right: 3px; bottom: 2px; font-size: 13px; line-height: 1; }
+/* The pile's size: '∞' (an endless pile, the rubber bands) or a count, over the top-right corner. */
+.bin-tile-badge {
+  position: absolute; top: -7px; right: -7px; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 5px;
+  display: flex; align-items: center; justify-content: center; pointer-events: none;
+  border: 2px solid #fff; border-radius: 12px; background: #1a2142; color: #fff;
+  font-size: 15px; font-weight: 900; line-height: 1; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+/* The picture following the finger out of the bin (`BIN_GHOST_PX`), over the panel and the drawer;
+   green-rimmed while it is over the drop zone. */
+.bin-ghost {
+  position: absolute; left: 0; top: 0; z-index: 55; object-fit: contain; pointer-events: none;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45)); transform-origin: 50% 50%;
+}
+.bin-ghost.hot { filter: drop-shadow(0 0 6px #61bb46) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45)); }
+/* The coach's 'drop' demonstration: a faint copy of the tile's picture under the glove. */
+.coach-drop-ghost {
+  position: absolute; left: 0; top: 0; width: 56px; height: 56px; z-index: 44; object-fit: contain;
+  pointer-events: none; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+}

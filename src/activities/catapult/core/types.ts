@@ -24,7 +24,9 @@ export type Material = 'wood' | 'brick' | 'steel' | 'crate';
 /** Rapier body roles. Ground/wall bodies belong to the world, not a placed part. */
 export type BodyRole = 'base' | 'wheel' | 'frame' | 'arm' | 'can' | 'block' | 'solid' | 'bullseye' | 'post' | 'fuzz' | 'ground' | 'wall';
 
-export type Outcome = 'running' | 'shot' | 'cleared' | 'outOfShots';
+/** 'space' (2026-10-16): the shot just fired was a space shot (catalog.ts SPACE_SPEED) - the fuzz
+ * left the world and hit nothing. The child may fire again while shots are left (`canReplay`). */
+export type Outcome = 'running' | 'shot' | 'cleared' | 'outOfShots' | 'space';
 
 export type Metrics = {
   /** Targets (can/block) latched as knocked down (dropped or tipped past the threshold). */

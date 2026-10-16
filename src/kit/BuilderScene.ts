@@ -25,16 +25,20 @@ import {
   hitWidget,
   layoutWidgets,
   leverPointToValue,
+  slidePointAt,
+  slidePointT,
+  slideTToValue,
   widgetAnchor,
   type CycleGeom,
   type DialGeom,
   type LeverGeom,
   type PullGeom,
   type RackGeom,
+  type SlideGeom,
   type TapGeom,
   type WidgetGeom,
 } from './widgetLayout';
-import { dialDragPose } from './coachGesture';
+import { dialDragPose, slideDragPose } from './coachGesture';
 import type {
   BackgroundLayer,
   Bounds,
@@ -71,10 +75,10 @@ interface WidgetTap {
   value?: string;
 }
 
-/** A dial, pull or lever widget grabbed on pointerdown; released on pointerup. */
+/** A dial, pull, lever or slide widget grabbed on pointerdown; released on pointerup. */
 interface WidgetDrag {
   id: string;
-  kind: 'dial' | 'pull' | 'lever';
+  kind: 'dial' | 'pull' | 'lever' | 'slide';
 }
 
 /** A tap widget's icon/texture flying from `from` to `to` after a live tap with `hopTo` set. */
@@ -478,6 +482,14 @@ export class BuilderScene extends Phaser.Scene {
   private widgetDragAngle = 0;
   private widgetDragValue: string | undefined;
   private widgetDragT = 0;
+  /** A slide drag: where along the track (0..1) the finger grabbed, minus the knob's own place, so
+   * the knob does not jump to the finger when it is grabbed off-centre. */
+  private slideGrabDT = 0;
+  /** 2026-10-16, the SUPPLY BIN: the dragged tile's drop zone (world meters), ringed while a tile
+   * is dragged out of the drawer (`setDropZone`); `dropHot` = the finger is inside it. */
+  private dropZone: { at: Vec2; r: number } | null = null;
+  private dropHot = false;
+  private dropGfx?: Phaser.GameObjects.Graphics;
   /** id -> {from, start}: a released pull under threshold springs its handle back to 0. */
   private readonly widgetSpring = new Map<string, { from: number; start: number }>();
   private widgetHops: WidgetHop[] = [];
@@ -1339,7 +1351,45 @@ export class BuilderScene extends Phaser.Scene {
       for (const ns of this.widgetNineSliceCache.values()) ns.setVisible(false);
     }
 
+    this.drawDropZone();
     this.drawCoachHand();
+  }
+
+  /** 2026-10-16, the SUPPLY BIN: rings the drop zone of the tile being dragged out of the drawer
+   * (`setDropZone`): a soft disc and a pulsing white ring, green and thicker while the finger is
+   * inside. Screen-constant line widths; never smaller than 36 px across the radius. */
+  private drawDropZone(): void {
+    const z = this.dropZone;
+    if (!z || !this.editable) {
+      this.dropGfx?.setVisible(false);
+      return;
+    }
+    let g = this.dropGfx;
+    if (!g) {
+      g = this.onWorld(this.add.graphics());
+      g.setDepth(DEPTH_WIDGETS + 0.15);
+      this.dropGfx = g;
+    }
+    const s = this.pxScale;
+    const c = this.view.toPx(z.at);
+    const r = Math.max(z.r * this.world.ppm, 36 * s);
+    const pulse = 0.5 + 0.5 * Math.sin((this.nowMs / 1000) * Math.PI * 2 * 1.4);
+    const hot = this.dropHot;
+    g.clear();
+    g.fillStyle(hot ? GO : COLORS.white, hot ? 0.22 : 0.1 + 0.06 * pulse);
+    g.fillCircle(c.x, c.y, r);
+    g.lineStyle((hot ? 6 : 4) * s, hot ? GO : COLORS.white, 0.65 + 0.35 * pulse);
+    g.strokeCircle(c.x, c.y, r * (1 + 0.05 * pulse));
+    g.lineStyle(2 * s, hot ? GO : COLORS.white, 0.3 * (1 - pulse));
+    g.strokeCircle(c.x, c.y, r * (1.1 + 0.08 * pulse));
+    g.setVisible(true);
+  }
+
+  /** The SUPPLY BIN's drop zone ring (world meters; null hides it), from the controller while a
+   * bin tile is dragged (`HudCallbacks.binDrag`). `hot` = the finger is inside the zone. */
+  setDropZone(zone: { at: Vec2; r: number } | null, hot = false): void {
+    this.dropZone = zone;
+    this.dropHot = hot;
   }
 
   /** The coach's hand (see `setCoachTarget`), placed after the widgets so it can find their
@@ -1347,8 +1397,9 @@ export class BuilderScene extends Phaser.Scene {
   private drawCoachHand(): void {
     const target = this.coachTarget;
     let p: Vec2 | null = null;
-    /** The drag demonstration's pose this frame (a 'drag' gesture on a dial), else the tap. */
-    let drag: ReturnType<typeof dialDragPose> = null;
+    /** The drag demonstration's pose this frame (a 'drag' gesture on a dial or a slide), else the
+     * tap. */
+    let drag: { frame: 0 | 1 | 2; tip: Vec2; alpha: number; ghost: Vec2 | null } | null = null;
     let ghostR = 0;
     if (target && this.editable) {
       if (target.type === 'widget') {
@@ -1358,6 +1409,10 @@ export class BuilderScene extends Phaser.Scene {
         if (geom?.kind === 'dial' && this.coachGesture?.kind === 'drag' && !held) {
           drag = dialDragPose(geom, this.coachGesture.toValue, this.nowMs - this.coachStart);
           ghostR = geom.handleR;
+        } else if (geom?.kind === 'slide' && this.coachGesture?.kind === 'drag' && !held) {
+          // 2026-10-16: the same stroke along a slide's straight track (the catapult's arm length).
+          drag = slideDragPose(geom, this.coachGesture.toValue, this.nowMs - this.coachStart);
+          ghostR = geom.knobR;
         }
         if (drag) p = drag.tip;
         else if (geom && !held) p = widgetAnchor(geom);
@@ -1901,6 +1956,9 @@ export class BuilderScene extends Phaser.Scene {
         case 'pull':
           this.drawPullWidget(geom, seenText);
           break;
+        case 'slide':
+          this.drawSlideWidget(geom, seenText);
+          break;
       }
       // A locked widget is drawn muted only; the padlock badge was dropped as too distracting.
     }
@@ -2102,6 +2160,10 @@ export class BuilderScene extends Phaser.Scene {
       this.drawBigTap(geom, geom.pill, seenText, seenNineSlice);
       return;
     }
+    if (geom.style === 'mini') {
+      this.drawMiniTap(geom, seenText);
+      return;
+    }
     const g = this.widgetGfx;
     const s = this.pxScale;
     const locked = geom.locked;
@@ -2150,6 +2212,92 @@ export class BuilderScene extends Phaser.Scene {
       const text = this.widgetText(key, geom.label, 16, '#ffffff', true);
       text.setAlpha(alpha);
       text.setPosition(geom.center.x, geom.center.y + half + 12 * s);
+    }
+  }
+
+  /** `TapWidget.style` 'mini' (2026-10-16, "take one band off"): a small round badge in the
+   * widget colour (default the delete badge's pink) with a white rim and the `icon` glyph in white,
+   * `geom.size` px across (its hit circle is 64 px, widgetLayout.ts). Pops on tap; muted when
+   * locked. No caption. */
+  private drawMiniTap(geom: TapGeom, seenText: Set<string>): void {
+    const g = this.widgetGfx;
+    const s = this.pxScale;
+    const locked = geom.locked;
+    const alpha = locked ? 0.55 : 1;
+    const fill = locked ? MUTED : geom.color ?? COLORS.pink;
+    const pop = this.popFor(geom.id);
+    const r = (geom.size / 2) * pop;
+    this.shadowCircle(geom.center.x, geom.center.y, r);
+    g.fillStyle(fill, alpha);
+    g.fillCircle(geom.center.x, geom.center.y, r);
+    g.lineStyle(2.5 * s, COLORS.white, alpha);
+    g.strokeCircle(geom.center.x, geom.center.y, r);
+    const key = `tap:${geom.id}:mini`;
+    seenText.add(key);
+    const fontPx = Math.max(12, Math.round((geom.size / s) * 0.62));
+    const text = this.widgetText(key, geom.icon, fontPx, '#ffffff', true, true, BIG_FONT_FAMILY);
+    text.setAlpha(alpha);
+    text.setScale(s * pop);
+    text.setPosition(geom.center.x, geom.center.y);
+  }
+
+  /** `SlideWidget` (2026-10-16, Jon: "arm length fully customizable"): a white knob with an accent
+   * rim on its world track. While held the knob follows the finger along the track (snapping the
+   * value, `live` committing each notch) and a faint dotted guide with the notches shows the track
+   * (`guide`, default true). The knob carries the current option's label ('knob' readout) or the
+   * `icon` glyph ('none'). */
+  private drawSlideWidget(geom: SlideGeom, seenText: Set<string>): void {
+    const g = this.widgetGfx;
+    const s = this.pxScale;
+    const locked = geom.locked;
+    const alpha = locked ? 0.45 : 1;
+    const accent = locked ? MUTED : geom.color ?? ACTIVE;
+    const dragging = this.widgetDrag?.id === geom.id && this.widgetDrag.kind === 'slide';
+    const knob = dragging ? slidePointAt(geom, this.widgetDragT) : geom.knob;
+    const value = dragging ? this.widgetDragValue ?? geom.value : geom.value;
+    const pop = this.popFor(geom.id);
+
+    if (dragging && geom.guide) {
+      const len = Math.hypot(geom.to.x - geom.from.x, geom.to.y - geom.from.y);
+      const step = 10 * s;
+      const dots = Math.max(1, Math.floor(len / step));
+      g.fillStyle(COLORS.white, 0.55);
+      for (let i = 0; i <= dots; i++) {
+        const p = slidePointAt(geom, i / dots);
+        g.fillCircle(p.x, p.y, 1.8 * s);
+      }
+      geom.notches.forEach((p, i) => {
+        const on = geom.options[i]?.value === value;
+        g.fillStyle(on ? accent : KNOB_COLOR, 0.95);
+        g.fillCircle(p.x, p.y, (on ? 5 : 3.5) * s);
+        g.lineStyle(1.5 * s, INK, 0.9);
+        g.strokeCircle(p.x, p.y, (on ? 5 : 3.5) * s);
+      });
+    }
+
+    const r = geom.knobR * (dragging ? 1.08 : 1) * pop;
+    this.shadowCircle(knob.x, knob.y, r);
+    g.fillStyle(KNOB_COLOR, alpha);
+    g.fillCircle(knob.x, knob.y, r);
+    g.lineStyle((dragging ? 5 : 4) * s, accent, alpha);
+    g.strokeCircle(knob.x, knob.y, r);
+
+    const opt = geom.options.find((o) => o.value === value);
+    if (geom.readout === 'knob' && opt && this.labelsVisible) {
+      const key = `slide:${geom.id}:knob`;
+      seenText.add(key);
+      // A long label ("2.75 m") gets a smaller face so it stays inside a 56 px knob.
+      const text = this.widgetText(key, opt.label, opt.label.length > 4 ? 13 : 16, colorHex(INK), true, true);
+      text.setAlpha(alpha);
+      text.setScale(s * pop);
+      text.setPosition(knob.x, knob.y);
+    } else if (geom.readout === 'none' && geom.icon) {
+      const key = `slide:${geom.id}:icon`;
+      seenText.add(key);
+      const text = this.widgetText(key, geom.icon, 22, colorHex(INK), true, true, BIG_FONT_FAMILY);
+      text.setAlpha(alpha);
+      text.setScale(s * pop);
+      text.setPosition(knob.x, knob.y);
     }
   }
 
@@ -2834,10 +2982,17 @@ export class BuilderScene extends Phaser.Scene {
           this.onWidgetBlocked?.(hit.id);
           return;
         }
-        if (geom?.kind === 'dial' || geom?.kind === 'pull' || geom?.kind === 'lever') {
+        if (geom?.kind === 'dial' || geom?.kind === 'pull' || geom?.kind === 'lever' || geom?.kind === 'slide') {
           this.widgetDrag = { id: hit.id, kind: geom.kind };
           this.widgetDragT = 0;
-          if (geom.kind === 'dial') {
+          if (geom.kind === 'slide') {
+            // The knob starts where it is; the grab offset keeps it under the finger's grip point.
+            const knobT = slidePointT(geom, geom.knob.x, geom.knob.y);
+            this.widgetDragT = knobT;
+            this.slideGrabDT = slidePointT(geom, sx, sy) - knobT;
+            this.widgetDragValue = geom.value;
+            this.widgetDragAngle = 0;
+          } else if (geom.kind === 'dial') {
             this.widgetDragValue = geom.value;
             this.widgetDragAngle = geom.handleAngle;
           } else if (geom.kind === 'lever') {
@@ -2910,6 +3065,15 @@ export class BuilderScene extends Phaser.Scene {
       } else if (geom?.kind === 'lever') {
         // The knob follows the snapped notch as the pointer moves.
         this.widgetDragValue = leverPointToValue(geom, stage.x, stage.y);
+      } else if (geom?.kind === 'slide') {
+        // The knob follows the finger along the track; the value snaps to the nearest notch and a
+        // `live` slide commits each new one (the arm grows with the finger).
+        const t = clamp(slidePointT(geom, stage.x, stage.y) - this.slideGrabDT, 0, 1);
+        this.widgetDragT = t;
+        const next = slideTToValue(geom, t);
+        const changed = next !== this.widgetDragValue;
+        this.widgetDragValue = next;
+        if (geom.live && changed) this.onWidgetAction?.(geom.id, next, true);
       }
       return;
     }
@@ -2968,7 +3132,7 @@ export class BuilderScene extends Phaser.Scene {
       const drag = this.widgetDrag;
       this.widgetDrag = null;
       this.activePointerId = null;
-      if (drag.kind === 'dial' || drag.kind === 'lever') {
+      if (drag.kind === 'dial' || drag.kind === 'lever' || drag.kind === 'slide') {
         this.widgetPop.set(drag.id, this.nowMs);
         this.onWidgetAction?.(drag.id, this.widgetDragValue);
       } else {

@@ -2,11 +2,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   armAngleFor,
   armArtBox,
+  armSlide,
+  armTextureKey,
+  ARM_TEXTURES,
   ART_PPM,
   BAND_ASPECTS,
   BAND_THICKNESS,
   BASE_ART,
+  bandBundleAt,
   bandSegments,
+  bandThickness,
   bandSprite,
   buildArm,
   buildGround,
@@ -15,6 +20,7 @@ import {
   catapultPocketAtRest,
   catapultRelease,
   crossbarPoseFor,
+  cupAtRest,
   cupCoverBox,
   fireSpot,
   fuzzTextureKey,
@@ -34,7 +40,7 @@ import {
   WORLD_H,
   WORLD_W,
 } from './build';
-import { ARM, BAND_COLOR, BAND_COUNT, FUZZ, FUZZ_NAMES, FUZZ_TINT } from './catalog';
+import { ARM_LENGTHS, BAND_COLOR, FUZZ, FUZZ_NAMES, FUZZ_TINT, MAX_VISIBLE_BANDS, armLength } from './catalog';
 import type { PlacedPart } from './types';
 import { createWorld } from '../../../physics';
 import type { PhysicsWorld } from '../../../physics/types';
@@ -46,7 +52,7 @@ function catapultPart(overrides: Partial<PlacedPart['props']> = {}, x = 5, y = 0
     kind: 'catapult',
     x,
     y,
-    props: { power: 'Medium', angle: '45', fuzz: 'Fur', arm: 'Short', ...overrides },
+    props: { bands: '2', angle: '45', fuzz: 'Fur', armLen: '2', ...overrides },
   };
 }
 
@@ -54,13 +60,13 @@ function catapultPart(overrides: Partial<PlacedPart['props']> = {}, x = 5, y = 0
  * `armAngleRad`, offset POCKET_DY along the arm's local leading face. Used here purely to derive
  * the expected geometry independently of importing a private helper. */
 function expectedArmPoint(part: PlacedPart, armAngleRad: number): { x: number; y: number } {
-  const armSpec = ARM[part.props.arm ?? 'Short'] ?? ARM.Short!;
+  const L = armLength(part.props);
   const pivot = { x: part.x + PIVOT_DX, y: part.y + PIVOT_DY };
   const c = Math.cos(armAngleRad);
   const s = Math.sin(armAngleRad);
   return {
-    x: pivot.x + armSpec.length * c + POCKET_DY * s,
-    y: pivot.y + armSpec.length * s - POCKET_DY * c,
+    x: pivot.x + L * c + POCKET_DY * s,
+    y: pivot.y + L * s - POCKET_DY * c,
   };
 }
 
@@ -79,11 +85,11 @@ describe('catapult build', () => {
     expect(690 - WORLD_H * 32).toBe(78);
   });
 
-  it('rest geometry constants match the plan (rear-facing arm)', () => {
-    expect(REST_ANGLE_DEG).toBe(200);
+  it('rest geometry constants (rear-facing arm; 15 degrees below rear-horizontal since 2026-10-16, was 20)', () => {
+    expect(REST_ANGLE_DEG).toBe(195);
     expect(PIVOT_DX).toBe(0.2);
     expect(PIVOT_DY).toBe(1.6);
-    expect(REST_ANGLE).toBeCloseTo((200 * Math.PI) / 180, 10);
+    expect(REST_ANGLE).toBeCloseTo((195 * Math.PI) / 180, 10);
   });
 
   it('crossbarPoseFor: the stop bar sits at armAngleFor(angle) - i.e. it rotates with the angle ' +
@@ -105,12 +111,12 @@ describe('catapult build', () => {
     }
   });
 
-  it('catapultRelease: Medium power + 45deg + Short arm gives speed 9.5 at 45deg', () => {
+  it('catapultRelease: 2 bands + 45deg + 2 m arm gives speed 9.5 at 45deg', () => {
     const part = catapultPart();
     const { v, releaseAngle } = catapultRelease(part);
     expect(releaseAngle).toBeCloseTo(Math.PI / 4, 5);
     const speed = Math.hypot(v.x, v.y);
-    expect(speed).toBeCloseTo(9.5, 5); // 10 (Medium) * 0.95 (Short factor)
+    expect(speed).toBeCloseTo(9.5, 5); // 10 (2 bands) * 0.95 (2 m arm factor)
     expect(v.x).toBeGreaterThan(0);
     expect(v.y).toBeGreaterThan(0);
   });
@@ -130,7 +136,7 @@ describe('catapult build', () => {
     const expected = expectedArmPoint(part, armAngleFor(45));
     expect(tip.x).toBeCloseTo(expected.x, 6);
     expect(tip.y).toBeCloseTo(expected.y, 6);
-    // Measured: about (3.96, 3.19) for a Short arm from (5, 0).
+    // Measured: about (3.96, 3.19) for a 2 m arm from (5, 0).
     expect(tip.x).toBeCloseTo(3.9626, 3);
     expect(tip.y).toBeCloseTo(3.1910, 3);
   });
@@ -144,9 +150,9 @@ describe('catapult build', () => {
     expect(pocket.y).toBeCloseTo(expected.y, 6);
   });
 
-  it('a Long arm reaches farther from the pivot and its release speed factor is higher', () => {
-    const short = catapultRelease(catapultPart({ arm: 'Short' }));
-    const long = catapultRelease(catapultPart({ arm: 'Long' }));
+  it('a longer arm reaches farther from the pivot and its release speed factor is higher', () => {
+    const short = catapultRelease(catapultPart({ armLen: '2' }));
+    const long = catapultRelease(catapultPart({ armLen: '3' }));
     expect(Math.hypot(long.v.x, long.v.y)).toBeGreaterThan(Math.hypot(short.v.x, short.v.y));
     const pivot = { x: 5 + PIVOT_DX, y: 0 + PIVOT_DY };
     expect(Math.hypot(long.tip.x - pivot.x, long.tip.y - pivot.y)).toBeGreaterThan(
@@ -154,10 +160,31 @@ describe('catapult build', () => {
     );
   });
 
-  it('a Long arm at rest clears the ground (y=0) even with the Metal fuzz (r 0.4) in the pocket', () => {
-    const part = catapultPart({ arm: 'Long' }, 5, 0);
-    const pocket = catapultPocketAtRest(part);
-    expect(pocket.y - FUZZ.Metal!.r).toBeGreaterThan(0);
+  it('every arm length at rest clears the ground (y=0): the Metal fuzz (r 0.4) in the pocket and the cup\'s bowl (local y 0.335)', () => {
+    for (const armLen of ARM_LENGTHS) {
+      const part = catapultPart({ armLen }, 5, 0);
+      const pocket = catapultPocketAtRest(part);
+      expect(pocket.y - FUZZ.Metal!.r, armLen).toBeGreaterThan(0);
+      const L = Number(armLen);
+      const bowl = 1.6 + L * Math.sin(REST_ANGLE) + 0.335 * Math.cos(REST_ANGLE);
+      expect(bowl, armLen).toBeGreaterThan(0.2);
+    }
+  });
+
+  it('cupAtRest is the pocket at rest; armSlide runs from the 1.5 m cup to the 4 m cup, every length\'s cup on it, evenly spaced', () => {
+    const part = catapultPart({ armLen: '2.5' }, 5, 0);
+    expect(cupAtRest(part)).toEqual(catapultPocketAtRest(part));
+    const { from, to } = armSlide(part);
+    expect(from).toEqual(cupAtRest(catapultPart({ armLen: '1.5' }, 5, 0)));
+    expect(to).toEqual(cupAtRest(catapultPart({ armLen: '4' }, 5, 0)));
+    ARM_LENGTHS.forEach((armLen, i) => {
+      const cup = cupAtRest(catapultPart({ armLen }, 5, 0));
+      const k = i / (ARM_LENGTHS.length - 1);
+      expect(cup.x, armLen).toBeCloseTo(from.x + (to.x - from.x) * k, 9);
+      expect(cup.y, armLen).toBeCloseTo(from.y + (to.y - from.y) * k, 9);
+    });
+    // The slide does not depend on the part's own armLen.
+    expect(armSlide(catapultPart({ armLen: '4' }, 5, 0))).toEqual({ from, to });
   });
 
   it('the arm body has no collider (mass 0) and is kinematic (ignores gravity)', async () => {
@@ -198,7 +225,7 @@ describe('catapult build', () => {
     for (const name of FUZZ_NAMES) {
       const handle = buildPart(world, catapultPart({ fuzz: name }));
       const fuzz = handle.visuals.find((v) => v.role === 'fuzz')!;
-      expect(fuzz.shape).toEqual({ kind: 'circle', r: FUZZ[name]!.r, cx: ARM.Short!.length, cy: -POCKET_DY });
+      expect(fuzz.shape).toEqual({ kind: 'circle', r: FUZZ[name]!.r, cx: 2, cy: -POCKET_DY });
       expect(fuzz.color).toBe(FUZZ_TINT[name]);
       expect(fuzz.upright).toBe(true);
       // The loaded-fuzz visual rides the arm body, not its own body.
@@ -227,10 +254,10 @@ describe('catapult build', () => {
   it('the arm carries, in draw order: the arm picture, the star gear at the pivot (turning with ' +
     'the arm), the loaded fuzz, then the cup\'s front half over it - and no kettlebell gear', async () => {
     world = await createWorld({ gravity: { x: 0, y: -10 } });
-    for (const arm of ['Short', 'Long']) {
-      const L = ARM[arm]!.length;
-      const handle = buildArm(world, catapultPart({ arm }, 5, 0));
-      expect(handle.visuals.map((v) => v.textureKey)).toEqual([`real-arm-${arm}`, 'real-gear', 'fuzz-Fur', 'real-cup']);
+    for (const armLen of ['1.5', '2', '3', '4']) {
+      const L = Number(armLen);
+      const handle = buildArm(world, catapultPart({ armLen }, 5, 0));
+      expect(handle.visuals.map((v) => v.textureKey)).toEqual([`real-arm-${armLen}`, 'real-gear', 'fuzz-Fur', 'real-cup']);
       expect(handle.visuals.some((v) => v.role === 'fuzzGear' || v.textureKey?.startsWith('gear-'))).toBe(false);
       for (const v of handle.visuals) expect(v.body).toBe(handle.id);
 
@@ -250,14 +277,14 @@ describe('catapult build', () => {
     }
     // The stopped arm (fuzz already flying) keeps its gear and cup, minus the fuzz.
     const stopped = buildArm(world, catapultPart({}, 5, 0), armAngleFor(45), false);
-    expect(stopped.visuals.map((v) => v.textureKey)).toEqual(['real-arm-Short', 'real-gear', 'real-cup']);
+    expect(stopped.visuals.map((v) => v.textureKey)).toEqual(['real-arm-2', 'real-gear', 'real-cup']);
   });
 
-  it('no power-pack visual rides the frame any more - power is drawn as rubber bands ' +
+  it('no power-pack visual rides the frame any more - the bands are drawn as rubber bands ' +
     '(sim.ts overlay, bandSegments), not a picture on the machine', async () => {
     world = await createWorld({ gravity: { x: 0, y: -10 } });
-    for (const power of ['Low', 'Medium', 'High', 'Max']) {
-      const handle = buildPart(world, catapultPart({ power }));
+    for (const bands of ['1', '2', '3', '4', '20']) {
+      const handle = buildPart(world, catapultPart({ bands }));
       expect(handle.visuals.some((v) => v.textureKey?.startsWith('power-'))).toBe(false);
     }
   });
@@ -335,25 +362,27 @@ describe('catapult build', () => {
     }
   });
 
-  it('the arm picture (real-arm-<arm>) is one box at ART_PPM whose cup centre lands on the pocket ' +
+  it('the arm picture (real-arm-<L>, one per arm length, 2026-10-16) is one box at ART_PPM whose cup centre lands on the pocket ' +
     '(local x = L), its stick centreline on local y 0 and its pivot end under the gear\'s ring', async () => {
     world = await createWorld({ gravity: { x: 0, y: -10 } });
-    for (const arm of ['Short', 'Long']) {
-      const L = ARM[arm]!.length;
-      const handle = buildPart(world, catapultPart({ arm }));
-      const armVisual = handle.visuals.find((v) => v.textureKey === `real-arm-${arm}`)!;
+    for (const armLen of ARM_LENGTHS) {
+      const L = Number(armLen);
+      const handle = buildPart(world, catapultPart({ armLen }));
+      expect(armTextureKey(L)).toBe(`real-arm-${armLen}`);
+      expect(ARM_TEXTURES[`real-arm-${armLen}`]).toEqual({ url: `parts/catapult/real-arm-${armLen}.png` });
+      const armVisual = handle.visuals.find((v) => v.textureKey === `real-arm-${armLen}`)!;
       expect(armVisual.role).toBe('arm');
-      expect(armVisual.shape).toEqual({ kind: 'box', ...armArtBox(arm) });
-      const box = armArtBox(arm);
-      const pxW = arm === 'Short' ? 560 : 800;
+      expect(armVisual.shape).toEqual({ kind: 'box', ...armArtBox(L) });
+      const box = armArtBox(L);
+      // The picture is 240 L + 80 px wide (560 at 2 m and 800 at 3 m: the old Short and Long).
+      const pxW = 240 * L + 80;
       expect(box.w).toBeCloseTo(pxW / ART_PPM, 9);
       expect(box.h).toBeCloseTo(132 / ART_PPM, 9);
       const left = box.cx - box.w / 2;
       expect(left).toBeGreaterThan(0.335); // under the gear's ring (r 0.335 .. 0.5)
       expect(left).toBeLessThan(GEAR_R);
-      // The cup centre is 721 px from the uncut export's stick end, which the cut moved to `left`.
-      const uncutStickEnd = left - (887 - pxW) / ART_PPM;
-      expect(uncutStickEnd + 721 / ART_PPM).toBeCloseTo(L, 9);
+      // The cup centre is 166 px in from the picture's cup end.
+      expect(left + box.w - 166 / ART_PPM).toBeCloseTo(L, 9);
       // Stick centreline (row 81.5 of 132 from the bowl side, local +y) on local y = 0.
       expect(box.cy + box.h / 2 - 81.5 / ART_PPM).toBeCloseTo(0, 9);
       // The loaded fuzz is drawn after the arm picture.
@@ -469,9 +498,9 @@ describe('catapult build', () => {
     it('the tied end (A) hangs straight below arm-local (L - 0.1, +0.1) - the x FIRE is laid out ' +
       'from - on the cup\'s underside (local y 0.31, inside the bowl\'s lowest row at 0.335); the peg ' +
       '(P) is straight below it, at the catapult\'s own ground-level y', () => {
-        for (const arm of ['Short', 'Long']) {
-          const part = catapultPart({ arm }, 5, 0);
-          const L = ARM[arm]!.length;
+        for (const armLen of ARM_LENGTHS) {
+          const part = catapultPart({ armLen }, 5, 0);
+          const L = Number(armLen);
           const above = armLocal(part, L - 0.1, 0.1);
           const { a, p } = stringAnchor(part);
           expect(a.x).toBeCloseTo(above.x, 9);
@@ -481,17 +510,21 @@ describe('catapult build', () => {
         }
     });
 
-    it('measured: A is about (x - 1.55, y + 0.63) for the Short arm, (x - 2.49, y + 0.29) for ' +
-      'the Long arm', () => {
-      const short = stringAnchor(catapultPart({ arm: 'Short' }, 5, 0));
-      const long = stringAnchor(catapultPart({ arm: 'Long' }, 5, 0));
-      expect(short.a.x).toBeCloseTo(5 - 1.5512, 3);
-      expect(short.a.y).toBeCloseTo(0 + 0.6327, 3);
-      expect(long.a.x).toBeCloseTo(5 - 2.4909, 3);
-      expect(long.a.y).toBeCloseTo(0 + 0.2907, 3);
-      // The Long arm's tie point sits closer to the pivot vertically (a shorter string) - the
-      // reason the limp cut piece (sim.ts) has to be capped relative to the actual string length.
+    it('measured: A is about (x - 1.61, y + 0.79) for the 2 m arm, (x - 2.58, y + 0.54) for 3 m, ' +
+      '(x - 3.54, y + 0.28) for 4 m - a longer arm, a shorter string, but always some string', () => {
+      const short = stringAnchor(catapultPart({ armLen: '2' }, 5, 0));
+      const long = stringAnchor(catapultPart({ armLen: '3' }, 5, 0));
+      const longest = stringAnchor(catapultPart({ armLen: '4' }, 5, 0));
+      expect(short.a.x).toBeCloseTo(5 - 1.609, 2);
+      expect(short.a.y).toBeCloseTo(0 + 0.793, 2);
+      expect(long.a.x).toBeCloseTo(5 - 2.575, 2);
+      expect(long.a.y).toBeCloseTo(0 + 0.535, 2);
+      expect(longest.a.x).toBeCloseTo(5 - 3.541, 2);
+      expect(longest.a.y).toBeCloseTo(0 + 0.276, 2);
+      // A longer arm's tie point sits closer to the ground (a shorter string) - the reason the limp
+      // cut piece (sim.ts) has to be capped relative to the actual string length.
       expect(long.a.y - long.p.y).toBeLessThan(short.a.y - short.p.y);
+      expect(longest.a.y - longest.p.y).toBeGreaterThan(0.2);
     });
 
     it('follows the part\'s own anchor (x, y), not just the pivot offset', () => {
@@ -505,9 +538,9 @@ describe('catapult build', () => {
 
   describe('fireSpot: where the FIRE button (and the snip burst) sit', () => {
     it('is FIRE_DX right of the string\'s tied point A, and FIRE_DY above the part\'s own ' +
-      'ground-level y - for both arms', () => {
-      for (const arm of ['Short', 'Long']) {
-        const part = catapultPart({ arm }, 5, 0);
+      'ground-level y - for every arm length', () => {
+      for (const armLen of ARM_LENGTHS) {
+        const part = catapultPart({ armLen }, 5, 0);
         const { a } = stringAnchor(part);
         const spot = fireSpot(part);
         expect(spot.x).toBeCloseTo(a.x + FIRE_DX, 9);
@@ -522,8 +555,8 @@ describe('catapult build', () => {
         const zoom = 3.6;
         const ppm = 32;
         const halfW = size / (ppm * zoom) / 2;
-        for (const arm of ['Short', 'Long']) {
-          const part = catapultPart({ arm }, 5, 0);
+        for (const armLen of ['2', '3']) {
+          const part = catapultPart({ armLen }, 5, 0);
           const { a } = stringAnchor(part);
           const spot = fireSpot(part);
           const stringGap = spot.x - halfW - a.x;
@@ -542,30 +575,58 @@ describe('catapult build', () => {
   });
 
   describe('bandSegments: the rubber bands', () => {
-    it('band count follows BAND_COUNT[power]; every band is BAND_COLOR red', () => {
-      for (const power of ['Low', 'Medium', 'High', 'Max']) {
-        const part = catapultPart({ power }, 5, 0);
+    it('one band per rubber band up to MAX_VISIBLE_BANDS (6), never more; every band is BAND_COLOR red', () => {
+      for (const n of [1, 2, 3, 4, 5, 6, 7, 20, 45, 60]) {
+        const part = catapultPart({ bands: String(n) }, 5, 0);
         const segs = bandSegments(part, REST_ANGLE);
-        expect(segs).toHaveLength(BAND_COUNT[power]!);
+        expect(segs).toHaveLength(Math.min(n, MAX_VISIBLE_BANDS));
         for (const seg of segs) expect(seg.color).toBe(BAND_COLOR);
       }
+      // Legacy power still maps (Low..Max = 1..4).
+      expect(bandSegments({ ...catapultPart({ bands: undefined as unknown as string }), props: { power: 'Max' } }, REST_ANGLE)).toHaveLength(4);
     });
 
-    it('band i runs from 0.85 + 0.08*i m along the arm to 1.05 + 0.08*i m along the lever ' +
-      '(stop direction), at rest', () => {
-      const part = catapultPart({ power: 'Max', angle: '30' }, 5, 0);
+    it('band i runs from 0.85 + 0.08*i m along the arm to 1.05 + 0.07*i m along the lever ' +
+      '(stop direction), at rest, on a 2 m arm', () => {
+      const part = catapultPart({ bands: '4', angle: '30' }, 5, 0);
       const pivot = { x: 5 + PIVOT_DX, y: 0 + PIVOT_DY };
       const stopDir = armAngleFor(30);
       const segs = bandSegments(part, REST_ANGLE);
       expect(segs).toHaveLength(4);
       segs.forEach((seg, i) => {
         const armDist = 0.85 + 0.08 * i;
-        const leverDist = 1.05 + 0.08 * i;
+        const leverDist = 1.05 + 0.07 * i;
         expect(seg.a.x).toBeCloseTo(pivot.x + armDist * Math.cos(REST_ANGLE), 6);
         expect(seg.a.y).toBeCloseTo(pivot.y + armDist * Math.sin(REST_ANGLE), 6);
         expect(seg.b.x).toBeCloseTo(pivot.x + leverDist * Math.cos(stopDir), 6);
         expect(seg.b.y).toBeCloseTo(pivot.y + leverDist * Math.sin(stopDir), 6);
       });
+    });
+
+    it('on a short arm the bands squeeze together: they never reach into the cup (L - 0.72) nor under the gear (0.55)', () => {
+      const pivot = { x: 5 + PIVOT_DX, y: 0 + PIVOT_DY };
+      for (const armLen of ARM_LENGTHS) {
+        for (const bands of ['1', '3', '6', '30']) {
+          const segs = bandSegments(catapultPart({ bands, armLen }, 5, 0), REST_ANGLE);
+          for (const seg of segs) {
+            const d = Math.hypot(seg.a.x - pivot.x, seg.a.y - pivot.y);
+            expect(d, `${armLen}/${bands}`).toBeGreaterThanOrEqual(0.55 - 1e-9);
+            expect(d, `${armLen}/${bands}`).toBeLessThanOrEqual(Number(armLen) - 0.72 + 1e-9);
+          }
+        }
+      }
+    });
+
+    it('bandBundleAt is the middle of the drawn bands at rest; a bundle of many draws thicker', () => {
+      const part = catapultPart({ bands: '3' }, 5, 0);
+      const segs = bandSegments(part, REST_ANGLE);
+      const mid = bandBundleAt(part);
+      expect(mid.x).toBeCloseTo(segs.reduce((s, g) => s + (g.a.x + g.b.x) / 2, 0) / 3, 9);
+      expect(mid.y).toBeCloseTo(segs.reduce((s, g) => s + (g.a.y + g.b.y) / 2, 0) / 3, 9);
+      expect(bandThickness(1)).toBeCloseTo(BAND_THICKNESS, 12);
+      expect(bandThickness(6)).toBeGreaterThan(bandThickness(2));
+      expect(bandThickness(20)).toBeCloseTo(1.6 * BAND_THICKNESS, 12);
+      expect(bandThickness(60)).toBeCloseTo(1.6 * BAND_THICKNESS, 12);
     });
 
     it('the arm side follows the passed-in armAngleRad (mid-swing), not REST_ANGLE', () => {

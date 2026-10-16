@@ -144,8 +144,11 @@ export interface TapWidget extends WidgetBase {
   texture?: { role: string; tint?: number };
   /** 'card' (default): the square icon card with a caption under it. 'big': a chunky rounded
    * pill with the label INSIDE in 24 px bold next to the icon, a soft pulse, and a wider hit area
-   * (the one obvious start button, e.g. "▶ DRIVE"; or "🔧 BUILD"). */
-  style?: 'card' | 'big';
+   * (the one obvious start button, e.g. "▶ DRIVE"; or "🔧 BUILD"). 'mini' (2026-10-16, Gao: "take
+   * one band off"): a small round badge, drawn `size` px (default 34) with the `icon` glyph (e.g.
+   * '−') in white on `color` (default the kit's delete pink), its hit circle never under 64 px;
+   * no caption. */
+  style?: 'card' | 'big' | 'mini';
   /** 'big' only: scales the whole pill (height, font, padding, minimum width, hit pad); default 1.
    * 2026-10-15: the catapult's BUILD pill under the machine is 0.75. */
   bigScale?: number;
@@ -265,7 +268,76 @@ export interface PullWidget extends WidgetBase {
   arrow?: boolean;
 }
 
-export type Widget = TapWidget | DialWidget | RackWidget | LeverWidget | CycleWidget | PullWidget;
+/** A handle dragged along a straight WORLD segment (2026-10-16, Jon: "arm length fully
+ * customizable": pull the catapult's arm longer). Option i sits at from + (to - from) * i/(n-1).
+ * The knob follows the finger along the segment and snaps to the nearest option; with `live` it
+ * commits each new notch while dragged (one undo entry per drag), otherwise on release. The drawn
+ * knob is `size` px (default 56, never under DIAL_MIN_KNOB_PX), its grab circle never under 64 px.
+ * Only the knob is grabbed (no invisible grab spots along the track). */
+export interface SlideWidget extends WidgetBase {
+  kind: 'slide';
+  from: Vec2;
+  to: Vec2;
+  options: PropertyOption[];
+  value: string;
+  live?: boolean;
+  /** 'knob' (default): the current option's label inside the knob. 'none': `icon` instead. */
+  readout?: 'knob' | 'none';
+  /** Glyph in the knob when `readout` is 'none' (e.g. '↔'). */
+  icon?: string;
+  /** A faint dotted line from..to (with the notches) while the knob is held. Default true. */
+  guide?: boolean;
+}
+
+export type Widget = TapWidget | DialWidget | RackWidget | LeverWidget | CycleWidget | PullWidget | SlideWidget;
+
+/** One tile in the SUPPLY BIN (`CourseSpec.bin`, 2026-10-16, Jon: "a classroom supply bin you pull
+ * parts from instead of menu rows"): a picture the child drags out of the drawer onto the machine
+ * (or taps) to change one prop of the selected part. */
+export interface BinItem {
+  /** Unique within one bin. */
+  id: string;
+  /** Picture URL under public/. */
+  image: string;
+  /** Caption under the tile. */
+  label: string;
+  /** Section heading ("Rubber bands", "Fuzzes"); groups show in first-seen order. */
+  group?: string;
+  /** The selected part's prop this item changes. */
+  code: string;
+  /** Set `code` to this value ... */
+  value?: string;
+  /** ... or add this to the prop's integer value (a rubber band: +1). The result must be one of
+   * the descriptor's options (when the catalog has a descriptor for `code`), else it is refused. */
+  step?: number;
+  /** Corner badge: '∞' for an endless pile, or a count. */
+  badge?: string;
+  /** What the machine has now (the fuzz in the cup): drawn "in use"; applying it does nothing. */
+  active?: boolean;
+  /** World drop zone (centre + radius, meters); absent = the selected part's bounds. */
+  drop?: { at: Vec2; r: number };
+  /** Stamped by the controller (code in `part.lockedProps`): a padlock, and it refuses. */
+  locked?: boolean;
+  /** Stamped by the controller from `Level.introduces` (`code` or `code:value`): a NEW badge. */
+  isNew?: boolean;
+}
+
+/** One goal card on a kit course (`HudSpec.goalCards`, 2026-10-16, Gao: "use goal cards like the
+ * roller coaster"): the coaster's big white card (src/core/goalCards.ts, style.css `.gcard`). */
+export interface KitGoalCard {
+  /** Picture URL under the number (64x32 viewBox, public/ui/goals/*.svg style). */
+  icon: string;
+  /** The big target number ("3"); ignored on a `check` card. */
+  number: string;
+  /** Small unit beside the number ("m", "×"); ignored on a `check` card. */
+  unit: string;
+  /** Tiny Title Case caption under the card ("Cans Knocked Down"). */
+  caption: string;
+  /** A yes/no goal: a big picture, no number and no bar. */
+  check?: boolean;
+  /** A "stay under" goal (op '<='): the UNDER tab. */
+  under?: boolean;
+}
 
 /** The HTML card shown in the dash after a run: what the child set, and what happened. */
 export interface ResultRow { label: string; value: string }
@@ -403,6 +475,10 @@ export interface HudState<K extends string, M, O extends string, L> {
   scroll: number | null;
   /** The coach's current step (see `CourseSpec.coach`), or null. */
   coach: CoachStep<K> | null;
+  /** 2026-10-16: the SUPPLY BIN for the selected part (`CourseSpec.bin`): items already gated by
+   * `Level.introduces` and stamped (`locked`, `isNew`); null when there is none (no `bin`, nothing
+   * selected, not tuning, or every item hidden). The drawer then shows the bin over any rows left. */
+  bin: BinItem[] | null;
   /** Kinds this level unlocks on the shelf (`Level.introduces` entries `part:<kind>`): the HUD
    * plays the unlock callout (the button pops in with NEW and its blurb) once per level load. */
   unlocked: K[];
@@ -431,6 +507,19 @@ export interface HudCallbacks<K extends string = string> {
   /** Hides the win banner and leaves the done-mode dash (its Next button calls `next`, its
    * Try-again button calls `stop`). */
   dismissWin(): void;
+  /** 2026-10-16, the SUPPLY BIN: applies bin item `itemId` to the selected part through the
+   * controller's setProp path (undo, locks, budget, introduces, `CoachContext.changed`). A locked
+   * item flashes `lines.locked`; an active one does nothing. */
+  applyBin(itemId: string): void;
+  /** The value bin item `itemId` would set right now (a `step` item: the current prop plus the
+   * step), for the tap's fly-to-machine animation (`flyTargets`); null when it would do nothing. */
+  binValue(itemId: string): { code: string; value: string } | null;
+  /** Bin item `itemId`'s drop zone on screen (stage px: centre and radius), or null when it has
+   * none on screen. */
+  binDropZone(itemId: string): { x: number; y: number; r: number } | null;
+  /** A bin tile is being dragged (`itemId`, `hot` = the finger is inside its drop zone): the scene
+   * draws the drop zone's pulsing ring. null when the drag ended. */
+  binDrag(itemId: string | null, hot: boolean): void;
 }
 
 // ---- coach (tap tutorials) ---------------------------------------------------------------
@@ -445,6 +534,8 @@ export type CoachTarget<K extends string = string> =
   | { type: 'shelf'; kind: K }
   | { type: 'drawer'; code: string; value?: string }
   | { type: 'bar'; button: 'play' | 'next' | 'undo' | 'clear' }
+  /** 2026-10-16: a SUPPLY BIN tile (`CourseSpec.bin`), by `BinItem.id`. */
+  | { type: 'bin'; itemId: string }
   | { type: 'none' };
 
 /** A demonstration the in-scene coach hand performs instead of its tap (2026-10-15, Gao: "add a
@@ -455,7 +546,11 @@ export type CoachTarget<K extends string = string> =
  * 2.65 s a stroke). Pure pose maths in src/kit/coachGesture.ts. Ignored (the plain tap) on any
  * other target, when the dial has no such option, or when it already shows `toValue`. The hand
  * hides while the child holds that widget. */
-export type CoachGesture = { kind: 'drag'; toValue: string };
+/** 2026-10-16: 'drag' also works on a SLIDE widget (the glove slides the knob along its track to
+ * `toValue`). 'drop' on a 'bin' target: the glove presses the bin tile, carries a ghost of its
+ * picture to the item's drop zone on the machine, lets go, fades and repeats (the same 2.65 s
+ * stroke; pure maths in coachGesture.ts `dropPose`). Ignored (the plain tap) on any other target. */
+export type CoachGesture = { kind: 'drag'; toValue: string } | { kind: 'drop' };
 
 export interface CoachStep<K extends string = string> {
   /** Stable id: the HUD animates the hand in again only when it changes. */
@@ -604,6 +699,17 @@ export interface HudSpec<K extends string, M, O extends string> {
   goalValueText: (goal: Goal<M>, current: number) => string;
   /** Metrics whose goals show no progress bar (booleans). */
   barlessMetrics: (keyof M & string)[];
+  /** 2026-10-16 (Gao: "use goal cards like the roller coaster"): with `goalsOverlay`, the goals
+   * show as the coaster's row of big white cards (style.css `.goal-cards` / `.gcard`), one per goal:
+   * a big target number and unit over a picture, a Title Case caption and a bar; idle, filling
+   * (orange), met (green + check), broken (red + "!"). Red only once an "under" goal is over its
+   * limit, or the level is over and failed (done mode, the goal not met and no further run
+   * possible); between shots with shots left an unmet card stays calm. Pure state in
+   * src/kit/goalCards.ts. Without it the goals stay today's rows. */
+  goalCards?: (goal: Goal<M>) => KitGoalCard;
+  /** Metrics the build already has before any run (`editMetrics` reports them truly): their cards
+   * fill while editing. The rest stay idle until a run. */
+  goalCardEditMetrics?: (keyof M & string)[];
   lines: {
     play: string; pass: string; doneNotPassed: string; freePlay: string;
     /** Play button label in edit mode (default '▶ Play'). */
@@ -700,6 +806,12 @@ export interface CourseSpec<
   focusFrame?: (part: PlacedPart<K>, level: L) => CameraFrame | null;
   /** Play mode, asked every frame: the body to follow, or null to return to the full field. */
   follow?: (level: L, outcome: O, elapsed: number) => FollowSpec | null;
+  /** 2026-10-16: the SUPPLY BIN for the selected part (see `BinItem`): with `drawer` on and a
+   * non-empty list, the drawer shows a toolbox titled "Supply Bin" with these tiles instead of the
+   * property rows (rows whose code a bin item or a widget drives are hidden; any others still show
+   * under the bin). Drag a tile onto the machine (its drop zone rings) or tap it. Items whose code
+   * (or `code:value`) is not introduced yet are hidden, like drawer rows. null/[] = no bin. */
+  bin?: (part: PlacedPart<K>, parts: PlacedPart<K>[], level: L) => BinItem[] | null;
   /** In-scene controls for the selected part; re-asked whenever the part or its props change.
    * Shown only while `canTune` and the part is selected. */
   widgets?: (part: PlacedPart<K>, parts: PlacedPart<K>[], level: L) => Widget[];

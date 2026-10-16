@@ -1,5 +1,21 @@
 // Turns a PlacedPart into Rapier bodies/shapes plus the RenderItems the scene draws.
-import { ARM, BAND_COLOR, BAND_COUNT, CAN_COLORS, CRATE_BREAK, FUZZ_TINT, MATERIALS, blockSize, fuzzName, fuzzSpec, launchSpeed } from './catalog';
+import {
+  ARM_LENGTHS,
+  BAND_COLOR,
+  CAN_COLORS,
+  CRATE_BREAK,
+  FUZZ_TINT,
+  MATERIALS,
+  MAX_ARM_LENGTH,
+  MAX_VISIBLE_BANDS,
+  MIN_ARM_LENGTH,
+  armLength,
+  bandCount,
+  blockSize,
+  fuzzName,
+  fuzzSpec,
+  launchSpeed,
+} from './catalog';
 import type { BodyId, Bounds, Material, OverlayItem, PartHandle, PlacedPart, RenderItem, Shape, Vec2 } from './types';
 import type { PhysicsWorld } from '../../../physics/types';
 
@@ -16,10 +32,14 @@ export const WORLD_H = 19.125;
 export const PIVOT_DX = 0.2;
 export const PIVOT_DY = 1.6;
 
-/** The arm's rest pose: laid back over the REAR of the machine, 20 degrees below
- * rear-horizontal (180 + 20 = 200). The bucket hangs over the back at rest, not the front, so
- * the sweep throws the fuzz forward over the base rather than off the back of it. */
-export const REST_ANGLE_DEG = 200;
+/** The arm's rest pose: laid back over the REAR of the machine, 15 degrees below
+ * rear-horizontal (180 + 15 = 195). The bucket hangs over the back at rest, not the front, so
+ * the sweep throws the fuzz forward over the base rather than off the back of it. 20 degrees
+ * (200) until 2026-10-16: arms now reach 4 m (catalog.ts ARM_LENGTHS), and at 20 degrees a 4 m
+ * arm's cup dug into the ground; at 15 its bowl clears it by 0.24 m. One angle for every length,
+ * so the cup's rest positions for all lengths lie on one straight line (`armSlide`). The arm
+ * carries no collider, so the rest angle never changes a shot. */
+export const REST_ANGLE_DEG = 195;
 export const REST_ANGLE = (REST_ANGLE_DEG * Math.PI) / 180;
 
 /** How far below the arm's own tip the fuzz pocket sits (local -y in the arm's unrotated
@@ -95,17 +115,45 @@ export const BASE_ART = {
  * upright while the arm is loaded at REST_ANGLE; it turns with the arm during the swing. */
 export const GEAR_R = 0.5;
 
-/** The arm picture (real-arm-<arm>.png): the export turned 180 deg (cup at local +x, its opening
+/** The arm pictures (real-arm-<L>.png, one per catalog.ts ARM_LENGTHS option, 2026-10-16: "arm
+ * length fully customizable"): the art lead's arm export turned 180 deg (cup at local +x, its opening
  * toward local -y, which faces UP at REST_ANGLE), 132 px tall. Its pivot-side edge sits 86 px
  * (0.358 m) out from the pivot, under the gear's ring; the stick's centreline (row 81.5) is local
- * y = 0; the cup centre is 721 px from the uncut export's stick end, so cutting the stick to 560 px
- * (Short) or 800 px (Long) puts the cup centre at local x = 0.358 + 394 / 240 = 2.0 = L (Short) or
- * 0.358 + 634 / 240 = 3.0 = L (Long). The pocket (L, -POCKET_DY) then sits just above the rim
- * (the picture's opening-side edge is local y -0.21), so the fuzz rides IN the cup. */
-const ARM_ART_PX: Record<string, number> = { Short: 560, Long: 800 };
-const ARM_ART_X0 = 86 / ART_PPM;
-export function armArtBox(armKey: string): { w: number; h: number; cx: number; cy: number } {
-  const w = (ARM_ART_PX[armKey] ?? ARM_ART_PX.Short!) / ART_PPM;
+ * y = 0; the cup centre is 166 px in from the picture's cup end, so a picture 240 L + 80 px wide
+ * puts the cup centre at local x = 0.358 + (240 L - 86) / 240 = L. The pocket (L, -POCKET_DY) then
+ * sits just above the rim (the picture's opening-side edge is local y -0.21), so the fuzz rides IN
+ * the cup. The pictures are cut from the Long export (800 px = 3 m) at the pivot end, where the gear
+ * hides the cut, so the cup is never stretched; 3.25 .. 4 m extend the stick on the pivot side by
+ * repeating its stripes (the generator script is in the 2026-10-16 core-agent scratchpad,
+ * make_arms.py). 2 m and 3 m are exactly the old Short and Long pictures. */
+export const ARM_ART_X0 = 86 / ART_PPM;
+const ARM_CUP_END_PX = 166;
+
+/** The texture key of the arm picture for a length L (m): `real-arm-<option>` for the nearest
+ * ARM_LENGTHS option. */
+export function armTextureKey(L: number): string {
+  return `real-arm-${nearestArmOption(L)}`;
+}
+
+function nearestArmOption(L: number): string {
+  let best: string = ARM_LENGTHS[0];
+  for (const opt of ARM_LENGTHS) if (Math.abs(Number(opt) - L) < Math.abs(Number(best) - L)) best = opt;
+  return best;
+}
+
+/** Every arm picture, for the course's `textures` (spec.ts). */
+export const ARM_TEXTURES: Record<string, { url: string }> = Object.fromEntries(
+  ARM_LENGTHS.map((len) => [`real-arm-${len}`, { url: `parts/catapult/real-arm-${len}.png` }]),
+);
+
+/** The arm picture's box on the arm body for a length L (m): the nearest option's picture, its
+ * pivot-side edge at ARM_ART_X0 and its cup centre exactly at L (for an option length the box is the
+ * picture's own size at ART_PPM; a length between options stretches the nearest picture a little). */
+export function armArtBox(L: number): { w: number; h: number; cx: number; cy: number } {
+  const len = Math.min(MAX_ARM_LENGTH, Math.max(MIN_ARM_LENGTH, L));
+  const px = 240 * Number(nearestArmOption(len)) + 80;
+  const sx = (len - ARM_ART_X0) / ((px - ARM_CUP_END_PX) / ART_PPM);
+  const w = (px / ART_PPM) * sx;
   return { w, h: 132 / ART_PPM, cx: ARM_ART_X0 + w / 2, cy: (81.5 - 132 / 2) / ART_PPM };
 }
 
@@ -138,9 +186,16 @@ const CUP_UNDERSIDE_LY = 0.31;
 
 /** The strength band pictures (real-band-<n>.png): the art lead's band, recoloured red, rebuilt
  * n times as long as it is wide. An overlay sprite keeps its picture's aspect (`size` is its width),
- * so each band picks the n that keeps it about BAND_THICKNESS thick at its current length. */
+ * so each band picks the n that keeps it about its thickness (BAND_THICKNESS, or `bandThickness`
+ * for a bundle) at its current length. */
 export const BAND_ASPECTS = [3, 4, 6, 8, 11, 15, 21, 29];
 export const BAND_THICKNESS = 0.06;
+
+/** How thick each drawn band is (m) on a catapult with `n` bands: a bundle of many reads tighter and
+ * thicker (2026-10-16): BAND_THICKNESS for 1, growing to 1.6x at 20 bands and more. */
+export function bandThickness(n: number): number {
+  return BAND_THICKNESS * (1 + 0.6 * Math.min(1, Math.max(0, n - 1) / 19));
+}
 /** Hook pictures (real-hook.png, 66 x 59 px, arch up): at each band end, and at both ends of the
  * trigger string. */
 export const HOOK_SIZE = 0.1;
@@ -150,12 +205,12 @@ const HOOK_ASPECT = 59 / 66;
 /** One band sprite stretched from `a` to `b`: the picture is vertical, so its angle is the
  * segment's angle minus 90 deg (the scene draws `angle` CCW, world axes). Null for a zero-length
  * segment. */
-export function bandSprite(id: string, a: Vec2, b: Vec2): OverlayItem | null {
+export function bandSprite(id: string, a: Vec2, b: Vec2, thickness = BAND_THICKNESS): OverlayItem | null {
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   if (len < 1e-6) return null;
   let n = BAND_ASPECTS[0]!;
   for (const k of BAND_ASPECTS) {
-    if (Math.abs(Math.log(len / k / BAND_THICKNESS)) < Math.abs(Math.log(len / n / BAND_THICKNESS))) n = k;
+    if (Math.abs(Math.log(len / k / thickness)) < Math.abs(Math.log(len / n / thickness))) n = k;
   }
   const theta = Math.atan2(b.y - a.y, b.x - a.x);
   return {
@@ -255,13 +310,13 @@ function pivotOf(part: PlacedPart): Vec2 {
  * (L, -POCKET_DY) rotated by armAngleRad about the pivot. Shared by `catapultRelease` (release
  * angle) and `catapultPocketAtRest` (REST_ANGLE) so both agree on one formula. */
 function armTipPoint(part: PlacedPart, armAngleRad: number): Vec2 {
-  const armSpec = ARM[part.props.arm ?? 'Short'] ?? ARM.Short!;
+  const L = armLength(part.props);
   const pivot = pivotOf(part);
   const c = Math.cos(armAngleRad);
   const s = Math.sin(armAngleRad);
   return {
-    x: pivot.x + armSpec.length * c + POCKET_DY * s,
-    y: pivot.y + armSpec.length * s - POCKET_DY * c,
+    x: pivot.x + L * c + POCKET_DY * s,
+    y: pivot.y + L * s - POCKET_DY * c,
   };
 }
 
@@ -269,6 +324,20 @@ function armTipPoint(part: PlacedPart, armAngleRad: number): Vec2 {
  * C2's widgets/labels should use for anything that points at "the loaded fuzz". */
 export function catapultPocketAtRest(part: PlacedPart): Vec2 {
   return armTipPoint(part, REST_ANGLE);
+}
+
+/** The cup centre at rest - where the loaded fuzz sits, the fuzz drop zone (2026-10-16, for the
+ * supply bin). The same point as `catapultPocketAtRest`. */
+export function cupAtRest(part: PlacedPart): Vec2 {
+  return catapultPocketAtRest(part);
+}
+
+/** The cup centre at rest with the arm at its shortest (1.5 m) and its longest (4 m): the track of
+ * the "pull the arm longer" slide handle. Every ARM_LENGTHS option's cup lies on this segment, evenly
+ * spaced (one rest angle for every length), option i at from + (to - from) * i / (n - 1). */
+export function armSlide(part: PlacedPart): { from: Vec2; to: Vec2 } {
+  const at = (len: number) => cupAtRest({ ...part, props: { ...part.props, armLen: String(len) } });
+  return { from: at(MIN_ARM_LENGTH), to: at(MAX_ARM_LENGTH) };
 }
 
 /** A point `dist` meters from the pivot along `angleRad` (world axes, CCW from +x) - the plain
@@ -284,16 +353,17 @@ function centrelinePoint(part: PlacedPart, angleRad: number, dist: number): Vec2
  * reference picture (stakeholder feedback 2026-09-22: "the fire button should be next to the string
  * to be cut", which needs the string off the arm's centreline so a button fits beside it). The
  * string hangs straight down through arm-local (L - 0.1, +0.1) at REST_ANGLE (L = arm length) - the
- * x the FIRE button is laid out from (`fireSpot`), about x - 1.55 (Short) / x - 2.49 (Long) - and
- * ties on where that vertical meets the cup's underside (local y CUP_UNDERSIDE_LY): world down is
- * arm-local (-sin, -cos)(REST_ANGLE) = (+0.34, +0.94), so the tie sits (0.31 - 0.1) / 0.94 =
- * 0.22 m below that point: about y + 0.63 (Short) / y + 0.29 (Long). */
+ * x the snip burst is laid out from (`fireSpot`) - and ties on where that vertical meets the cup's
+ * underside (local y CUP_UNDERSIDE_LY): world down is arm-local (-sin, -cos)(REST_ANGLE) = (+0.26,
+ * +0.97) at 195 degrees, so the tie sits (0.31 - 0.1) / 0.97 = 0.22 m below that point. At rest
+ * the tie is about (x - 1.13, y + 0.92) for a 1.5 m arm, (x - 1.61, y + 0.79) at 2 m, (x - 2.58,
+ * y + 0.54) at 3 m and (x - 3.54, y + 0.28) at 4 m (the string gets shorter as the arm grows). */
 function cupUndersidePoint(part: PlacedPart): Vec2 {
-  const armSpec = ARM[part.props.arm ?? 'Short'] ?? ARM.Short!;
+  const L = armLength(part.props);
   const pivot = pivotOf(part);
   const c = Math.cos(REST_ANGLE);
   const s = Math.sin(REST_ANGLE);
-  const lx = armSpec.length - 0.1;
+  const lx = L - 0.1;
   const ly = 0.1;
   const drop = (CUP_UNDERSIDE_LY - ly) / -c;
   return { x: pivot.x + lx * c - ly * s, y: pivot.y + lx * s + ly * c - drop };
@@ -330,25 +400,51 @@ export function fireSpot(part: PlacedPart): Vec2 {
   return { x: a.x + FIRE_DX, y: part.y + FIRE_DY };
 }
 
-/** The rubber bands' endpoints (arm side -> lever side), `BAND_COUNT[power]` of them, all
- * `BAND_COLOR` red (band 0 closest to the arm/lever roots). `armAngleRad` is the arm's
- * CURRENT drawn angle (REST at rest, the tracked swing angle mid-shot, the release/stop angle
- * once it lands) - the lever side always sits at the stop direction for the part's own `angle`
- * prop, since the lever itself never moves. Shared by the sim's per-frame overlay and
- * `partTargets` so every band-related visual agrees on one geometry. */
+/** Where the bands hook onto the arm (distance from the pivot along its centreline, m): from just
+ * outside the gear's ring (BAND_ARM_MIN) to just short of the cup's rim (L - BAND_CUP_GAP). */
+const BAND_ARM_MIN = 0.55;
+const BAND_CUP_GAP = 0.72;
+/** Spacing between neighbouring bands along the arm and along the lever (m) when there is room. */
+const BAND_STEP_ARM = 0.08;
+const BAND_STEP_LEVER = 0.07;
+
+/** The rubber bands' endpoints (arm side -> lever side), all `BAND_COLOR` red, band 0 closest to the
+ * arm/lever roots: one per band up to MAX_VISIBLE_BANDS (2026-10-16: unlimited bands; past six the
+ * bundle shows a "×n" label instead, sim.ts). On the arm they start 0.85 m out, 0.08 m apart, and
+ * squeeze together on a short arm so they never reach into the cup; on the lever 1.05 m out, 0.07 m
+ * apart. `armAngleRad` is the arm's CURRENT drawn angle (REST at rest, the tracked swing angle
+ * mid-shot, the release/stop angle once it lands) - the lever side always sits at the stop direction
+ * for the part's own `angle` prop, since the lever itself never moves. Shared by the sim's per-frame
+ * overlay, `bandBundleAt` and spec.ts so every band-related visual agrees on one geometry. */
 export function bandSegments(part: PlacedPart, armAngleRad: number): { a: Vec2; b: Vec2; color: number }[] {
   const angleDeg = Number(part.props.angle ?? '45') || 45;
   const stopDir = armAngleFor(angleDeg);
-  const count = BAND_COUNT[part.props.power ?? 'Medium'] ?? BAND_COUNT.Medium!;
+  const count = Math.min(bandCount(part.props), MAX_VISIBLE_BANDS);
+  const hi = armLength(part.props) - BAND_CUP_GAP;
+  const step = count > 1 ? Math.min(BAND_STEP_ARM, (hi - BAND_ARM_MIN) / (count - 1)) : 0;
+  const a0 = Math.max(BAND_ARM_MIN, Math.min(0.85, hi - step * (count - 1)));
   const segs: { a: Vec2; b: Vec2; color: number }[] = [];
   for (let i = 0; i < count; i++) {
     segs.push({
-      a: centrelinePoint(part, armAngleRad, 0.85 + 0.08 * i),
-      b: centrelinePoint(part, stopDir, 1.05 + 0.08 * i),
+      a: centrelinePoint(part, armAngleRad, a0 + step * i),
+      b: centrelinePoint(part, stopDir, 1.05 + BAND_STEP_LEVER * i),
       color: BAND_COLOR,
     });
   }
   return segs;
+}
+
+/** The middle of the rubber band bundle at rest (the mean of the drawn bands' midpoints): the band
+ * drop zone for the supply bin, where a "−" badge goes, and where the "×n" label sits. */
+export function bandBundleAt(part: PlacedPart, armAngleRad: number = REST_ANGLE): Vec2 {
+  const segs = bandSegments(part, armAngleRad);
+  let x = 0;
+  let y = 0;
+  for (const { a, b } of segs) {
+    x += (a.x + b.x) / 2;
+    y += (a.y + b.y) / 2;
+  }
+  return { x: x / segs.length, y: y / segs.length };
 }
 
 /** Builds the kinematic arm body (no collider) at `armAngleRad` (default the part's rest pose)
@@ -365,9 +461,9 @@ export function buildArm(
   armAngleRad: number = REST_ANGLE,
   withFuzz = true,
 ): ArmBuild {
-  const armKey = part.props.arm ?? 'Short';
-  const armSpec = ARM[armKey] ?? ARM.Short!;
-  const L = armSpec.length;
+  // 2026-10-16: any length from 1.5 to 4 m (catalog.ts armLength); the picture, the cup, the loaded
+  // fuzz and the release point all follow it.
+  const L = armLength(part.props);
   const pivot = pivotOf(part);
 
   // No collider: the arm is kinematic and purely visual/rotational. Its body origin IS the
@@ -375,10 +471,10 @@ export function buildArm(
   const id = world.createBody({ type: 'kinematic', position: pivot, angle: armAngleRad });
 
   const common = { partId: part.id, body: id, locked: !!part.locked, lockPosition: !!part.lockPosition };
-  const armBox = armArtBox(armKey);
+  const armBox = armArtBox(L);
   const armShape: Shape = { kind: 'box', ...armBox };
   const visuals: RenderItem[] = [
-    { ...common, shape: armShape, color: ARM_COLOR, role: 'arm', textureKey: `real-arm-${armKey}` },
+    { ...common, shape: armShape, color: ARM_COLOR, role: 'arm', textureKey: armTextureKey(L) },
     // Drawn after the arm so it covers the stick's pivot end; not upright, so it turns with the arm.
     { ...common, shape: { kind: 'circle', r: GEAR_R }, color: GEAR_COLOR, role: 'arm', textureKey: 'real-gear' },
   ];
@@ -712,7 +808,7 @@ export function catapultRelease(part: PlacedPart): { tip: Vec2; v: Vec2; release
   const angleDeg = Number(part.props.angle ?? '45') || 45;
   const releaseAngle = (angleDeg * Math.PI) / 180;
   const tip = armTipPoint(part, armAngleFor(angleDeg));
-  // Power, arm and the fuzz's own mass (catalog.ts: the bands store a fixed energy per power).
+  // Bands, arm length and the fuzz's own mass (catalog.ts launchSpeed).
   const speed = launchSpeed(part.props);
   const v: Vec2 = { x: speed * Math.cos(releaseAngle), y: speed * Math.sin(releaseAngle) };
   return { tip, v, releaseAngle };

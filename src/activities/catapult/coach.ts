@@ -5,14 +5,17 @@
 //
 // Gao, 2026-10-15: "add a tutorial sequence to catapult", modelled on the rover's (vehicle/
 // coach.ts). Each intro level walks its one new thing: tap the catapult (its drawer opens), use
-// the new control (a power, the angle lever, a fuzz, an arm), then tap FIRE in the bottom bar. (The
-// move level, dragging the catapult, was removed the same day.) A step advances on the action
-// (`CoachContext.changed`: the kit records each prop code the child sets and 'move' once a part
-// was dragged) and stays done: once the new control was used and a shot has gone (`runs`), the
-// child is on their own for the rest of that level load. A fresh load starts over. Level 1 also
-// points at Next level after the pass, as the rover's level 1 does. Nothing on the Donut level
-// (its new thing, the split, is locked in and needs no tap), on Smash it (the crates' level: Bruno's
-// line and the hints teach it, and picking a fuzz is already known) or on the challenges.
+// the new control, then tap FIRE in the bottom bar. 2026-10-16 (Jon's huddle 2026-10-15: building
+// the catapult must feel tactile): the new controls are the supply bin and the slide knob, so the
+// glove demonstrates them - it carries a rubber band from the bin onto the band bundle (power), drags
+// the angle knob up the arc (angle), carries the Flower from the bin into the cup (weight) and
+// slides the arm knob out to 3 m (arm). A step advances on the action (`CoachContext.changed`: the
+// kit records each prop code the child sets, from a bin tile, a widget or the "−" badge) and stays
+// done: once the new control was used and a shot has gone (`runs`), the child is on their own for
+// the rest of that level load. A fresh load starts over. Level 1 also points at Next level after
+// the pass, as the rover's level 1 does. Nothing on the Donut level (its new thing, the split, is
+// locked in and needs no tap), on Smash it (the crates' level: Bruno's line and the hints teach it,
+// and picking a fuzz is already known) or on the challenges.
 import type { CoachContext, CoachGesture, CoachStep, CoachTarget } from '../../kit/types';
 import { gatedOptions, isOptionKnown, knownConcepts } from '../../kit/concepts';
 import { CATALOG } from './core/catalog';
@@ -26,39 +29,53 @@ export type CatapultCoachStep = CoachStep<PartKind>;
 export const FIRE_TARGET: CoachTarget<PartKind> = { type: 'bar', button: 'play' };
 /** The angle lever's drag handle (spec.ts `catapultWidgets`). */
 export const ANGLE_WIDGET = 'angle';
+/** The arm's slide knob (spec.ts `catapultWidgets`). */
+export const ARM_WIDGET = 'armLen';
+/** The rubber band pile in the supply bin (spec.ts `catapultBin`). */
+export const BAND_ITEM = 'band';
+/** A fuzz's tile in the supply bin (spec.ts `catapultBin`). */
+export function fuzzItem(name: string): string {
+  return `fuzz-${name}`;
+}
 
-/** What each intro level teaches: a drawer row (the hand on one of its options: `option` when the
- * lesson names one, else `suggestedOption`'s next one up), the angle lever (the hand drags its knob
- * up the arc, 2026-10-15). */
+/** What each intro level teaches: a bin tile carried onto the machine (the band pile, or one
+ * fuzz), the angle lever's knob or the arm's slide knob dragged (to `option` when the lesson names
+ * one, else the next notch up the child can see). */
 type Lesson =
-  | { kind: 'drawer'; code: 'power' | 'fuzz' | 'arm'; tap: string; pick: string; option?: string }
-  | { kind: 'lever'; tap: string; drag: string };
+  | { kind: 'band'; tap: string; drop: string }
+  | { kind: 'fuzz'; tap: string; drop: string; option: string }
+  | { kind: 'lever'; tap: string; drag: string }
+  | { kind: 'slide'; tap: string; drag: string; option: string };
 
 const LESSONS: Record<string, Lesson> = {
+  // Fling it starts on 1 band and exactly 2 pass: one band from the bin is the whole lesson.
   power: {
-    kind: 'drawer',
-    code: 'power',
-    tap: 'Tap the catapult to see its parts.',
-    pick: 'More rubber bands means more power. Tap this one.',
+    kind: 'band',
+    tap: 'Tap the catapult to open the supply bin.',
+    drop: 'Grab a rubber band from the bin and loop it on the catapult.',
   },
   angle: { kind: 'lever', tap: 'Tap the catapult. It has a new lever.', drag: 'Drag the lever knob to aim higher.' },
   // The energy rule (2026-10-15): the weight level is two targets, a near block for the heavy Metal
-  // and a far can only the light Flower reaches. The glove points at the Flower, the new idea (a
-  // light fuzz flies farther); the hints and Smash it carry the heavy half.
+  // and a far can only the light Flower reaches. The glove carries the Flower, the new idea (a
+  // light fuzz flies farther); the hints carry the heavy half.
   weight: {
-    kind: 'drawer',
-    code: 'fuzz',
-    tap: 'Tap the catapult to pick a fuzz.',
-    pick: 'A light fuzz flies farther. Tap this one.',
+    kind: 'fuzz',
+    tap: 'Tap the catapult to see the fuzzes in the bin.',
+    drop: 'A light fuzz flies farther. Drag the Flower from the bin into the cup.',
     option: 'Flower',
   },
+  // 2026-10-16: the arm is a length (1.5 .. 4 m) on a slide knob; every length from 2.75 m reaches
+  // the bullseye, so the glove slides it to 3 m (the old Long arm).
   arm: {
-    kind: 'drawer',
-    code: 'arm',
+    kind: 'slide',
     tap: 'Tap the catapult to look at its arm.',
-    pick: 'A longer arm flings farther. Tap it.',
+    drag: 'A longer arm flings farther. Slide the arm knob out.',
+    option: '3',
   },
 };
+
+/** The prop code each lesson's action sets. */
+const ACTION: Record<Lesson['kind'], string> = { band: 'bands', fuzz: 'fuzz', lever: 'angle', slide: 'armLen' };
 
 /** The FIRE step's words: the first level names what FIRE does, later ones just ask. */
 const FIRE_TEXT: Record<string, string> = { power: 'Now tap FIRE and watch it fly!' };
@@ -91,8 +108,8 @@ function catapultOf(ctx: CatapultCoachContext): PlacedPart | undefined {
 }
 
 /** The option the glove suggests for `code`: the next one up from the current value among those
- * the child can see on this level (more bands, a heavier fuzz, the long arm; options a later level
- * unlocks are skipped), or the one below when the current is already the last. */
+ * the child can see on this level (a heavier fuzz, a longer arm; options a later level unlocks are
+ * skipped), or the one below when the current is already the last. */
 export function suggestedOption(level: CatapultLevel, part: PlacedPart, code: string): string | null {
   const known = knownConcepts(LEVELS, level.id);
   const options = (CATALOG.catapult.descriptors.find((d) => d.code === code)?.options ?? [])
@@ -102,31 +119,50 @@ export function suggestedOption(level: CatapultLevel, part: PlacedPart, code: st
   return options[i + 1] ?? options[i - 1] ?? null;
 }
 
-/** `CourseSpec.coach`: the next step on the five intro levels, null everywhere else, during a
- * shot, and once the level's lesson is done. */
+/** The lesson's named option, unless the catapult has it already (then the next one over). */
+function lessonOption(level: CatapultLevel, part: PlacedPart, code: string, option: string): string | null {
+  return option !== part.props[code] ? option : suggestedOption(level, part, code);
+}
+
+/** `CourseSpec.coach`: the next step on the four intro levels, null everywhere else, during a
+ * shot, once the level's lesson is done, and once a failed level is out of shots. */
 export function catapultCoach(ctx: CatapultCoachContext): CatapultCoachStep | null {
   if (ctx.mode === 'play') return null;
   const lesson = LESSONS[ctx.level.id];
   if (!lesson) return null;
   if (ctx.passed) return ctx.level.id === 'power' ? step('next', NEXT_TEXT, { type: 'bar', button: 'next' }) : null;
+  // Out of shots and not passed (2026-10-16): the level is over, the red goal card and Bruno's line
+  // say so, and only Reset helps; the glove asking for the lesson's control again would be noise.
+  if (ctx.mode === 'done' && ctx.level.shots > 0 && ctx.runs >= ctx.level.shots) return null;
   const catapult = catapultOf(ctx);
   if (!catapult) return null;
   const changed = ctx.changed ?? [];
-  const action = lesson.kind === 'drawer' ? lesson.code : 'angle';
+  const action = ACTION[lesson.kind];
 
   if (!changed.includes(action)) {
     // The glove taps the catapult itself (the BUILD pill tried on 2026-10-15 is gone).
     if (ctx.selectedId !== catapult.id) return step('tap', lesson.tap, { type: 'part', partId: catapult.id });
-    if (lesson.kind === 'lever') {
-      // The glove drags the knob along the lever's arc (kit `CoachGesture`), not a tap.
-      const to = suggestedAngle(catapult);
-      return step('angle', lesson.drag, { type: 'widget', id: ANGLE_WIDGET }, to ? { kind: 'drag', toValue: to } : undefined);
+    switch (lesson.kind) {
+      case 'band':
+        // The glove carries a band from the bin's pile onto the band bundle (kit `CoachGesture`
+        // 'drop').
+        return step('bands', lesson.drop, { type: 'bin', itemId: BAND_ITEM }, { kind: 'drop' });
+      case 'fuzz': {
+        const value = lessonOption(ctx.level, catapult, 'fuzz', lesson.option);
+        if (!value) return null;
+        return step('fuzz', lesson.drop, { type: 'bin', itemId: fuzzItem(value) }, { kind: 'drop' });
+      }
+      case 'lever': {
+        // The glove drags the knob along the lever's arc, not a tap.
+        const to = suggestedAngle(catapult);
+        return step('angle', lesson.drag, { type: 'widget', id: ANGLE_WIDGET }, to ? { kind: 'drag', toValue: to } : undefined);
+      }
+      case 'slide': {
+        // The glove slides the arm's knob out along its track.
+        const to = lessonOption(ctx.level, catapult, 'armLen', lesson.option);
+        return step('armLen', lesson.drag, { type: 'widget', id: ARM_WIDGET }, to ? { kind: 'drag', toValue: to } : undefined);
+      }
     }
-    const value =
-      lesson.option !== undefined && lesson.option !== catapult.props[lesson.code]
-        ? lesson.option
-        : suggestedOption(ctx.level, catapult, lesson.code);
-    return step(lesson.code, lesson.pick, value ? { type: 'drawer', code: lesson.code, value } : { type: 'drawer', code: lesson.code });
   }
   // The new control is used: FIRE, unless a shot already went (then the child knows FIRE).
   if (ctx.runs === 0) return step('fire', FIRE_TEXT[ctx.level.id] ?? FIRE_AGAIN, FIRE_TARGET);

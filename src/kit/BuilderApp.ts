@@ -2,6 +2,7 @@
 // a CourseSpec, and glues the editor scene, the (async, physics-backed) sim and the HUD together.
 // Moved from activities/goldberg/app.ts.
 import type {
+  BinItem,
   Bounds,
   CameraFrame,
   CoachStep,
@@ -25,6 +26,7 @@ import type {
 } from './types';
 import { gatedOptions, isKnown, isOptionKnown, knownConcepts } from './concepts';
 import { hasShelfKinds } from './shelf';
+import { binItemValue, visibleBinItems } from './bin';
 import { allPass, evaluateGoals } from './goals';
 import { FixedStepper } from '../core/stepper';
 import { interpolateSnapshot } from './interpolate';
@@ -664,6 +666,78 @@ export class BuilderApp<
     });
   }
 
+  // ---- the SUPPLY BIN (2026-10-16, `CourseSpec.bin`) ----------------------
+
+  /** The course's raw bin for `part` (`spec.bin`), [] without one or without the drawer (the bin
+   * lives in the drawer). */
+  private rawBin(part: PlacedPart<K>): BinItem[] {
+    if (!this.spec.drawer || !this.spec.bin) return [];
+    return this.spec.bin(part, this.parts, this.level) ?? [];
+  }
+
+  /** The tiles the child sees for `part`: gated by `Level.introduces`, stamped `locked`/`isNew`. */
+  private binItems(part: PlacedPart<K>): BinItem[] {
+    return visibleBinItems(this.rawBin(part), part, this.known, this.gated, this.level.introduces ?? []);
+  }
+
+  /** The selected part and one of its visible bin items, or null (nothing selected, not tuning,
+   * no such item). */
+  private selectedBinItem(itemId: string): { part: PlacedPart<K>; item: BinItem } | null {
+    if (!this.canTune() || this.selectedId == null) return null;
+    const part = this.parts.find((p) => p.id === this.selectedId);
+    if (!part) return null;
+    const item = this.binItems(part).find((it) => it.id === itemId);
+    return item ? { part, item } : null;
+  }
+
+  /** `HudCallbacks.binValue`: what bin item `itemId` would set on the selected part right now. */
+  binValue(itemId: string): { code: string; value: string } | null {
+    const hit = this.selectedBinItem(itemId);
+    if (!hit || hit.item.locked) return null;
+    const descriptor = this.spec.catalog[hit.part.kind].descriptors.find((d) => d.code === hit.item.code);
+    const value = binItemValue(hit.item, hit.part.props, descriptor);
+    return value === null ? null : { code: hit.item.code, value };
+  }
+
+  /** `HudCallbacks.applyBin`: a tile dropped on the machine or tapped. Goes through `setProp`
+   * (undo, the concept gate, the budget, `CoachContext.changed`, the live rebuild); a locked tile
+   * flashes `lines.locked` like a locked widget; an active one (or a step past the row's last
+   * option) does nothing. */
+  applyBin(itemId: string): void {
+    const hit = this.selectedBinItem(itemId);
+    if (!hit) return;
+    if (hit.item.locked) {
+      this.lockedUntil = Date.now() + 2000;
+      return;
+    }
+    const next = this.binValue(itemId);
+    if (next) this.setProp(next.code, next.value);
+  }
+
+  /** Bin item `itemId`'s drop zone in world meters: its own `drop`, else the selected part's
+   * bounds (from the last build) as a circle around them. */
+  private binDropWorld(itemId: string): { at: Vec2; r: number } | null {
+    const hit = this.selectedBinItem(itemId);
+    if (!hit) return null;
+    if (hit.item.drop) return hit.item.drop;
+    const b = this.sim?.handles().find((h) => h.partId === hit.part.id)?.bounds;
+    return b ? { at: { x: b.x, y: b.y }, r: Math.max(b.w, b.h) / 2 } : null;
+  }
+
+  /** `HudCallbacks.binDropZone`: the drop zone on screen (stage px). */
+  binDropZone(itemId: string): { x: number; y: number; r: number } | null {
+    const zone = this.binDropWorld(itemId);
+    if (!zone) return null;
+    const c = this.scene.worldToStage(zone.at);
+    return { x: c.x, y: c.y, r: zone.r * this.scene.stagePerMeter() };
+  }
+
+  /** `HudCallbacks.binDrag`: the scene rings the dragged tile's drop zone (pulsing; brighter when
+   * the finger is inside it), or clears the ring. */
+  binDrag(itemId: string | null, hot: boolean): void {
+    this.scene.setDropZone(itemId !== null ? this.binDropWorld(itemId) : null, hot);
+  }
+
   removeSelected(): void {
     if (this.mode !== 'edit' || this.selectedId == null) return;
     const part = this.parts.find((p) => p.id === this.selectedId);
@@ -966,7 +1040,7 @@ export class BuilderApp<
     }
   }
 
-  /** Drops a widget's own gated options (dial/lever/rack/cycle carry a copy of the descriptor's
+  /** Drops a widget's own gated options (dial/lever/slide/rack/cycle carry a copy of the descriptor's
    * options; a widget with no `code`, or a tap/pull widget, has none to filter and passes through
    * unchanged). Copies the widget, never mutates the one `spec.widgets` returned. Cheap: these are
    * the only four kinds that carry a per-option list. */
@@ -976,6 +1050,7 @@ export class BuilderApp<
     switch (w.kind) {
       case 'dial':
       case 'lever':
+      case 'slide':
         return { ...w, options: w.options.filter((o) => isOptionKnown(this.known, this.gated, code, o.value)) };
       case 'cycle':
         return { ...w, options: w.options.filter((o) => isOptionKnown(this.known, this.gated, code, o.value)) };
@@ -1159,6 +1234,13 @@ export class BuilderApp<
     }
     const selectedPart = this.selectedId != null ? this.parts.find((p) => p.id === this.selectedId) : undefined;
     const claimedCodes = new Set(this.widgets.map((w) => w.code).filter((c): c is string => !!c));
+    // 2026-10-16: the SUPPLY BIN replaces the rows its items drive (every item's code, even one
+    // hidden by `introduces`: a bin-driven code never shows as a row).
+    const rawBin = selectedPart && canTune ? this.rawBin(selectedPart) : [];
+    for (const it of rawBin) claimedCodes.add(it.code);
+    const binNow = selectedPart && rawBin.length > 0
+      ? visibleBinItems(rawBin, selectedPart, this.known, this.gated, this.level.introduces ?? [])
+      : [];
     const selected = selectedPart && canTune
       ? (() => {
           const descriptors = this.spec.catalog[selectedPart.kind].descriptors
@@ -1206,6 +1288,7 @@ export class BuilderApp<
       scroll: this.scrollState(),
       coach: this.coach,
       unlocked: this.unlocked,
+      bin: binNow.length > 0 ? binNow : null,
     };
   }
 
