@@ -1,6 +1,6 @@
-// Catapult course spec: the child builds the catapult from the SUPPLY BIN (rubber bands and
-// fuzzes dragged out of the drawer onto the machine), drags the angle lever and the arm's slide
-// knob on the machine itself, then taps FIRE (the bottom bar's yellow button) to snip the trigger
+// Catapult course spec: the child builds the catapult by hand - stretches each rubber band from the
+// arm to the angle lever (2026-10-16), drags fuzzes out of the SUPPLY BIN into the cup, drags the
+// angle lever and the arm's slide knob on the machine itself, then taps FIRE (the bottom bar's yellow button) to snip the trigger
 // string and launch within a shot budget, knocking down cans and block towers, sometimes chasing a
 // bullseye. Product direction 2026-09-22: the PULL ring is gone - FIRE is a plain button, angle is
 // a lever dragged on the machine, power is visible rubber bands. 2026-10-15 (Gao: "remove the fire
@@ -12,26 +12,29 @@
 // lead's real exports (core/build.ts's ART_PPM block).
 //
 // 2026-10-16 (Jon's huddle 2026-10-15: "the entirety of your effort for catapult should be on the
-// catapult right now" - building it must feel tactile): rubber bands are unlimited (a band tile
-// with an endless pile, `catapultBin`; ~10+ bands is a space shot, core/catalog.ts SPACE_SPEED),
-// a small "−" badge takes one off, the arm length is a knob slid along the arm (1.5 .. 4 m), the
-// world is the catapult's own backyard (backdrop.ts; no ferris wheel), and the goals are the
-// coaster's big goal cards (Gao: "change to use goal cards like in roller coaster";
-// `catapultGoalCard`). See src/kit/types.ts for the CourseSpec contract this course plugs into.
+// catapult right now" - building it must feel tactile): rubber bands are unlimited (~10+ bands is
+// a space shot, core/catalog.ts SPACE_SPEED), a small "−" badge takes one off, the arm length is a
+// knob slid along the arm (1.5 .. 4 m), the backdrop is the coaster's theme park without its ferris
+// wheel (backdrop.ts; Gao: "for the background, just use the roller coaster's bg but without the
+// ferris wheel"), and the goals are the coaster's big goal cards (Gao: "change to use goal cards
+// like in roller coaster"; `catapultGoalCard`). Later on 2026-10-16 (Gao: "i want the player to
+// actually build the catapult's rubber bands. i want them to drag the rubber band from one arm to
+// the other to install it"): a band is no longer a bin tile; the child stretches it from a hook on
+// the arm to a hook on the angle lever (kit `StretchWidget`, id 'band-on'). See src/kit/types.ts for the CourseSpec contract this course plugs into.
 import type { BinItem, CourseSpec, Goal, KitGoalCard, PlacedPart, RenderItem, ResultCard, Vec2, Widget } from '../../kit/types';
 import type { PartKind, Metrics, Outcome, CatapultLevel } from './core/types';
-import { CATALOG, FUZZ, FUZZ_NAMES, PART_LIMIT, armLength, bandCount, blockSize, defaultProps, fuzzName } from './core/catalog';
+import { BAND_COLOR, CATALOG, FUZZ, FUZZ_NAMES, MAX_BANDS, PART_LIMIT, armLength, bandCount, blockSize, defaultProps, fuzzName } from './core/catalog';
 import {
   ARM_TEXTURES,
   armAngleFor,
   armSlide,
   BAND_ASPECTS,
-  bandBundleAt,
   BLOCK_SIZES,
   CAN_TEXTURE,
   crateTexture,
   cupAtRest,
   LEVER_LENGTH,
+  nextBandHooks,
   PIVOT_DX,
   PIVOT_DY,
   REST_ANGLE,
@@ -82,9 +85,9 @@ const FOLLOW_ZOOM = 1.6;
 const FOLLOW_DY = 0.5 + riseFor(FOLLOW_ZOOM);
 
 /** Where a bin item lands on the machine (world meters, centre + width), for the tap's "part
- * flies to the machine" animation (kit `partTargets`): a rubber band flies to the band bundle (for
- * the NEW count), a fuzz into the cup. The angle and the arm are dragged on the machine itself
- * (widgets), so nothing flies for them. Only the catapult part has targets. */
+ * flies to the machine" animation (kit `partTargets`): a fuzz into the cup. The bands are stretched
+ * on by hand and the angle and the arm are dragged on the machine itself (widgets), so nothing
+ * flies for them. Only the catapult part has targets. */
 function catapultPartTargets(
   part: PlacedPart<PartKind>,
   code: string,
@@ -92,8 +95,6 @@ function catapultPartTargets(
 ): { at: Vec2; size: number }[] {
   if (part.kind !== 'catapult') return [];
   switch (code) {
-    case 'bands':
-      return [{ at: bandBundleAt({ ...part, props: { ...part.props, bands: value } }), size: 0.6 }];
     case 'fuzz': {
       // Sized to the NEW fuzz's diameter (with a little headroom).
       const fuzzSpec = FUZZ[value] ?? FUZZ.Fur!;
@@ -106,15 +107,13 @@ function catapultPartTargets(
 
 // ---- the SUPPLY BIN (2026-10-16) -----------------------------------------------------------
 // Jon (huddle 2026-10-15): "a classroom supply bin / toolbox you pull parts from instead of menu
-// rows", "rubber bands unlimited like rover wheels"; Gao: "add a band by looping it on". The child
-// drags a band tile onto the band bundle (or taps it: +1 band, an endless pile) and a fuzz tile
-// into the cup. Items for a code the level has not introduced yet are hidden by the kit (the power
-// level shows the band pile alone; the Donut tile waits for its own level, `fuzz:Donut`); a code in
-// the catapult's lockedProps shows padlocked.
+// rows". The child drags a fuzz tile into the cup (or taps it). Items for a code the level has not
+// introduced yet are hidden by the kit (the Donut tile waits for its own level, `fuzz:Donut`); a code
+// in the catapult's lockedProps shows padlocked. Until later on 2026-10-16 the bin also held an
+// endless Rubber band tile dropped onto the band bundle; the bands are stretched on by hand now
+// (Gao: "drag the rubber band from one arm to the other to install it", `catapultWidgets`), so on
+// Fling it the bin is empty and the drawer stays shut (kit `drawerHasContent`).
 
-/** The band tile's drop zone radius around the band bundle (m): 0.75 m is 60 px at the build
- * view's 2.5x, a finger-sized target that still stays off the cup and the angle knob. */
-export const BAND_DROP_R = 0.75;
 /** A fuzz tile's drop zone radius around the cup centre (m): 0.7 m (56 px at 2.5x) covers the
  * cup and the biggest fuzz (the Metal's spiky cap) with a finger's slack. */
 export const CUP_DROP_R = 0.7;
@@ -124,30 +123,18 @@ export function catapultBin(part: PlacedPart<PartKind>): BinItem[] | null {
   if (part.kind !== 'catapult') return null;
   const loaded = fuzzName(part.props);
   const cup = cupAtRest(part);
-  return [
-    {
-      id: 'band',
-      image: 'ui/bin/band.svg',
-      label: 'Rubber band',
-      group: 'Rubber bands',
-      code: 'bands',
-      step: 1,
-      badge: '∞',
-      drop: { at: bandBundleAt(part), r: BAND_DROP_R },
-    },
-    ...FUZZ_NAMES.map(
-      (name): BinItem => ({
-        id: `fuzz-${name}`,
-        image: FUZZ[name]!.image,
-        label: FUZZ[name]!.label,
-        group: 'Fuzzes',
-        code: 'fuzz',
-        value: name,
-        active: name === loaded,
-        drop: { at: cup, r: CUP_DROP_R },
-      }),
-    ),
-  ];
+  return FUZZ_NAMES.map(
+    (name): BinItem => ({
+      id: `fuzz-${name}`,
+      image: FUZZ[name]!.image,
+      label: FUZZ[name]!.label,
+      group: 'Fuzzes',
+      code: 'fuzz',
+      value: name,
+      active: name === loaded,
+      drop: { at: cup, r: CUP_DROP_R },
+    }),
+  );
 }
 
 /** Scale per fuzz for its picture (public/parts/catapult/fuzz-<name>.png, a square canvas centred
@@ -212,11 +199,12 @@ function placedAboveLine(parts: PlacedPart<PartKind>[], level: CatapultLevel): n
 }
 
 // ---- in-scene widgets ------------------------------------------------------------------------
-// The angle lever's drag handle (2026-09-22), the arm's slide knob and the "take one band off"
-// badge (2026-10-16). FIRE is the bottom bar's yellow button since 2026-10-15 (it was an in-scene
-// tap button by the trigger string; the string's snip burst still plays there, core/build.ts
-// `fireSpot`). The bands and the fuzz come from the supply bin (`catapultBin`). The kit drops a
-// widget whose code the level has not introduced yet and padlocks one whose code is locked.
+// The rubber band stretched from arm to lever (2026-10-16), the angle lever's drag handle
+// (2026-09-22), the arm's slide knob and the "take one band off" badge (2026-10-16). FIRE is the
+// bottom bar's yellow button since 2026-10-15 (it was an in-scene tap button by the trigger string;
+// the string's snip burst still plays there, core/build.ts `fireSpot`). The fuzz comes from the
+// supply bin (`catapultBin`). The kit drops a widget whose code the level has not introduced yet and
+// mutes one whose code is locked.
 
 /** How far past the lever's tip the angle knob rides (m): clear of the lever's blue pad. */
 const KNOB_OUT_M = 0.55;
@@ -225,10 +213,15 @@ const KNOB_OUT_M = 0.55;
  * its track runs parallel to the arm like a ruler, 1.5 m nearest the base, 4 m out at the left.
  * Above the cup it would sit on the angle knob at 60-75 degrees with a short arm. */
 export const SLIDE_UNDER_M = 0.7;
-/** The "−" badge under the band bundle (m from the bundle's middle): on the base's A-frame below the
- * arm, clear of the bands, the pivot gear and the 1.5 m slide knob. */
-const BAND_OFF_DX = 0.2;
-const BAND_OFF_DY = -1.0;
+/** The "−" badge (2026-10-16): BAND_OFF_ALONG m out along the arm at rest from the pivot (the
+ * innermost a band ever hooks on, core/build.ts BAND_ARM_MIN), then BAND_OFF_UNDER m square to the
+ * arm, downward: on the base's A-frame under the arm, 72 px (at the build zoom) from the nearest arm
+ * hook a band can have and on the far side of the arm from the lever hooks and the stretch path, so
+ * its 64 px hit circle never sits on a hook; clear of the pivot gear and the slide knob. */
+const BAND_OFF_ALONG = 0.55;
+const BAND_OFF_UNDER = 0.9;
+/** The band picture the stretch widget draws while a band is held (core/build.ts BAND_ASPECTS). */
+const STRETCH_BAND_TEXTURE = 'real-band-8';
 
 /** The slide knob's track: `armSlide` (the cup centre at 1.5 m and at 4 m, core/build.ts) moved
  * SLIDE_UNDER_M square to the arm at rest, downward. Option i (ARM_LENGTHS[i]) sits under that
@@ -243,10 +236,14 @@ export function armSlideTrack(part: PlacedPart<PartKind>): { from: Vec2; to: Vec
   return { from: shift(from), to: shift(to) };
 }
 
-/** Where the "−" badge sits (world m). */
+/** Where the "−" badge sits (world m): see BAND_OFF_ALONG. */
 export function bandOffAt(part: PlacedPart<PartKind>): Vec2 {
-  const bundle = bandBundleAt(part);
-  return { x: bundle.x + BAND_OFF_DX, y: bundle.y + BAND_OFF_DY };
+  const px = part.x + PIVOT_DX;
+  const py = part.y + PIVOT_DY;
+  const c = Math.cos(REST_ANGLE);
+  const s = Math.sin(REST_ANGLE);
+  // Square to the arm, on the ground side: (-sin, cos) of 195 degrees points down-right.
+  return { x: px + BAND_OFF_ALONG * c - BAND_OFF_UNDER * s, y: py + BAND_OFF_ALONG * s + BAND_OFF_UNDER * c };
 }
 
 export function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
@@ -254,7 +251,29 @@ export function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
   const { x, y } = part;
   const pivot: Vec2 = { x: x + PIVOT_DX, y: y + PIVOT_DY };
   const options = (code: string) => CATALOG.catapult.descriptors.find((d) => d.code === code)!.options;
-  const widgets: Widget[] = [
+  const bands = bandCount(part.props);
+  const widgets: Widget[] = [];
+  // 2026-10-16 (Gao: "i want the player to actually build the catapult's rubber bands. i want them
+  // to drag the rubber band from one arm to the other to install it"): two pulsing hooks where the
+  // next band goes (`nextBandHooks`: on the arm and on the angle lever, where the machine then draws
+  // it); stretch a band from either one to the other and it hooks on: one band more, through the
+  // normal prop path (undo, locks, `CoachContext.changed`, the between-shots live update). First in
+  // the list, so the angle knob and the slide knob win a press where their grab circles overlap a
+  // hook. Gone at MAX_BANDS. Kept while the bands are locked, muted by the kit (a touch gets Bruno's
+  // "bolted down" line): the widget is what keeps the Rubber bands row (60 options) out of the
+  // drawer. The kit drops it before the 'bands' row is introduced.
+  if (bands < MAX_BANDS) {
+    widgets.push({
+      kind: 'stretch',
+      id: 'band-on',
+      code: 'bands',
+      value: String(bands + 1),
+      ...nextBandHooks(part),
+      textureKey: STRETCH_BAND_TEXTURE,
+      color: BAND_COLOR,
+    });
+  }
+  widgets.push(
     {
       kind: 'dial',
       id: 'angle',
@@ -292,13 +311,12 @@ export function catapultWidgets(part: PlacedPart<PartKind>): Widget[] {
       live: true,
       readout: 'knob',
     },
-  ];
-  // Take one band off (2026-10-16, bands are unlimited from the bin): a small red "−" badge under
-  // the bundle. It sets one band fewer through the normal prop path (`values`: the one next value),
-  // so undo, locks, `CoachContext.changed` and the between-shots live update all hold. Hidden at 1
-  // band (a catapult always keeps one) and while the bands are locked (a padlocked "−" is noise;
-  // the bin's band tile already shows the padlock).
-  const bands = bandCount(part.props);
+  );
+  // Take one band off (2026-10-16, bands are unlimited): a small red "−" badge on the A-frame under
+  // the arm (`bandOffAt`). It sets one band fewer through the normal prop path (`values`: the one
+  // next value), so undo, locks, `CoachContext.changed` and the between-shots live update all hold.
+  // Hidden at 1 band (a catapult always keeps one) and while the bands are locked (a muted "−" next
+  // to the muted hooks is noise).
   if (bands > 1 && !part.lockedProps?.includes('bands')) {
     widgets.push({
       kind: 'tap',
@@ -388,9 +406,10 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
   //
   // 2026-10-07: the world is WORLD_H = 19.125 m tall (was 15; core/build.ts): no dash
   // (`hud.goalsOverlay`), so the 612 px panel starts at stage y 78 and shows y -1.5 .. 17.625.
-  // 2026-10-16 (Jon's huddle 2026-10-15: "each game needs its own environment"): the catapult's
-  // own placeholder backyard (backdrop.ts: picket fence, shed, trees, drifting clouds, lawn green
-  // over garden soil), replacing the coaster's theme park and its ferris wheel (2026-10-15).
+  // 2026-10-16 (Gao: "for the background, just use the roller coaster's bg but without the ferris
+  // wheel"): the coaster's sky, drifting clouds, hazy hills and trees (backdrop.ts), its ferris
+  // wheel left out; the coaster's grass over warm earth. (Earlier that day a placeholder backyard
+  // with a fence and a shed stood here, after the coaster's park with its wheel on 2026-10-15.)
   world: {
     worldW: 30,
     worldH: WORLD_H,
@@ -469,20 +488,21 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
 
   widgets: catapultWidgets,
 
-  // The supply bin for the catapult (rubber bands, fuzzes); the targets and free-play parts keep
-  // their drawer rows.
+  // The supply bin for the catapult (the fuzzes); the targets and free-play parts keep their drawer
+  // rows.
   bin: catapultBin,
 
   // No BUILD pill (2026-10-15: tried above, then under the catapult; Gao: "just remove the build
   // button, it doesnt look good"): the child taps the catapult itself, and the coach points there.
 
-  // Tutorials on the four intro levels (coach.ts): tap the catapult, the new thing (a band dropped
-  // from the bin, the angle knob dragged, the Flower dropped in the cup, the arm knob slid), FIRE.
+  // Tutorials on the four intro levels (coach.ts): tap the catapult, the new thing (a band stretched
+  // from arm to arm, the angle knob dragged, the Flower dropped in the cup, the arm knob slid), FIRE.
   coach: catapultCoach,
 
   partTargets: catapultPartTargets,
 
-  // The drawer holds the supply bin for the catapult and picture-button rows for the other parts;
+  // The drawer holds the supply bin for the catapult (shut while it has no tile to show, kit
+  // `drawerHasContent`) and picture-button rows for the other parts;
   // the fuzz tiles are the same pictures as the scene textures, so a swapped fuzz looks the same in
   // the bin and in the cup.
   drawer: true,
@@ -503,7 +523,8 @@ export const catapultSpec: CourseSpec<PartKind, Metrics, Outcome, CatapultLevel>
     // box stretches the 1:2 canvas, so a scale of 534 / 324 draws the beans 0.8 m tall at their own
     // aspect (0.659 m wide), centred on the box (core/build.ts's CAN_TEXTURE).
     [CAN_TEXTURE]: { url: 'parts/catapult/can-beans.png', scale: 534 / 324 },
-    // Overlay sprites (core/sim.ts): the rubber bands and the trigger string, and their hooks.
+    // Overlay sprites (core/sim.ts): the rubber bands and the trigger string, and their hooks. The
+    // stretch widget draws a held band with real-band-8 (STRETCH_BAND_TEXTURE).
     ...bandTextures(),
     'real-hook': { url: 'parts/catapult/real-hook.png' },
     // The trigger-string snip burst (same pop/hold/fade treatment as the hit bursts below).

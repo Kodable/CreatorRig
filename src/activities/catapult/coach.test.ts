@@ -7,7 +7,7 @@ import {
   ANGLE_DRAG_NOTCHES,
   ANGLE_WIDGET,
   ARM_WIDGET,
-  BAND_ITEM,
+  BAND_WIDGET,
   catapultCoach,
   FIRE_TARGET,
   fuzzItem,
@@ -66,13 +66,15 @@ function expectTargetOnScreen(c: CatapultCoachContext, s: CatapultCoachStep): vo
     expect(sel!.lockedProps ?? [], s.id).not.toContain(w.code);
     if (s.gesture) {
       // A drag demonstration: the widget is a dial or a slide that has the target option, not
-      // already there.
+      // already there, or a stretch whose value (the band it adds) is the target.
       expect(s.gesture.kind, s.id).toBe('drag');
       if (s.gesture.kind !== 'drag') return;
-      expect(['dial', 'slide'], s.id).toContain(w.kind);
+      expect(['dial', 'slide', 'stretch'], s.id).toContain(w.kind);
       if (w.kind === 'dial' || w.kind === 'slide') {
         expect(w.options.map((o) => o.value), s.id).toContain(s.gesture.toValue);
         expect(s.gesture.toValue, s.id).not.toBe(w.value);
+      } else if (w.kind === 'stretch') {
+        expect(s.gesture.toValue, s.id).toBe(w.value);
       }
     }
   } else if (t.type === 'bin') {
@@ -93,15 +95,22 @@ function expectTargetOnScreen(c: CatapultCoachContext, s: CatapultCoachStep): vo
 }
 
 describe('catapultCoach: level 1 (power) walks every tap', () => {
-  it('tap the catapult -> carry a rubber band from the bin onto the machine (2026-10-16) -> FIRE', () => {
-    expect(coach('power')).toEqual({ id: 'tap', text: 'Tap the catapult to open the supply bin.', target: { type: 'part', partId: 1 } });
-    // 2026-10-16 (Jon: a supply bin you pull parts from): the glove drags a band from the bin's pile.
+  it('tap the catapult -> stretch a rubber band from one arm to the other (2026-10-16) -> FIRE', () => {
+    expect(coach('power')).toEqual({ id: 'tap', text: 'Tap the catapult to build it.', target: { type: 'part', partId: 1 } });
+    // 2026-10-16 (Gao: "drag the rubber band from one arm to the other to install it"): the glove
+    // stretches a band across the hooks; Fling it starts on 1 band, so the band it adds is the 2nd.
     expect(coach('power', { selected: true })).toEqual({
       id: 'bands',
-      text: 'Grab a rubber band from the bin and loop it on the catapult.',
-      target: { type: 'bin', itemId: BAND_ITEM },
-      gesture: { kind: 'drop' },
+      text: 'Drag a rubber band from one arm to the other to hook it on.',
+      target: { type: 'widget', id: BAND_WIDGET },
+      gesture: { kind: 'drag', toValue: '2' },
     });
+    // The demonstration follows the widget's value (the band it would add).
+    const c = ctxFor('power', { selected: true });
+    c.parts = c.parts.map((p) => (p.kind === 'catapult' ? { ...p, props: { ...p.props, bands: '4' } } : p));
+    expect(catapultCoach(c)?.gesture).toEqual({ kind: 'drag', toValue: '5' });
+    const band = catapultSpec.widgets!(c.parts[0]!, c.parts, c.level).find((w) => w.id === BAND_WIDGET);
+    expect(band).toMatchObject({ kind: 'stretch', value: '5' });
     expect(coach('power', { selected: true, changed: ['bands'] })).toEqual({ id: 'fire', text: 'Now tap FIRE and watch it fly!', target: FIRE_TARGET });
     // FIRE is on the bar, so the step holds whether the drawer is still open or not.
     expect(coach('power', { changed: ['bands'] })?.id).toBe('fire');
@@ -199,7 +208,7 @@ describe('catapultCoach: levels 2-5, one new thing each, then FIRE', () => {
   });
 });
 
-describe('catapultCoach: the angle and arm steps drag, the band and fuzz steps drop from the bin, the rest tap', () => {
+describe('catapultCoach: the band, angle and arm steps drag, the fuzz step drops from the bin, the rest tap', () => {
   it('suggestedAngle: two notches (30 degrees) up, capped at 75; from 75 two down', () => {
     expect(ANGLE_DRAG_NOTCHES).toBe(2);
     const part = findLevel('angle')!.parts.find((p) => p.kind === 'catapult')!;
@@ -218,8 +227,8 @@ describe('catapultCoach: the angle and arm steps drag, the band and fuzz steps d
     expect(catapultCoach(c)?.gesture).toEqual({ kind: 'drag', toValue: '75' });
   });
 
-  it('each step\'s gesture: drag on the angle and arm steps, drop on the band and fuzz steps, none on tap / FIRE / Next', () => {
-    const want: Record<string, string | undefined> = { angle: 'drag', armLen: 'drag', bands: 'drop', fuzz: 'drop', tap: undefined, fire: undefined, next: undefined };
+  it('each step\'s gesture: drag on the band, angle and arm steps, drop on the fuzz step, none on tap / FIRE / Next', () => {
+    const want: Record<string, string | undefined> = { angle: 'drag', armLen: 'drag', bands: 'drag', fuzz: 'drop', tap: undefined, fire: undefined, next: undefined };
     for (const id of INTRO) {
       for (const changed of [[], ['bands'], ['fuzz'], ['armLen'], ['move'], ['angle']]) {
         for (const selected of [false, true]) {
@@ -230,9 +239,11 @@ describe('catapultCoach: the angle and arm steps drag, the band and fuzz steps d
     }
   });
 
-  it('the coach lines name the bin and stay short (<= 100 characters, Bruno\'s voice)', () => {
-    expect(coach('power', { selected: true })!.text).toContain('from the bin');
+  it('the band line says to stretch it from arm to arm, the fuzz line names the bin; no line sends kids to the ' +
+    'bin for a band', () => {
+    expect(coach('power', { selected: true })!.text).toContain('from one arm to the other');
     expect(coach('weight', { selected: true })!.text).toContain('from the bin');
+    expect(coach('power')!.text).not.toContain('bin');
   });
 });
 

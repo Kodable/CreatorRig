@@ -234,7 +234,8 @@ export const LEVELS: CatapultLevel[] = [
     ],
     hints: [
       'One band barely gets the fuzz off the ground. What could reach that shelf?',
-      'Tap the catapult, then check the rubber bands. Too few falls short, too many flies over.',
+      // 2026-10-16: bands are stretched on by hand (Gao: "drag the rubber band from one arm to the other").
+      'Tap the catapult, then stretch a band from arm to arm. Too few falls short, too many flies over.',
       'Try 2 rubber bands, then tap FIRE.',
     ],
     failHints: { outOfShots: 'Out of fuzzes! The can is still standing up there. Try a different number of bands.', space: SPACE_HINT },

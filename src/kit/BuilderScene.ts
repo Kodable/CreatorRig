@@ -28,6 +28,11 @@ import {
   slidePointAt,
   slidePointT,
   slideTToValue,
+  stretchAnchor,
+  stretchBandWidth,
+  stretchGrabEnd,
+  stretchReleaseHits,
+  stretchTarget,
   widgetAnchor,
   type CycleGeom,
   type DialGeom,
@@ -35,10 +40,11 @@ import {
   type PullGeom,
   type RackGeom,
   type SlideGeom,
+  type StretchGeom,
   type TapGeom,
   type WidgetGeom,
 } from './widgetLayout';
-import { dialDragPose, slideDragPose } from './coachGesture';
+import { dialDragPose, slideDragPose, stretchDragPose } from './coachGesture';
 import type {
   BackgroundLayer,
   Bounds,
@@ -75,11 +81,28 @@ interface WidgetTap {
   value?: string;
 }
 
-/** A dial, pull, lever or slide widget grabbed on pointerdown; released on pointerup. */
+/** A dial, pull, lever, slide or stretch widget grabbed on pointerdown; released on pointerup. */
 interface WidgetDrag {
   id: string;
-  kind: 'dial' | 'pull' | 'lever' | 'slide';
+  kind: 'dial' | 'pull' | 'lever' | 'slide' | 'stretch';
 }
+
+/** A `StretchWidget`'s band after the finger lets go (world m, so it holds whatever the widget
+ * list does next): 'snap' twangs on the hooks `a`..`b` (installed), 'back' shrinks from the release
+ * point `b` into its hook `a` (missed). */
+interface StretchAnim {
+  id: string;
+  kind: 'snap' | 'back';
+  a: Vec2;
+  b: Vec2;
+  start: number;
+  textureKey?: string;
+  color: number;
+}
+
+/** A stretch band's twang on the hooks, and its snap back into the hook after a miss (ms). */
+const STRETCH_SNAP_MS = 420;
+const STRETCH_BACK_MS = 200;
 
 /** A tap widget's icon/texture flying from `from` to `to` after a live tap with `hopTo` set. */
 interface WidgetHop {
@@ -485,6 +508,12 @@ export class BuilderScene extends Phaser.Scene {
   /** A slide drag: where along the track (0..1) the finger grabbed, minus the knob's own place, so
    * the knob does not jump to the finger when it is grabbed off-centre. */
   private slideGrabDT = 0;
+  /** A stretch drag (`StretchWidget`): which hook the band was grabbed on (0 = `from`), and where
+   * the finger holds its other end (stage px). */
+  private stretchEnd: 0 | 1 = 0;
+  private stretchFinger: Vec2 = { x: 0, y: 0 };
+  /** Bands let go: the twang on the hooks, or the snap back (see `StretchAnim`). */
+  private stretchAnims: StretchAnim[] = [];
   /** 2026-10-16, the SUPPLY BIN: the dragged tile's drop zone (world meters), ringed while a tile
    * is dragged out of the drawer (`setDropZone`); `dropHot` = the finger is inside it. */
   private dropZone: { at: Vec2; r: number } | null = null;
@@ -1401,6 +1430,8 @@ export class BuilderScene extends Phaser.Scene {
      * tap. */
     let drag: { frame: 0 | 1 | 2; tip: Vec2; alpha: number; ghost: Vec2 | null } | null = null;
     let ghostR = 0;
+    /** A stretch demonstration's ghost is a band from this hook to the fingertip, not a knob. */
+    let ghostBand: { from: Vec2; color: number } | null = null;
     if (target && this.editable) {
       if (target.type === 'widget') {
         const geom = this.widgetGeoms.find((gm) => gm.id === target.id);
@@ -1413,6 +1444,11 @@ export class BuilderScene extends Phaser.Scene {
           // 2026-10-16: the same stroke along a slide's straight track (the catapult's arm length).
           drag = slideDragPose(geom, this.coachGesture.toValue, this.nowMs - this.coachStart);
           ghostR = geom.knobR;
+        } else if (geom?.kind === 'stretch' && this.coachGesture?.kind === 'drag' && !held) {
+          // 2026-10-16 (Gao: "drag the rubber band from one arm to the other"): the glove carries a
+          // stretched band from the `from` hook to the `to` hook.
+          drag = stretchDragPose(geom, this.coachGesture.toValue, this.nowMs - this.coachStart);
+          ghostBand = { from: geom.from, color: geom.color };
         }
         if (drag) p = drag.tip;
         else if (geom && !held) p = widgetAnchor(geom);
@@ -1428,7 +1464,7 @@ export class BuilderScene extends Phaser.Scene {
     if (p && !this.worldCam.worldView.contains(p.x, p.y)) p = null;
     // The pause between drag strokes: no hand at all.
     if (p && drag && drag.alpha <= 0) p = null;
-    this.drawCoachGhost(p && drag ? drag.ghost : null, ghostR, drag?.alpha ?? 0);
+    this.drawCoachGhost(p && drag ? drag.ghost : null, ghostR, drag?.alpha ?? 0, ghostBand);
     if (!p) {
       this.coachHand?.setVisible(false);
       this.coachHandShadow?.setVisible(false);
@@ -1488,7 +1524,7 @@ export class BuilderScene extends Phaser.Scene {
 
   /** The drag demonstration's ghost handle: a faint copy of the dial's knob (same radius) under
    * the pressed glove, so the stroke reads as "the knob goes with your finger". */
-  private drawCoachGhost(at: Vec2 | null, r: number, alpha: number): void {
+  private drawCoachGhost(at: Vec2 | null, r: number, alpha: number, band: { from: Vec2; color: number } | null = null): void {
     if (!at || alpha <= 0) {
       this.coachGhost?.setVisible(false);
       return;
@@ -1501,6 +1537,20 @@ export class BuilderScene extends Phaser.Scene {
     }
     const s = this.pxScale;
     g.clear();
+    if (band) {
+      // A stretch demonstration: a see-through band from the hook to the fingertip.
+      const len = Math.hypot(at.x - band.from.x, at.y - band.from.y);
+      const w = stretchBandWidth(len, s);
+      g.lineStyle(w + 3 * s, darken(band.color, 0.4), 0.5 * alpha);
+      g.lineBetween(band.from.x, band.from.y, at.x, at.y);
+      g.lineStyle(w, band.color, 0.7 * alpha);
+      g.lineBetween(band.from.x, band.from.y, at.x, at.y);
+      g.fillStyle(band.color, 0.7 * alpha);
+      g.fillCircle(band.from.x, band.from.y, w / 2);
+      g.fillCircle(at.x, at.y, w / 2);
+      g.setVisible(true);
+      return;
+    }
     g.fillStyle(KNOB_COLOR, 0.35 * alpha);
     g.fillCircle(at.x, at.y, r);
     g.lineStyle(3 * s, ACTIVE, 0.6 * alpha);
@@ -1959,11 +2009,15 @@ export class BuilderScene extends Phaser.Scene {
         case 'slide':
           this.drawSlideWidget(geom, seenText);
           break;
+        case 'stretch':
+          this.drawStretchWidget(geom, seenImg);
+          break;
       }
       // A locked widget is drawn muted only; the padlock badge was dropped as too distracting.
     }
 
     this.drawWidgetHops(seenText, seenImg);
+    this.drawStretchAnims(seenImg);
 
     for (const [key, text] of this.widgetTextCache) if (!seenText.has(key)) text.setVisible(false);
     for (const [key, img] of this.widgetImageCache) if (!seenImg.has(key)) img.setVisible(false);
@@ -2299,6 +2353,153 @@ export class BuilderScene extends Phaser.Scene {
       text.setScale(s * pop);
       text.setPosition(knob.x, knob.y);
     }
+  }
+
+  /** `StretchWidget` (2026-10-16, Gao: "drag the rubber band from one arm to the other to install
+   * it"). Idle: each hook a peg in a gently pulsing white ring, a faint dotted guide between them.
+   * Held: a band from the grabbed hook to the finger (`drawStretchBand`: thinner the longer, a
+   * little wobble) and the OTHER hook glowing bigger as the target, green while a release there
+   * would install the band. Muted, with no pulse, when locked. */
+  private drawStretchWidget(geom: StretchGeom, seenImg: Set<string>): void {
+    const g = this.widgetGfx;
+    const s = this.pxScale;
+    const locked = geom.locked;
+    const alpha = locked ? 0.45 : 1;
+    const ringColor = locked ? MUTED : COLORS.white;
+    const pulse = locked ? 0 : 0.5 + 0.5 * Math.sin((this.nowMs / 1000) * Math.PI * 2 * 1.1);
+    const dragging = this.widgetDrag?.id === geom.id && this.widgetDrag.kind === 'stretch';
+    const peg = (p: Vec2, r: number): void => {
+      g.fillStyle(SHADOW_COLOR, SHADOW_ALPHA);
+      g.fillCircle(p.x, p.y + 2 * s, r);
+      g.fillStyle(KNOB_COLOR, alpha);
+      g.fillCircle(p.x, p.y, r);
+      g.lineStyle(2.5 * s, INK, alpha);
+      g.strokeCircle(p.x, p.y, r);
+      g.fillStyle(locked ? MUTED : geom.color, alpha);
+      g.fillCircle(p.x, p.y, r * 0.45);
+    };
+
+    if (dragging) {
+      const anchor = stretchAnchor(geom, this.stretchEnd);
+      const target = stretchTarget(geom, this.stretchEnd);
+      const f = this.stretchFinger;
+      const hot = stretchReleaseHits(geom, this.stretchEnd, f.x, f.y);
+      // The target: a soft glow and a thick ring, half again the idle ring's size.
+      const tr = geom.ringR * (hot ? 1.9 : 1.55) * (1 + 0.08 * pulse);
+      g.fillStyle(hot ? GO : COLORS.white, hot ? 0.35 : 0.18 + 0.1 * pulse);
+      g.fillCircle(target.x, target.y, tr);
+      g.lineStyle((hot ? 6 : 5) * s, hot ? GO : COLORS.white, 0.95);
+      g.strokeCircle(target.x, target.y, tr);
+      peg(target, 7 * s);
+      peg(anchor, 7 * s);
+      const len = Math.hypot(f.x - anchor.x, f.y - anchor.y);
+      const wobble = 3 * s * Math.sin((this.nowMs / 1000) * Math.PI * 2 * 5) * Math.min(1, len / (80 * s));
+      this.drawStretchBand(`stretch:${geom.id}:held`, anchor, f, wobble, geom.color, geom.textureKey, seenImg);
+      return;
+    }
+
+    // Idle: the dotted guide first (under the rings), then each hook.
+    const len = Math.hypot(geom.to.x - geom.from.x, geom.to.y - geom.from.y);
+    const gap = geom.ringR * 1.3;
+    if (len > gap * 2) {
+      const step = 9 * s;
+      const n = Math.floor((len - gap * 2) / step);
+      g.fillStyle(COLORS.white, 0.5 * alpha);
+      for (let i = 0; i <= n; i++) {
+        const t = (gap + i * step) / len;
+        g.fillCircle(geom.from.x + (geom.to.x - geom.from.x) * t, geom.from.y + (geom.to.y - geom.from.y) * t, 1.8 * s);
+      }
+    }
+    const pop = this.popFor(geom.id);
+    for (const p of [geom.from, geom.to]) {
+      const r = geom.ringR * (1 + 0.1 * pulse) * pop;
+      g.fillStyle(INK, 0.22 * alpha);
+      g.fillCircle(p.x, p.y, r);
+      g.lineStyle(4 * s, ringColor, (0.75 + 0.25 * pulse) * alpha);
+      g.strokeCircle(p.x, p.y, r);
+      if (!locked) {
+        g.lineStyle(2 * s, COLORS.white, 0.4 * (1 - pulse));
+        g.strokeCircle(p.x, p.y, r * (1.2 + 0.25 * pulse));
+      }
+      peg(p, 6 * s);
+    }
+  }
+
+  /** A rubber band from `a` to `b` (stage px), bowed `wobble` px sideways at its middle: two halves of
+   * the `textureKey` picture (a vertical band, stretched along each half) when it is loaded, else a
+   * rounded line in `color` with a darker rim. Thinner the longer it is (`stretchBandWidth`). */
+  private drawStretchBand(
+    key: string,
+    a: Vec2,
+    b: Vec2,
+    wobble: number,
+    color: number,
+    textureKey: string | undefined,
+    seenImg: Set<string>,
+  ): void {
+    const s = this.pxScale;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 1e-3) return;
+    const w = stretchBandWidth(len, s);
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    const mid = { x: (a.x + b.x) / 2 + nx * wobble, y: (a.y + b.y) / 2 + ny * wobble };
+    if (textureKey && this.textures.exists(textureKey)) {
+      ([[a, mid], [mid, b]] as const).forEach(([p, q], i) => {
+        const k = `${key}:${i}`;
+        seenImg.add(k);
+        let img = this.widgetImageCache.get(k);
+        if (!img) {
+          img = this.onWorld(this.add.image(0, 0, textureKey));
+          img.setDepth(DEPTH_WIDGETS + 0.04);
+          this.widgetImageCache.set(k, img);
+        }
+        if (img.texture.key !== textureKey) img.setTexture(textureKey);
+        const segLen = Math.hypot(q.x - p.x, q.y - p.y);
+        // The picture is vertical: its long axis turns onto the half (a little overlap at the
+        // middle hides the joint).
+        img.setDisplaySize(w, segLen + w * 0.6);
+        img.setRotation(Math.atan2(q.y - p.y, q.x - p.x) - Math.PI / 2);
+        img.setPosition((p.x + q.x) / 2, (p.y + q.y) / 2);
+        img.setAlpha(1);
+        img.clearTint();
+        img.setVisible(true);
+      });
+      return;
+    }
+    if (textureKey) this.warnMissingTexture(textureKey);
+    const g = this.widgetGfx;
+    for (const [lw, c] of [[w + 3 * s, darken(color, 0.35)], [w, color]] as const) {
+      g.lineStyle(lw, c, 1);
+      g.lineBetween(a.x, a.y, mid.x, mid.y);
+      g.lineBetween(mid.x, mid.y, b.x, b.y);
+      g.fillStyle(c, 1);
+      for (const p of [a, mid, b]) g.fillCircle(p.x, p.y, lw / 2);
+    }
+  }
+
+  /** Bands let go (`StretchAnim`): the twang on the hooks after an install (a decaying wobble, the
+   * machine's own band drawing takes over under it) and the snap back into the hook after a miss. */
+  private drawStretchAnims(seenImg: Set<string>): void {
+    if (this.stretchAnims.length === 0) return;
+    const s = this.pxScale;
+    this.stretchAnims = this.stretchAnims.filter((an) => this.nowMs - an.start < (an.kind === 'snap' ? STRETCH_SNAP_MS : STRETCH_BACK_MS));
+    this.stretchAnims.forEach((an, i) => {
+      const a = this.view.toPx(an.a);
+      const b = this.view.toPx(an.b);
+      const key = `stretch:${an.id}:anim${i}`;
+      if (an.kind === 'snap') {
+        const t = (this.nowMs - an.start) / STRETCH_SNAP_MS;
+        const wobble = 9 * s * (1 - t) * (1 - t) * Math.sin(t * Math.PI * 9);
+        this.drawStretchBand(key, a, b, wobble, an.color, an.textureKey, seenImg);
+      } else {
+        const t = (this.nowMs - an.start) / STRETCH_BACK_MS;
+        // An elastic recoil: fast off the finger, settling into the hook.
+        const k = 1 - (1 - t) * (1 - t) * (1 - t);
+        const end = { x: b.x + (a.x - b.x) * k, y: b.y + (a.y - b.y) * k };
+        this.drawStretchBand(key, a, end, 0, an.color, an.textureKey, seenImg);
+      }
+    });
   }
 
   private drawDialWidget(geom: DialGeom, seenText: Set<string>): void {
@@ -2982,6 +3183,16 @@ export class BuilderScene extends Phaser.Scene {
           this.onWidgetBlocked?.(hit.id);
           return;
         }
+        if (geom?.kind === 'stretch') {
+          // A band grabbed on a hook: it stretches to the finger until the release.
+          this.widgetDrag = { id: hit.id, kind: 'stretch' };
+          this.stretchEnd = stretchGrabEnd(geom, sx, sy) ?? (hit.index === 1 ? 1 : 0);
+          this.stretchFinger = { x: sx, y: sy };
+          this.widgetDragT = 0;
+          this.widgetDragValue = undefined;
+          this.widgetDragAngle = 0;
+          return;
+        }
         if (geom?.kind === 'dial' || geom?.kind === 'pull' || geom?.kind === 'lever' || geom?.kind === 'slide') {
           this.widgetDrag = { id: hit.id, kind: geom.kind };
           this.widgetDragT = 0;
@@ -3065,6 +3276,8 @@ export class BuilderScene extends Phaser.Scene {
       } else if (geom?.kind === 'lever') {
         // The knob follows the snapped notch as the pointer moves.
         this.widgetDragValue = leverPointToValue(geom, stage.x, stage.y);
+      } else if (geom?.kind === 'stretch') {
+        this.stretchFinger = { x: stage.x, y: stage.y };
       } else if (geom?.kind === 'slide') {
         // The knob follows the finger along the track; the value snaps to the nearest notch and a
         // `live` slide commits each new one (the arm grows with the finger).
@@ -3132,7 +3345,9 @@ export class BuilderScene extends Phaser.Scene {
       const drag = this.widgetDrag;
       this.widgetDrag = null;
       this.activePointerId = null;
-      if (drag.kind === 'dial' || drag.kind === 'lever' || drag.kind === 'slide') {
+      if (drag.kind === 'stretch') {
+        this.releaseStretch(drag.id, pointer);
+      } else if (drag.kind === 'dial' || drag.kind === 'lever' || drag.kind === 'slide') {
         this.widgetPop.set(drag.id, this.nowMs);
         this.onWidgetAction?.(drag.id, this.widgetDragValue);
       } else {
@@ -3246,6 +3461,28 @@ export class BuilderScene extends Phaser.Scene {
     this.activePointerId = null;
     this.dragPartId = null;
     this.dragOffset = { x: 0, y: 0 };
+  }
+
+  /** A stretch band let go: on the other hook it installs (the widget fires with its value, through
+   * the controller's normal prop path) and twangs on the hooks; anywhere else it snaps back into its
+   * hook and nothing changes. */
+  private releaseStretch(id: string, pointer: Phaser.Input.Pointer): void {
+    const geom = this.widgetGeoms.find((gm): gm is StretchGeom => gm.id === id && gm.kind === 'stretch');
+    const spec = this.widgetsById.get(id);
+    if (!geom || spec?.kind !== 'stretch') return;
+    const stage = this.worldCam.getWorldPoint(pointer.x, pointer.y);
+    this.stretchFinger = { x: stage.x, y: stage.y };
+    const end = this.stretchEnd;
+    const anchorW = end === 0 ? spec.from : spec.to;
+    const color = geom.color;
+    if (stretchReleaseHits(geom, end, stage.x, stage.y)) {
+      this.stretchAnims.push({ id, kind: 'snap', a: spec.from, b: spec.to, start: this.nowMs, textureKey: spec.textureKey, color });
+      this.widgetPop.set(id, this.nowMs);
+      this.onWidgetAction?.(id, spec.value);
+    } else {
+      const at = this.view.toWorld({ x: stage.x, y: stage.y });
+      this.stretchAnims.push({ id, kind: 'back', a: anchorW, b: at, start: this.nowMs, textureKey: spec.textureKey, color });
+    }
   }
 
   /** Clamps a candidate world-meter drag delta so the part's bounds stay inside its region when

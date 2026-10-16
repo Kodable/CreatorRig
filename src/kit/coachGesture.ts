@@ -6,7 +6,7 @@
 // both courses' drag tutorials feel the same; only the path differs (an arc, not straight up).
 import { dragHandPose, DRAG_HAND, DRAG_HAND_PERIOD_MS } from '../core/coach';
 import type { Vec2 } from './types';
-import { dialPoint, slideValuePoint, type DialGeom, type SlideGeom } from './widgetLayout';
+import { dialPoint, slideValuePoint, type DialGeom, type SlideGeom, type StretchGeom } from './widgetLayout';
 
 export { DRAG_HAND as DIAL_DRAG_HAND, DRAG_HAND_PERIOD_MS as DIAL_DRAG_PERIOD_MS };
 
@@ -70,6 +70,21 @@ export function slideDragPose(geom: SlideGeom, toValue: string, tMs: number): St
   const to = slideValuePoint(geom, toValue);
   if (!to || toValue === geom.value) return null;
   const from = geom.knob;
+  const p = dragHandPose(tMs);
+  const tip = { x: from.x + (to.x - from.x) * p.rise, y: from.y + (to.y - from.y) * p.rise };
+  const pressed = p.alpha > 0 && (p.frame === 2 || p.rise > 0);
+  return { frame: p.frame, along: p.rise, tip, alpha: p.alpha, ghost: pressed ? tip : null };
+}
+
+/** 2026-10-16 (Gao: "drag the rubber band from one arm to the other to install it"): the drag
+ * demonstration on a STRETCH widget: the glove presses the `from` hook, carries the stretched band's
+ * end to the `to` hook while pressed (the ghost is that band end: the scene draws a band from `from`
+ * to it), lets go there, fades and repeats on the drag hand's 2.65 s stroke. Unlike a dial or a
+ * slide, `toValue` is the band the widget would ADD, so the stroke runs while the widget's value is
+ * `toValue`, and is null (the plain tap) otherwise. */
+export function stretchDragPose(geom: StretchGeom, toValue: string, tMs: number): StrokePose | null {
+  if (toValue !== geom.value) return null;
+  const { from, to } = geom;
   const p = dragHandPose(tMs);
   const tip = { x: from.x + (to.x - from.x) * p.rise, y: from.y + (to.y - from.y) * p.rise };
   const pressed = p.alpha > 0 && (p.frame === 2 || p.rise > 0);

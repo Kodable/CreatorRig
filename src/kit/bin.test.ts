@@ -1,7 +1,7 @@
 // The SUPPLY BIN's pure rules (2026-10-16): gating and stamping tiles, the value a tile sets (a
 // `step` adds to the prop's integer value), grouping and the drop test.
 import { describe, expect, it } from 'vitest';
-import { binGroups, binItemValue, insideDropZone, visibleBinItems } from './bin';
+import { binGroups, binItemValue, drawerHasContent, insideDropZone, visibleBinItems } from './bin';
 import type { BinItem, PropertyDescriptor } from './types';
 
 const BANDS: PropertyDescriptor = {
@@ -98,5 +98,17 @@ describe('insideDropZone', () => {
     expect(insideDropZone({ x: 100, y: 100, r: 80 }, { x: 200, y: 100 })).toBe(false);
     expect(insideDropZone({ x: 100, y: 100, r: 5 }, { x: 130, y: 100 })).toBe(true); // 40 px minimum
     expect(insideDropZone({ x: 100, y: 100, r: 5 }, { x: 130, y: 100 }, 20)).toBe(false);
+  });
+});
+
+// 2026-10-16: once the catapult's bands moved onto the machine, Fling it had no tile and no row.
+describe('drawerHasContent: the drawer opens only with something in it', () => {
+  const tile: BinItem = { id: 'fuzz-Fur', image: 'x.png', label: 'Fur', code: 'fuzz', value: 'Fur' };
+  it('a shelf, a bin tile or a row opens it; none of them keeps it shut', () => {
+    expect(drawerHasContent({ shelfOn: false, bin: null, rows: 0 })).toBe(false);
+    expect(drawerHasContent({ shelfOn: false, bin: [], rows: 0 })).toBe(false);
+    expect(drawerHasContent({ shelfOn: true, bin: null, rows: 0 })).toBe(true);
+    expect(drawerHasContent({ shelfOn: false, bin: [tile], rows: 0 })).toBe(true);
+    expect(drawerHasContent({ shelfOn: false, bin: null, rows: 1 })).toBe(true);
   });
 });

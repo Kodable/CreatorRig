@@ -9,6 +9,17 @@ import {
   MIN_TOUCH_PX,
   MINI_TAP_PX,
   SLIDE_KNOB_PX,
+  STRETCH_BAND_MIN_PX,
+  STRETCH_BAND_PX,
+  STRETCH_COLOR,
+  STRETCH_GRAB_PX,
+  STRETCH_SNAP_PX,
+  stretchAnchor,
+  stretchBandWidth,
+  stretchGrabEnd,
+  stretchReleaseHits,
+  stretchTarget,
+  type StretchGeom,
   slidePointAt,
   slidePointT,
   slidePointToValue,
@@ -30,7 +41,7 @@ import {
   type LeverGeom,
   type RackGeom,
 } from './widgetLayout';
-import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, SlideWidget, TapWidget, Vec2 } from './types';
+import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, SlideWidget, StretchWidget, TapWidget, Vec2 } from './types';
 
 const toPx = (v: Vec2): Vec2 => ({ x: v.x * 10, y: 500 - v.y * 10 });
 
@@ -531,5 +542,81 @@ describe("TapWidget style 'mini' (a small round badge)", () => {
     expect(g.size).toBeCloseTo(MINI_TAP_PX / 2, 9);
     expect(widgetAnchor(g)).toEqual(g.center);
     expect(hitWidget([g], g.center.x + 15, g.center.y)?.id).toBe('less'); // inside the 32 px (x0.5) circle
+  });
+});
+
+// 2026-10-16 (Gao: "drag the rubber band from one arm to the other to install it"): `StretchWidget`.
+describe('layoutWidgets: stretch (a rubber band stretched hook to hook)', () => {
+  const toPx = (v: Vec2): Vec2 => ({ x: v.x * 10, y: 500 - v.y * 10 });
+  const band: StretchWidget = { id: 'band-on', kind: 'stretch', code: 'bands', value: '3', from: { x: 10, y: 10 }, to: { x: 20, y: 10 } };
+
+  it('lays out both hooks in stage px with two grab circles carrying the value, >= 64 px across at any zoom', () => {
+    for (const zoom of [1, 2.5, 4]) {
+      const [g] = layoutWidgets([band], toPx, 1 / zoom) as [StretchGeom];
+      expect(g.kind).toBe('stretch');
+      expect(g.from).toEqual({ x: 100, y: 400 });
+      expect(g.to).toEqual({ x: 200, y: 400 });
+      expect(g.value).toBe('3');
+      expect(g.color).toBe(STRETCH_COLOR); // the band red by default
+      expect(g.grabR * 2 * zoom).toBeGreaterThanOrEqual(MIN_TOUCH_PX);
+      expect(g.grabR * 2 * zoom).toBeCloseTo(STRETCH_GRAB_PX, 9);
+      expect(g.snapR * zoom).toBeGreaterThanOrEqual(40);
+      expect(g.hits).toHaveLength(2);
+      expect(g.hits.map((h) => [h.index, h.value])).toEqual([[0, '3'], [1, '3']]);
+    }
+  });
+
+  it('hitWidget finds a press on either hook, not between them', () => {
+    const geoms = layoutWidgets([band], toPx, 1);
+    expect(hitWidget(geoms, 100, 400)?.id).toBe('band-on');
+    expect(hitWidget(geoms, 200 + STRETCH_GRAB_PX / 2 - 1, 400)?.id).toBe('band-on');
+    expect(hitWidget(geoms, 150, 400)).toBeNull();
+  });
+
+  it('stretchGrabEnd: the hook in reach, the nearer one when both are (close hooks), null outside', () => {
+    const [g] = layoutWidgets([band], toPx, 1) as [StretchGeom];
+    expect(stretchGrabEnd(g, 102, 398)).toBe(0);
+    expect(stretchGrabEnd(g, 195, 405)).toBe(1);
+    expect(stretchGrabEnd(g, 150, 400)).toBeNull();
+    const [close] = layoutWidgets([{ ...band, to: { x: 14, y: 10 } }], toPx, 1) as [StretchGeom];
+    expect(stretchGrabEnd(close, 118, 400)).toBe(0);
+    expect(stretchGrabEnd(close, 122, 400)).toBe(1);
+    expect(stretchTarget(g, 0)).toEqual(g.to);
+    expect(stretchTarget(g, 1)).toEqual(g.from);
+    expect(stretchAnchor(g, 1)).toEqual(g.to);
+  });
+
+  it('stretchReleaseHits: a release within the snap radius of the OTHER hook installs, either way round; ' +
+    'mid-air, past the radius or back on the start hook does not', () => {
+    const [g] = layoutWidgets([band], toPx, 1) as [StretchGeom];
+    expect(stretchReleaseHits(g, 0, 200, 400)).toBe(true);
+    expect(stretchReleaseHits(g, 0, 200 + STRETCH_SNAP_PX - 1, 400)).toBe(true);
+    expect(stretchReleaseHits(g, 0, 200, 400 - STRETCH_SNAP_PX - 1)).toBe(false);
+    expect(stretchReleaseHits(g, 1, 100, 400)).toBe(true);
+    expect(stretchReleaseHits(g, 0, 150, 300)).toBe(false); // mid-air
+    expect(stretchReleaseHits(g, 0, 100, 400)).toBe(false); // back where it started
+    // Two hooks closer than the snap radius: a tap on the start hook never installs, a release on
+    // the other one does.
+    const [close] = layoutWidgets([{ ...band, to: { x: 14, y: 10 } }], toPx, 1) as [StretchGeom];
+    expect(stretchReleaseHits(close, 0, 100, 400)).toBe(false);
+    expect(stretchReleaseHits(close, 0, 140, 400)).toBe(true);
+    // The snap radius is screen-constant: at 2.5x zoom it is 2.5x smaller in stage px.
+    const [zoomed] = layoutWidgets([band], toPx, 1 / 2.5) as [StretchGeom];
+    expect(stretchReleaseHits(zoomed, 0, 200 + STRETCH_SNAP_PX / 2.5 - 0.5, 400)).toBe(true);
+    expect(stretchReleaseHits(zoomed, 0, 200 + STRETCH_SNAP_PX / 2.5 + 0.5, 400)).toBe(false);
+  });
+
+  it('stretchBandWidth: full width just off the hook, thinner the longer, never under the minimum, screen-constant', () => {
+    expect(stretchBandWidth(30, 1)).toBe(STRETCH_BAND_PX);
+    expect(stretchBandWidth(60, 1)).toBe(STRETCH_BAND_PX);
+    expect(stretchBandWidth(240, 1)).toBeCloseTo(STRETCH_BAND_PX / 2, 9);
+    expect(stretchBandWidth(120, 1)).toBeLessThan(stretchBandWidth(80, 1));
+    expect(stretchBandWidth(1e6, 1)).toBe(STRETCH_BAND_MIN_PX);
+    expect(stretchBandWidth(240 / 2.5, 1 / 2.5)).toBeCloseTo(stretchBandWidth(240, 1) / 2.5, 9);
+  });
+
+  it('the coach anchor (a plain tap fallback) is the from hook', () => {
+    const [g] = layoutWidgets([band], toPx, 1) as [StretchGeom];
+    expect(widgetAnchor(g)).toEqual(g.from);
   });
 });

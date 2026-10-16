@@ -7,6 +7,7 @@ import {
   FUZZ_TINT,
   MATERIALS,
   MAX_ARM_LENGTH,
+  MAX_BANDS,
   MAX_VISIBLE_BANDS,
   MIN_ARM_LENGTH,
   armLength,
@@ -445,6 +446,18 @@ export function bandBundleAt(part: PlacedPart, armAngleRad: number = REST_ANGLE)
     y += (a.y + b.y) / 2;
   }
   return { x: x / segs.length, y: y / segs.length };
+}
+
+/** Where the NEXT rubber band hooks on at rest (2026-10-16, Gao: "drag the rubber band from one arm
+ * to the other to install it"): the arm-side and lever-side ends of the band `bandSegments` would
+ * draw last with one band more (capped at MAX_BANDS; past MAX_VISIBLE_BANDS the last drawn band's
+ * place, where the bundle's outermost band already sits). The spec's stretch widget puts its two
+ * hooks here, so a band stretched across them lands exactly where the machine then draws it. */
+export function nextBandHooks(part: PlacedPart): { from: Vec2; to: Vec2 } {
+  const next = Math.min(MAX_BANDS, bandCount(part.props) + 1);
+  const segs = bandSegments({ ...part, props: { ...part.props, bands: String(next) } }, REST_ANGLE);
+  const last = segs[segs.length - 1]!;
+  return { from: last.a, to: last.b };
 }
 
 /** Builds the kinematic arm body (no collider) at `armAngleRad` (default the part's rest pose)

@@ -22,7 +22,7 @@ import type {
 import { levelPickerLabel } from './chapters';
 import { hasShelfKinds, nonShelfKinds, shelfGroups } from './shelf';
 import { kitGoalCardLive, levelOver, type KitGoalCardState } from './goalCards';
-import { binGroups, insideDropZone } from './bin';
+import { binGroups, drawerHasContent, insideDropZone } from './bin';
 import { dropPose } from './coachGesture';
 import { playGoalsIntro as animateGoalsIntro, prefersReducedMotion } from '../ui/goalsIntro';
 import { BrunoDialog, type QuickLine } from '../ui/brunoDialog';
@@ -2606,7 +2606,10 @@ export class BuilderHud<
     // scrollable `drawerRowsEl` (no pinned panel involved).
     const shelfOn = this.drawerMode && hasShelfKinds(state.palette, this.hud.partInfo);
     if (this.drawerMode) {
-      const showDrawer = state.canTune && state.selected !== null;
+      // 2026-10-16: a selection with nothing to show (no shelf, no bin tile, no row: every control
+      // is on the machine) keeps the drawer shut (`drawerHasContent`).
+      const showDrawer = state.canTune && state.selected !== null &&
+        drawerHasContent({ shelfOn, bin: state.bin, rows: state.selected.descriptors.length });
       // The drawer closed, the mode left edit (both collapse to !showDrawer, since `selected` is
       // null whenever `!canTune`), the selection was cleared (shelf courses only — `selected` can
       // be null while the drawer stays open), or the selection moved to a different part: a flight

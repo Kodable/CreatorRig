@@ -1,7 +1,7 @@
 // Phaser-free layout math for the widget layer: turns a course's `Widget[]` (world meters, sizes
 // in screen-constant stage px) into stage-px geometry BuilderScene draws from and hit-tests
 // against. Kept free of Phaser so it is unit-testable without a canvas.
-import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, SlideWidget, TapWidget, Vec2, Widget } from './types';
+import type { CycleWidget, DialWidget, LeverWidget, PullWidget, RackWidget, SlideWidget, StretchWidget, TapWidget, Vec2, Widget } from './types';
 
 /** The scene never draws or hit-tests a control smaller than this (on-screen px). */
 export const MIN_TOUCH_PX = 64;
@@ -14,6 +14,18 @@ export const DIAL_MIN_KNOB_PX = 44;
 export const MINI_TAP_PX = 34;
 /** 2026-10-16: a `SlideWidget`'s default drawn knob diameter (on-screen px). */
 export const SLIDE_KNOB_PX = 56;
+
+/** 2026-10-16, `StretchWidget` (a rubber band stretched from hook to hook): each hook's grab
+ * circle across (on-screen px, never under MIN_TOUCH_PX), how near the other hook a release must
+ * land to install the band (radius, on-screen px; a finger's slack), the idle hook ring's radius,
+ * the band's drawn width just off the hook, and the thinnest it gets when stretched long. */
+export const STRETCH_GRAB_PX = 72;
+export const STRETCH_SNAP_PX = 48;
+export const STRETCH_RING_PX = 17;
+export const STRETCH_BAND_PX = 14;
+export const STRETCH_BAND_MIN_PX = 6;
+/** The band's default colour: the catapult's band red. */
+export const STRETCH_COLOR = 0xee3b3b;
 
 /** A hit-test shape in stage px (the same coordinate space `toPx` produces, i.e. before
  * RENDER_SCALE and before the camera's zoom — the space the pointer handlers already compute via
@@ -204,7 +216,22 @@ export interface SlideGeom extends WidgetGeomBase {
   color?: number;
 }
 
-export type WidgetGeom = TapGeom | DialGeom | RackGeom | LeverGeom | CycleGeom | PullGeom | SlideGeom;
+/** A `StretchWidget` in stage px: its two hooks (hit 0 = `from`, hit 1 = `to`, both carrying
+ * `value`), each hook's grab radius, the release radius around the target hook and the idle ring's
+ * radius (all already multiplied by pxScale). */
+export interface StretchGeom extends WidgetGeomBase {
+  kind: 'stretch';
+  from: Vec2;
+  to: Vec2;
+  value: string;
+  grabR: number;
+  snapR: number;
+  ringR: number;
+  textureKey?: string;
+  color: number;
+}
+
+export type WidgetGeom = TapGeom | DialGeom | RackGeom | LeverGeom | CycleGeom | PullGeom | SlideGeom | StretchGeom;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -597,6 +624,70 @@ export function slidePointAt(g: Pick<SlideGeom, 'from' | 'to'>, t: number): Vec2
   return lerpVec(g.from, g.to, clamp(t, 0, 1));
 }
 
+function layoutStretch(w: StretchWidget, toPx: (v: Vec2) => Vec2, pxScale: number): StretchGeom {
+  const from = toPx(w.from);
+  const to = toPx(w.to);
+  const grabR = (Math.max(MIN_TOUCH_PX, STRETCH_GRAB_PX) / 2) * pxScale;
+  return {
+    id: w.id,
+    kind: 'stretch',
+    from,
+    to,
+    value: w.value,
+    grabR,
+    snapR: STRETCH_SNAP_PX * pxScale,
+    ringR: STRETCH_RING_PX * pxScale,
+    textureKey: w.textureKey,
+    color: w.color ?? STRETCH_COLOR,
+    locked: w.locked ?? false,
+    // Both hooks are grabbed (either way round installs the band); `stretchGrabEnd` picks the
+    // nearer one when the two circles overlap (a steep angle lever lies close to the arm).
+    hits: [
+      { shape: { kind: 'circle', x: from.x, y: from.y, r: grabR }, value: w.value, index: 0 },
+      { shape: { kind: 'circle', x: to.x, y: to.y, r: grabR }, value: w.value, index: 1 },
+    ],
+  };
+}
+
+/** Which hook a press at a stage point grabs: 0 (`from`), 1 (`to`) or null (neither within its grab
+ * circle). The nearer hook wins when both are in reach. */
+export function stretchGrabEnd(g: Pick<StretchGeom, 'from' | 'to' | 'grabR'>, sx: number, sy: number): 0 | 1 | null {
+  const d0 = Math.hypot(sx - g.from.x, sy - g.from.y);
+  const d1 = Math.hypot(sx - g.to.x, sy - g.to.y);
+  if (Math.min(d0, d1) > g.grabR) return null;
+  return d0 <= d1 ? 0 : 1;
+}
+
+/** The hook a band grabbed at `end` stretches toward (the OTHER one), stage px. */
+export function stretchTarget(g: Pick<StretchGeom, 'from' | 'to'>, end: 0 | 1): Vec2 {
+  return end === 0 ? g.to : g.from;
+}
+
+/** The hook a band grabbed at `end` is anchored to, stage px. */
+export function stretchAnchor(g: Pick<StretchGeom, 'from' | 'to'>, end: 0 | 1): Vec2 {
+  return end === 0 ? g.from : g.to;
+}
+
+/** True when a band grabbed at hook `end` and let go at (sx, sy) lands on the other hook: within
+ * `snapR` of it AND nearer it than the hook it started from (two close hooks never install on a
+ * tap). Pure, unit-tested. */
+export function stretchReleaseHits(g: Pick<StretchGeom, 'from' | 'to' | 'snapR'>, end: 0 | 1, sx: number, sy: number): boolean {
+  const target = stretchTarget(g, end);
+  const anchor = stretchAnchor(g, end);
+  const dt = Math.hypot(sx - target.x, sy - target.y);
+  const da = Math.hypot(sx - anchor.x, sy - anchor.y);
+  return dt <= g.snapR && dt < da;
+}
+
+/** The stretched band's drawn width (stage px) for a band `lenPx` long: STRETCH_BAND_PX just off the
+ * hook, thinning as 1 / sqrt(length) past 60 on-screen px (a real band thins as it stretches), never
+ * under STRETCH_BAND_MIN_PX. */
+export function stretchBandWidth(lenPx: number, pxScale: number): number {
+  const screenLen = lenPx / pxScale;
+  const k = screenLen <= 60 ? 1 : Math.sqrt(60 / screenLen);
+  return Math.max(STRETCH_BAND_MIN_PX, STRETCH_BAND_PX * k) * pxScale;
+}
+
 /** Where a pointer (the coach's hand) should point on a laid-out widget, stage px: a tap/cycle
  * centre, a dial's handle, a rack's middle cell, a lever's knob, a pull's rest handle. */
 export function widgetAnchor(geom: WidgetGeom): Vec2 {
@@ -625,6 +716,8 @@ export function widgetAnchor(geom: WidgetGeom): Vec2 {
       return geom.at;
     case 'slide':
       return geom.knob;
+    case 'stretch':
+      return geom.from;
   }
 }
 
@@ -654,6 +747,8 @@ export function layoutWidgets(
         return layoutPull(w, toPx, pxScale);
       case 'slide':
         return layoutSlide(w, toPx, pxScale);
+      case 'stretch':
+        return layoutStretch(w, toPx, pxScale);
     }
   });
 }

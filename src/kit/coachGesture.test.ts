@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DIAL_DRAG_HAND, DIAL_DRAG_PERIOD_MS, DROP_ARC_PX, dialDragPose, dialOptionAngle, dropPose, slideDragPose } from './coachGesture';
+import { DIAL_DRAG_HAND, DIAL_DRAG_PERIOD_MS, DROP_ARC_PX, dialDragPose, dialOptionAngle, dropPose, slideDragPose, stretchDragPose } from './coachGesture';
 import { dragHandPose } from '../core/coach';
-import type { DialWidget, SlideWidget, Vec2 } from './types';
-import { layoutWidgets, slideValuePoint, type DialGeom, type SlideGeom } from './widgetLayout';
+import type { DialWidget, SlideWidget, StretchWidget, Vec2 } from './types';
+import { layoutWidgets, slideValuePoint, type DialGeom, type SlideGeom, type StretchGeom } from './widgetLayout';
 
 // A five-notch dial like the catapult's angle lever: 15..75 over a quarter turn, handle at 30.
 const toPx = (v: Vec2): Vec2 => ({ x: v.x * 10, y: 500 - v.y * 10 });
@@ -163,6 +163,43 @@ describe("coachGesture: the 'drop' demonstration (bin tile -> drop zone)", () =>
       const p = dropPose(from, to, t);
       expect(p.frame).toBe(c.frame);
       expect(p.alpha).toBeCloseTo(c.alpha, 12);
+    }
+  });
+});
+
+// 2026-10-16 (Gao: "drag the rubber band from one arm to the other to install it").
+describe("coachGesture: the 'drag' demonstration on a stretch widget (a band from hook to hook)", () => {
+  const band: StretchWidget = { id: 'band-on', kind: 'stretch', code: 'bands', value: '2', from: { x: 10, y: 10 }, to: { x: 14, y: 16 } };
+  const [g] = layoutWidgets([band], toPx, 1) as [StretchGeom];
+
+  it('runs while the widget would add the band it names (toValue = its value), else null (the plain tap)', () => {
+    expect(stretchDragPose(g, '2', 500)).not.toBeNull();
+    expect(stretchDragPose(g, '3', 500)).toBeNull();
+    expect(stretchDragPose(g, '1', 500)).toBeNull();
+  });
+
+  it('presses the from hook, carries the band end to the to hook, holds, lets go, fades, repeats', () => {
+    const pose = (t: number) => stretchDragPose(g, '2', t)!;
+    expect(pose(0)).toMatchObject({ frame: 0, along: 0, alpha: 0, ghost: null, tip: g.from });
+    const pressed = pose(pressedAt - 1);
+    expect(pressed.frame).toBe(2);
+    expect(pressed.tip).toEqual(g.from);
+    expect(pressed.ghost).toEqual(g.from); // the band end under the pressed finger
+    const mid = pose(pressedAt + D.move / 2);
+    expect(mid.along).toBeCloseTo(0.5, 9);
+    expect(mid.tip.x).toBeCloseTo((g.from.x + g.to.x) / 2, 9);
+    expect(mid.tip.y).toBeCloseTo((g.from.y + g.to.y) / 2, 9);
+    expect(mid.ghost).toEqual(mid.tip);
+    const held = pose(doneMoving + D.hold / 2);
+    expect(held.tip.x).toBeCloseTo(g.to.x, 9);
+    expect(held.tip.y).toBeCloseTo(g.to.y, 9);
+    expect(held.ghost).toEqual(held.tip);
+    expect(pose(DIAL_DRAG_PERIOD_MS - 1)).toMatchObject({ alpha: 0, ghost: null });
+    expect(pose(DIAL_DRAG_PERIOD_MS + 900)).toEqual(pose(900));
+    for (let t = 0; t < DIAL_DRAG_PERIOD_MS; t += 41) {
+      const c = dragHandPose(t);
+      expect(pose(t).frame).toBe(c.frame);
+      expect(pose(t).alpha).toBeCloseTo(c.alpha, 12);
     }
   });
 });

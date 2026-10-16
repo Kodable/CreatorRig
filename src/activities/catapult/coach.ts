@@ -6,11 +6,13 @@
 // Gao, 2026-10-15: "add a tutorial sequence to catapult", modelled on the rover's (vehicle/
 // coach.ts). Each intro level walks its one new thing: tap the catapult (its drawer opens), use
 // the new control, then tap FIRE in the bottom bar. 2026-10-16 (Jon's huddle 2026-10-15: building
-// the catapult must feel tactile): the new controls are the supply bin and the slide knob, so the
-// glove demonstrates them - it carries a rubber band from the bin onto the band bundle (power), drags
-// the angle knob up the arc (angle), carries the Flower from the bin into the cup (weight) and
-// slides the arm knob out to 3 m (arm). A step advances on the action (`CoachContext.changed`: the
-// kit records each prop code the child sets, from a bin tile, a widget or the "−" badge) and stays
+// the catapult must feel tactile): the new controls are built by hand, so the glove demonstrates
+// them - it stretches a rubber band from the arm's hook to the lever's hook (power; later on
+// 2026-10-16, Gao: "drag the rubber band from one arm to the other to install it"; it carried a band
+// tile from the supply bin until then), drags the angle knob up the arc (angle), carries the Flower
+// from the bin into the cup (weight) and slides the arm knob out to 3 m (arm). A step advances on
+// the action (`CoachContext.changed`: the kit records each prop code the child sets, from a bin
+// tile, a widget or the "−" badge) and stays
 // done: once the new control was used and a shot has gone (`runs`), the child is on their own for
 // the rest of that level load. A fresh load starts over. Level 1 also points at Next level after
 // the pass, as the rover's level 1 does. Nothing on the Donut level (its new thing, the split, is
@@ -18,7 +20,7 @@
 // and picking a fuzz is already known) or on the challenges.
 import type { CoachContext, CoachGesture, CoachStep, CoachTarget } from '../../kit/types';
 import { gatedOptions, isOptionKnown, knownConcepts } from '../../kit/concepts';
-import { CATALOG } from './core/catalog';
+import { CATALOG, bandCount } from './core/catalog';
 import { LEVELS } from './core/levels';
 import type { CatapultLevel, PartKind, PlacedPart } from './core/types';
 
@@ -31,28 +33,28 @@ export const FIRE_TARGET: CoachTarget<PartKind> = { type: 'bar', button: 'play' 
 export const ANGLE_WIDGET = 'angle';
 /** The arm's slide knob (spec.ts `catapultWidgets`). */
 export const ARM_WIDGET = 'armLen';
-/** The rubber band pile in the supply bin (spec.ts `catapultBin`). */
-export const BAND_ITEM = 'band';
+/** The rubber band stretched from the arm's hook to the lever's hook (spec.ts `catapultWidgets`). */
+export const BAND_WIDGET = 'band-on';
 /** A fuzz's tile in the supply bin (spec.ts `catapultBin`). */
 export function fuzzItem(name: string): string {
   return `fuzz-${name}`;
 }
 
-/** What each intro level teaches: a bin tile carried onto the machine (the band pile, or one
- * fuzz), the angle lever's knob or the arm's slide knob dragged (to `option` when the lesson names
- * one, else the next notch up the child can see). */
+/** What each intro level teaches: a rubber band stretched on, a fuzz tile carried from the bin
+ * into the cup, the angle lever's knob or the arm's slide knob dragged (to `option` when the lesson
+ * names one, else the next notch up the child can see). */
 type Lesson =
-  | { kind: 'band'; tap: string; drop: string }
+  | { kind: 'band'; tap: string; stretch: string }
   | { kind: 'fuzz'; tap: string; drop: string; option: string }
   | { kind: 'lever'; tap: string; drag: string }
   | { kind: 'slide'; tap: string; drag: string; option: string };
 
 const LESSONS: Record<string, Lesson> = {
-  // Fling it starts on 1 band and exactly 2 pass: one band from the bin is the whole lesson.
+  // Fling it starts on 1 band and exactly 2 pass: one band stretched on is the whole lesson.
   power: {
     kind: 'band',
-    tap: 'Tap the catapult to open the supply bin.',
-    drop: 'Grab a rubber band from the bin and loop it on the catapult.',
+    tap: 'Tap the catapult to build it.',
+    stretch: 'Drag a rubber band from one arm to the other to hook it on.',
   },
   angle: { kind: 'lever', tap: 'Tap the catapult. It has a new lever.', drag: 'Drag the lever knob to aim higher.' },
   // The energy rule (2026-10-15): the weight level is two targets, a near block for the heavy Metal
@@ -144,9 +146,9 @@ export function catapultCoach(ctx: CatapultCoachContext): CatapultCoachStep | nu
     if (ctx.selectedId !== catapult.id) return step('tap', lesson.tap, { type: 'part', partId: catapult.id });
     switch (lesson.kind) {
       case 'band':
-        // The glove carries a band from the bin's pile onto the band bundle (kit `CoachGesture`
-        // 'drop').
-        return step('bands', lesson.drop, { type: 'bin', itemId: BAND_ITEM }, { kind: 'drop' });
+        // The glove stretches a band from the arm's hook to the lever's hook (kit `CoachGesture`
+        // 'drag' on a stretch widget: `toValue` is the band it adds, the widget's own value).
+        return step('bands', lesson.stretch, { type: 'widget', id: BAND_WIDGET }, { kind: 'drag', toValue: String(bandCount(catapult.props) + 1) });
       case 'fuzz': {
         const value = lessonOption(ctx.level, catapult, 'fuzz', lesson.option);
         if (!value) return null;

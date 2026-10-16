@@ -289,7 +289,34 @@ export interface SlideWidget extends WidgetBase {
   guide?: boolean;
 }
 
-export type Widget = TapWidget | DialWidget | RackWidget | LeverWidget | CycleWidget | PullWidget | SlideWidget;
+/** A rubber band the child stretches from one hook to the other (2026-10-16, Gao: "i want the
+ * player to actually build the catapult's rubber bands ... drag the rubber band from one arm to the
+ * other to install it"). Idle (while the part is selected) both hooks show as gently pulsing
+ * screen-size rings with a peg in the middle, so kids see where a band goes. Press on EITHER hook
+ * (grab circle >= 64 px, the nearer hook wins when the two overlap): a band stretches from that
+ * hook to the finger (thinner the longer it gets, with a little wobble) and the OTHER hook glows
+ * bigger as the target. Release within STRETCH_SNAP_PX of the other hook (and nearer it than the
+ * start): the band snaps on with a short twang and the widget fires like any other with its
+ * `value` (with `code`: the controller's normal setProp path - undo, lockedProps, `introduces`,
+ * the budget, `CoachContext.changed`, the live update between shots). Released anywhere else the
+ * band snaps back into its hook and nothing changes. Pure maths in widgetLayout.ts
+ * (`layoutStretch`, `stretchGrabEnd`, `stretchReleaseHits`, `stretchBandWidth`). */
+export interface StretchWidget extends WidgetBase {
+  kind: 'stretch';
+  /** A hook on one arm (world m). */
+  from: Vec2;
+  /** A hook on the other arm (world m). */
+  to: Vec2;
+  /** With `code`: released on the other hook -> setProp(code, value). */
+  value: string;
+  /** Picture for the band while stretched (a vertical band picture, stretched along the band);
+   * else a thick rounded line in `color`. */
+  textureKey?: string;
+  /** Default the band red 0xee3b3b. */
+  color?: number;
+}
+
+export type Widget = TapWidget | DialWidget | RackWidget | LeverWidget | CycleWidget | PullWidget | SlideWidget | StretchWidget;
 
 /** One tile in the SUPPLY BIN (`CourseSpec.bin`, 2026-10-16, Jon: "a classroom supply bin you pull
  * parts from instead of menu rows"): a picture the child drags out of the drawer onto the machine
@@ -550,6 +577,10 @@ export type CoachTarget<K extends string = string> =
  * `toValue`). 'drop' on a 'bin' target: the glove presses the bin tile, carries a ghost of its
  * picture to the item's drop zone on the machine, lets go, fades and repeats (the same 2.65 s
  * stroke; pure maths in coachGesture.ts `dropPose`). Ignored (the plain tap) on any other target. */
+/** 2026-10-16 (Gao: "drag the rubber band from one arm to the other"): 'drag' on a STRETCH widget:
+ * the glove presses the `from` hook, carries a stretched band's end to the `to` hook, lets go,
+ * fades and repeats on the same stroke (coachGesture.ts `stretchDragPose`). It runs while the
+ * widget's `value` is `toValue` (the band it would add) and hides while the child holds it. */
 export type CoachGesture = { kind: 'drag'; toValue: string } | { kind: 'drop' };
 
 export interface CoachStep<K extends string = string> {

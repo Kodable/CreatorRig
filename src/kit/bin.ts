@@ -75,3 +75,12 @@ export function insideDropZone(zone: { x: number; y: number; r: number }, p: { x
   const r = Math.max(zone.r, minR);
   return Math.hypot(p.x - zone.x, p.y - zone.y) <= r;
 }
+
+/** Whether the drawer has anything to show for the selected part (2026-10-16: once the catapult's
+ * bands moved onto the machine, Fling it's bin was empty and every row was claimed by a widget, and
+ * the drawer slid open with nothing in it): the course's parts shelf, a bin tile, or a property row.
+ * Without any of them the drawer stays shut and the child builds in the zoomed view with the
+ * widgets alone. */
+export function drawerHasContent(o: { shelfOn: boolean; bin: readonly BinItem[] | null; rows: number }): boolean {
+  return o.shelfOn || (o.bin?.length ?? 0) > 0 || o.rows > 0;
+}

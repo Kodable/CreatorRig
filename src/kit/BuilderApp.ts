@@ -1087,6 +1087,8 @@ export class BuilderApp<
       // concept is dropped entirely, not merely disabled.
       const list: Widget[] = this.spec.widgets(part, this.parts, this.level)
         .filter((w) => !w.code || isKnown(this.known, w.code))
+        // A stretch widget sets one value: a value gated by a later level drops it too.
+        .filter((w) => w.kind !== 'stretch' || !w.code || isOptionKnown(this.known, this.gated, w.code, w.value))
         .map((w) => this.filterWidgetOptions({
           ...w,
           locked: !!(w.code && part.lockedProps?.includes(w.code)),
